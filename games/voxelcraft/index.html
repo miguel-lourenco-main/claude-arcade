@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voxelcraft</title>
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+  }
+}
+</script>
+</head>
+<body>
+  <div id="app"></div>
+
+  <div id="hud">
+    <div id="crosshair"></div>
+    <div id="block-name"></div>
+    <div id="hotbar"></div>
+    <pre id="debug" class="hidden"></pre>
+    <div id="water-tint" class="hidden"></div>
+  </div>
+
+  <div id="picker" class="hidden">
+    <div id="picker-panel">
+      <h2>Blocks <span class="hint">(click to put in selected slot — E to close)</span></h2>
+      <div id="picker-grid"></div>
+    </div>
+  </div>
+
+  <div id="overlay">
+    <div id="overlay-panel">
+      <h1 id="overlay-title">VOXELCRAFT</h1>
+      <p class="sub">a from-scratch Minecraft-style sandbox</p>
+      <button id="resume">Click to play</button>
+      <div id="controls">
+        <div><b>WASD</b> move · <b>Space</b> jump · <b>2×Space</b> fly · <b>2×W</b> sprint · <b>Shift</b> sneak/descend</div>
+        <div><b>LMB</b> break · <b>RMB</b> place · <b>MMB</b> pick block · <b>Wheel/1-9</b> hotbar</div>
+        <div><b>E</b> block picker · <b>F3</b> debug · <b>Esc</b> pause</div>
+      </div>
+      <div class="row">
+        <button id="reset" class="danger">Reset world</button>
+        <a href="../../index.html" class="back">← Arcade</a>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
