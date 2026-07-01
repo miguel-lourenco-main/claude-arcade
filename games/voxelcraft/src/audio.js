@@ -52,5 +52,12 @@ export class Sfx {
     else this._noiseBurst(base * 1.25, 0.09, 0.14);
   }
 
+  step(blockId) {
+    const def = BLOCKS[blockId];
+    if (!def || def.sound === undefined) return;
+    const base = MATERIAL_FREQ[def.sound] || 500;
+    this._noiseBurst(base * 0.6 + Math.random() * 80, 0.07, 0.05);
+  }
+
   click() { this._noiseBurst(2200, 0.04, 0.08); }
 }

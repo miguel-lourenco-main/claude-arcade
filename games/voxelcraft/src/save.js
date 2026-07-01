@@ -15,6 +15,8 @@ export function loadSave() {
   }
 }
 
+let warnedQuota = false;
+
 export function writeSave(world, player, sky, hud) {
   try {
     localStorage.setItem(KEY, JSON.stringify({
@@ -29,7 +31,10 @@ export function writeSave(world, player, sky, hud) {
       edits: world.serializeEdits(),
     }));
   } catch (e) {
-    console.warn("save failed", e);
+    if (!warnedQuota) {
+      warnedQuota = true;
+      console.warn("Voxelcraft: saving failed (localStorage quota?) — progress will not persist.", e);
+    }
   }
 }
 
@@ -37,10 +42,19 @@ export function clearSave() {
   localStorage.removeItem(KEY);
 }
 
+// Returns a stop() that disables autosaving — required for "Reset world",
+// otherwise the unload hooks re-write the save right after clearSave().
 export function startAutosave(fn, intervalMs = 5000) {
-  setInterval(fn, intervalMs);
-  window.addEventListener("beforeunload", fn);
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") fn();
-  });
+  let enabled = true;
+  const handler = () => { if (enabled) fn(); };
+  const onVisibility = () => { if (document.visibilityState === "hidden") handler(); };
+  const id = setInterval(handler, intervalMs);
+  window.addEventListener("beforeunload", handler);
+  document.addEventListener("visibilitychange", onVisibility);
+  return () => {
+    enabled = false;
+    clearInterval(id);
+    window.removeEventListener("beforeunload", handler);
+    document.removeEventListener("visibilitychange", onVisibility);
+  };
 }

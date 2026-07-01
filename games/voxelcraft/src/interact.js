@@ -51,6 +51,7 @@ export class Interaction {
     this.target = null;
     this.buttons = new Set();
     this._nextAction = 0;
+    this._lastBreakKey = null; // sweep-breaking: break as soon as target changes
 
     const box = new THREE.BoxGeometry(1.002, 1.002, 1.002);
     this.highlight = new THREE.LineSegments(
@@ -68,8 +69,11 @@ export class Interaction {
     this._act(button);
     this._nextAction = performance.now() + ACTION_REPEAT_MS + 60;
   }
-  onMouseUp(button) { this.buttons.delete(button); }
-  clearInput() { this.buttons.clear(); }
+  onMouseUp(button) {
+    this.buttons.delete(button);
+    if (button === 0) this._lastBreakKey = null;
+  }
+  clearInput() { this.buttons.clear(); this._lastBreakKey = null; }
 
   update(dt) {
     const eye = { x: this.player.pos.x, y: this.player.eyeY, z: this.player.pos.z };
@@ -87,6 +91,13 @@ export class Interaction {
     if (this.buttons.size > 0 && now >= this._nextAction) {
       for (const b of this.buttons) this._act(b);
       this._nextAction = now + ACTION_REPEAT_MS;
+    } else if (this.buttons.has(0) && this.target) {
+      // sweeping the crosshair onto a new block breaks it immediately
+      const key = `${this.target.x},${this.target.y},${this.target.z}`;
+      if (this._lastBreakKey !== null && key !== this._lastBreakKey) {
+        this._break();
+        this._nextAction = now + ACTION_REPEAT_MS;
+      }
     }
 
     this.particles.update(dt);
@@ -101,6 +112,8 @@ export class Interaction {
   _break() {
     const t = this.target;
     if (!t) return;
+    if (t.id === BEDROCK) return; // the world floor is indestructible
+    this._lastBreakKey = `${t.x},${t.y},${t.z}`;
     const def = BLOCKS[t.id];
     const affected = this.world.setBlock(t.x, t.y, t.z, AIR);
     // breaking the support under a plant pops the plant too

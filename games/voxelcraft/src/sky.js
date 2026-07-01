@@ -49,7 +49,10 @@ export class Sky {
     scene.add(this.clouds);
 
     this.skyColor = new THREE.Color();
-    scene.fog = new THREE.Fog(0x87ceeb, 60, 150);
+    // fog must swallow the meshed world edge (5 chunks = 80 blocks)
+    scene.fog = new THREE.Fog(0x87ceeb, 45, 82);
+    this.ambientDay = new THREE.Color(0xffffff);
+    this.ambientNight = new THREE.Color(0x7683b8); // moonlit blue
   }
 
   _makeStars(seed) {
@@ -122,9 +125,11 @@ export class Sky {
 
     this.sun.intensity = 0.95 * day;
     this.sun.position.copy(sunDir).multiplyScalar(100);
-    this.moon.intensity = 0.14 * (1 - day);
+    this.moon.intensity = 0.18 * (1 - day);
     this.moon.position.copy(sunDir).multiplyScalar(-100);
-    this.ambient.intensity = 0.22 + 0.45 * day;
+    // genuinely dark, slightly blue nights
+    this.ambient.intensity = 0.12 + 0.55 * day;
+    this.ambient.color.copy(this.ambientNight).lerp(this.ambientDay, day);
 
     this.rig.position.copy(camera.position);
     this.sunMesh.position.copy(sunDir).multiplyScalar(350);
@@ -135,8 +140,12 @@ export class Sky {
 
     this.clouds.position.x = camera.position.x;
     this.clouds.position.z = camera.position.z;
-    this.clouds.material.map.offset.x = (camera.position.x + performance.now() * 0.0012) / 466;
-    this.clouds.material.map.offset.y = -camera.position.z / 466;
+    // keep offsets in [0,1): the uv transform uniform is float32 and loses
+    // per-frame precision once the raw value grows large
+    const ox = (camera.position.x + performance.now() * 0.0012) / 466;
+    const oy = -camera.position.z / 466;
+    this.clouds.material.map.offset.x = ox - Math.floor(ox);
+    this.clouds.material.map.offset.y = oy - Math.floor(oy);
     this.clouds.material.color.setScalar(0.4 + 0.6 * day);
 
     const fog = this.scene.fog;
@@ -146,7 +155,7 @@ export class Sky {
       this.scene.background = fog.color;
     } else {
       fog.color.copy(this.skyColor);
-      fog.near = 60; fog.far = 150;
+      fog.near = 45; fog.far = 82;
       this.scene.background = this.skyColor;
     }
   }

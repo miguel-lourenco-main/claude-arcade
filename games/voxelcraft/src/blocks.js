@@ -23,6 +23,8 @@ export const CACTUS = 17;
 export const BRICKS = 18;
 export const SANDSTONE = 19;
 export const LEAVES_COLD = 20;
+export const COAL_ORE = 21;
+export const IRON_ORE = 22;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -113,6 +115,8 @@ BLOCKS[SANDSTONE] = def("Sandstone", {
   tiles: cube({ top: TILE.SANDSTONE_TOP, side: TILE.SANDSTONE_SIDE, bottom: TILE.SANDSTONE_TOP }),
 });
 BLOCKS[LEAVES_COLD] = def("Spruce Leaves", { tiles: cube(TILE.LEAVES_COLD), sound: "plant" });
+BLOCKS[COAL_ORE] = def("Coal Ore", { tiles: cube(TILE.COAL_ORE) });
+BLOCKS[IRON_ORE] = def("Iron Ore", { tiles: cube(TILE.IRON_ORE) });
 
 // Blocks offered in the hotbar picker (everything but air).
 export const PLACEABLE = BLOCKS.map((b, id) => id).filter((id) => id !== AIR);

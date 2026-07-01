@@ -1,6 +1,6 @@
 // Chunked voxel world: storage, block get/set, edit overlay for persistence.
 
-import { AIR } from "./blocks.js";
+import { AIR, BLOCKS } from "./blocks.js";
 
 export const CHUNK = 16;
 export const HEIGHT = 96;
@@ -145,6 +145,9 @@ export class World {
     if (!Array.isArray(flat)) return;
     for (let i = 0; i + 3 < flat.length; i += 4) {
       const x = flat[i], y = flat[i + 1], z = flat[i + 2], id = flat[i + 3];
+      // a corrupted save must not crash boot or feed the mesher unknown ids
+      if (!Number.isInteger(x) || !Number.isInteger(y) || !Number.isInteger(z)) continue;
+      if (y < 0 || y >= HEIGHT || !Number.isInteger(id) || !BLOCKS[id]) continue;
       const cx = x >> 4, cz = z >> 4;
       const key = chunkKey(cx, cz);
       let overlay = this.edits.get(key);

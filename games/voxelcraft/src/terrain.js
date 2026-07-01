@@ -1,14 +1,17 @@
-// Procedural terrain: heightmap + biomes + caves + water + deterministic
-// decoration (trees, cacti, plants). Everything is a pure function of world
-// coordinates and the seed, so features spanning chunk borders stay coherent.
+// Procedural terrain: heightmap + biomes + caves + ores + water and
+// deterministic decoration (trees, cacti, plants). Everything is a pure
+// function of world coordinates and the seed, so features spanning chunk
+// borders stay coherent.
 
 import {
   GRASS, DIRT, STONE, SAND, GRAVEL, LOG, LEAVES, LEAVES_COLD, WATER, BEDROCK,
-  SNOWY_GRASS, TALLGRASS, POPPY, DANDELION, CACTUS, SANDSTONE, AIR,
+  SNOWY_GRASS, TALLGRASS, POPPY, DANDELION, CACTUS, SANDSTONE, COAL_ORE,
+  IRON_ORE, AIR,
 } from "./blocks.js";
 import { CHUNK, HEIGHT, SEA_LEVEL } from "./world.js";
 import { Perlin, hash2 } from "./noise.js";
 
+const TREE_CELL = 5;   // one tree candidate per 5x5-column cell (grid jitter)
 const TREE_MARGIN = 3; // canopy radius 2 + 1 safety
 
 function smoothstep(a, b, t) {
@@ -64,20 +67,36 @@ export class Terrain {
     return false;
   }
 
-  treeAt(x, z, biome, h) {
+  oreAt(x, y, z, h) {
+    if (y >= h - 3) return 0;
+    if (this.cave1.fbm3(x * 0.13 + 911, y * 0.13, z * 0.13 - 911, 2) > 0.58) return COAL_ORE;
+    if (y < 28 && this.cave2.fbm3(x * 0.15 - 911, y * 0.15, z * 0.15 + 911, 2) > 0.62) return IRON_ORE;
+    return 0;
+  }
+
+  // One tree candidate per TREE_CELL x TREE_CELL cell, at a jittered position.
+  // Grid placement guarantees spacing without any neighbor-dominance scan.
+  treeCellAt(cx5, cz5) {
+    const roll = hash2(cx5, cz5, this.seed ^ 0x7ee7);
+    const jx = cx5 * TREE_CELL + Math.floor(hash2(cx5, cz5, this.seed ^ 0x11aa) * TREE_CELL);
+    const jz = cz5 * TREE_CELL + Math.floor(hash2(cx5, cz5, this.seed ^ 0x22bb) * TREE_CELL);
+    const h = this.heightAt(jx, jz);
     if (h <= SEA_LEVEL + 1 || h >= HEIGHT - 12) return null;
-    const density = biome === "forest" ? 0.022 : biome === "plains" ? 0.004 : biome === "snow" ? 0.008 : 0;
-    if (density === 0) return null;
-    if (hash2(x, z, this.seed ^ 0x7ee7) >= density) return null;
-    // avoid trees hugging each other: dominant tree per 3x3 neighborhood
-    for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) {
-      if (dx === 0 && dz === 0) continue;
-      const other = hash2(x + dx, z + dz, this.seed ^ 0x7ee7);
-      const otherBiome = density; // same order of magnitude; cheap comparison below
-      if (other < otherBiome && other < hash2(x, z, this.seed ^ 0x7ee7)) return null;
+    const biome = this.biomeAt(jx, jz, h);
+    const density = biome === "forest" ? 0.55 : biome === "plains" ? 0.1 : biome === "snow" ? 0.2 : 0;
+    if (roll >= density) return null;
+    const trunk = 4 + Math.floor(hash2(jx, jz, this.seed ^ 0x1e00) * 3); // 4..6
+    return { x: jx, z: jz, h, trunk, leaves: biome === "snow" ? LEAVES_COLD : LEAVES };
+  }
+
+  treeNear(x, z, radius = 1) {
+    const c0x = Math.floor((x - radius) / TREE_CELL), c1x = Math.floor((x + radius) / TREE_CELL);
+    const c0z = Math.floor((z - radius) / TREE_CELL), c1z = Math.floor((z + radius) / TREE_CELL);
+    for (let cz5 = c0z; cz5 <= c1z; cz5++) for (let cx5 = c0x; cx5 <= c1x; cx5++) {
+      const t = this.treeCellAt(cx5, cz5);
+      if (t && Math.abs(t.x - x) <= radius && Math.abs(t.z - z) <= radius) return true;
     }
-    const trunk = 4 + Math.floor(hash2(x, z, this.seed ^ 0x1e00) * 3); // 4..6
-    return { trunk, leaves: biome === "snow" ? LEAVES_COLD : LEAVES };
+    return false;
   }
 
   cactusAt(x, z, biome, h) {
@@ -93,19 +112,34 @@ export function makeGenerator(seed) {
   const generate = (world, chunk) => {
     const x0 = chunk.cx * CHUNK, z0 = chunk.cz * CHUNK;
 
+    // cached column data: heights for chunk + 1-cell border (for the cave
+    // water guard), biomes for in-chunk columns
+    const H = new Int16Array((CHUNK + 2) * (CHUNK + 2));
+    const hAt = (dx, dz) => H[(dx + 1) + (CHUNK + 2) * (dz + 1)];
+    for (let dz = -1; dz <= CHUNK; dz++) {
+      for (let dx = -1; dx <= CHUNK; dx++) {
+        H[(dx + 1) + (CHUNK + 2) * (dz + 1)] = t.heightAt(x0 + dx, z0 + dz);
+      }
+    }
+    const biomes = new Array(CHUNK * CHUNK);
+
     // pass 1: columns
     for (let lz = 0; lz < CHUNK; lz++) {
       for (let lx = 0; lx < CHUNK; lx++) {
         const x = x0 + lx, z = z0 + lz;
-        const h = t.heightAt(x, z);
+        const h = hAt(lx, lz);
         const biome = t.biomeAt(x, z, h);
+        biomes[lx + CHUNK * lz] = biome;
         const beach = h >= SEA_LEVEL - 2 && h <= SEA_LEVEL + 1;
+        // lowest neighboring column floor: a cave cell at or below a
+        // neighbor's water line would open a hole into static water
+        const minNbH = Math.min(hAt(lx - 1, lz), hAt(lx + 1, lz), hAt(lx, lz - 1), hAt(lx, lz + 1));
 
         for (let y = 0; y <= h; y++) {
           let id;
           if (y === 0 || (y <= 2 && hash2(x * 3 + y, z * 3, seed ^ 0xbed) < 0.6)) {
             id = BEDROCK;
-          } else if (y > 3 && y < h - 2 && t.isCave(x, y, z)) {
+          } else if (y > 3 && y < h - 2 && (y > SEA_LEVEL || minNbH >= y) && t.isCave(x, y, z)) {
             id = AIR;
           } else if (biome === "desert") {
             if (y > h - 4) id = SAND;
@@ -121,6 +155,7 @@ export function makeGenerator(seed) {
           } else {
             id = STONE;
           }
+          if (id === STONE) id = t.oreAt(x, y, z, h) || STONE;
           if (id !== AIR) chunk.set(lx, y, lz, id);
         }
 
@@ -131,41 +166,39 @@ export function makeGenerator(seed) {
       }
     }
 
-    // pass 2: decoration, scanning a margin so trees from neighbor columns
-    // spill into this chunk deterministically
-    for (let dz = -TREE_MARGIN; dz < CHUNK + TREE_MARGIN; dz++) {
-      for (let dx = -TREE_MARGIN; dx < CHUNK + TREE_MARGIN; dx++) {
-        const x = x0 + dx, z = z0 + dz;
-        const h = t.heightAt(x, z);
-        const biome = t.biomeAt(x, z, h);
-        const inChunk = dx >= 0 && dx < CHUNK && dz >= 0 && dz < CHUNK;
+    // pass 2a: trees from grid cells overlapping the chunk + canopy margin
+    const c0x = Math.floor((x0 - TREE_MARGIN) / TREE_CELL);
+    const c1x = Math.floor((x0 + CHUNK - 1 + TREE_MARGIN) / TREE_CELL);
+    const c0z = Math.floor((z0 - TREE_MARGIN) / TREE_CELL);
+    const c1z = Math.floor((z0 + CHUNK - 1 + TREE_MARGIN) / TREE_CELL);
+    for (let cz5 = c0z; cz5 <= c1z; cz5++) {
+      for (let cx5 = c0x; cx5 <= c1x; cx5++) {
+        const tree = t.treeCellAt(cx5, cz5);
+        if (tree) stampTree(chunk, tree.x - x0, tree.z - z0, tree.h, tree);
+      }
+    }
 
-        // skip columns whose surface was carved away by a cave opening
-        const surfaceCarved = h > 3 && t.isCave(x, h, z);
-
-        const tree = surfaceCarved ? null : t.treeAt(x, z, biome, h);
-        if (tree) {
-          stampTree(chunk, x - x0, z - z0, h, tree);
-          continue;
-        }
-
-        if (!inChunk || surfaceCarved) continue;
+    // pass 2b: cacti and plants (single-column features, no margin needed)
+    for (let lz = 0; lz < CHUNK; lz++) {
+      for (let lx = 0; lx < CHUNK; lx++) {
+        const x = x0 + lx, z = z0 + lz;
+        const h = hAt(lx, lz);
+        const biome = biomes[lx + CHUNK * lz];
 
         const cactus = t.cactusAt(x, z, biome, h);
-        if (cactus > 0) {
+        if (cactus > 0 && chunk.get(lx, h, lz) === SAND) {
           for (let i = 1; i <= cactus; i++) {
-            if (h + i < HEIGHT) chunk.set(dx, h + i, dz, CACTUS);
+            if (h + i < HEIGHT && chunk.get(lx, h + i, lz) === AIR) chunk.set(lx, h + i, lz, CACTUS);
           }
           continue;
         }
 
-        // plants on grass
         if ((biome === "plains" || biome === "forest") && h > SEA_LEVEL + 1 && h + 1 < HEIGHT) {
           const r = hash2(x, z, seed ^ 0xf10a);
-          if (chunk.get(dx, h, dz) === GRASS) {
-            if (r < 0.06) chunk.set(dx, h + 1, dz, TALLGRASS);
-            else if (r < 0.068) chunk.set(dx, h + 1, dz, POPPY);
-            else if (r < 0.076) chunk.set(dx, h + 1, dz, DANDELION);
+          if (r < 0.076 && chunk.get(lx, h, lz) === GRASS && chunk.get(lx, h + 1, lz) === AIR) {
+            if (r < 0.06) chunk.set(lx, h + 1, lz, TALLGRASS);
+            else if (r < 0.068) chunk.set(lx, h + 1, lz, POPPY);
+            else chunk.set(lx, h + 1, lz, DANDELION);
           }
         }
       }
@@ -200,17 +233,22 @@ export function makeGenerator(seed) {
   return generate;
 }
 
-// Find a dry-land spawn column near the origin (expanding ring search).
+// Find a dry-land spawn column near the origin that isn't inside a tree or
+// cactus (expanding ring search).
 export function findSpawn(terrain) {
-  for (let r = 0; r < 64; r += 4) {
-    for (let a = 0; a < 16; a++) {
-      const x = Math.round(Math.cos((a / 16) * Math.PI * 2) * r);
-      const z = Math.round(Math.sin((a / 16) * Math.PI * 2) * r);
+  for (let r = 0; r < 200; r += 4) {
+    const samples = Math.max(8, r);
+    for (let a = 0; a < samples; a++) {
+      const x = Math.round(Math.cos((a / samples) * Math.PI * 2) * r);
+      const z = Math.round(Math.sin((a / samples) * Math.PI * 2) * r);
       const h = terrain.heightAt(x, z);
-      if (h > SEA_LEVEL + 1 && h < HEIGHT - 20) {
-        return { x: x + 0.5, y: h + 2.5, z: z + 0.5 };
-      }
+      if (h <= SEA_LEVEL + 1 || h >= HEIGHT - 20) continue;
+      if (terrain.treeNear(x, z, 1)) continue;
+      if (terrain.cactusAt(x, z, terrain.biomeAt(x, z, h), h) > 0) continue;
+      return { x: x + 0.5, y: h + 2.5, z: z + 0.5 };
     }
   }
-  return { x: 0.5, y: HEIGHT - 20, z: 0.5 };
+  // desperate fallback: over the origin column, swimming if need be
+  const h0 = terrain.heightAt(0, 0);
+  return { x: 0.5, y: Math.max(h0, SEA_LEVEL) + 2.5, z: 0.5 };
 }

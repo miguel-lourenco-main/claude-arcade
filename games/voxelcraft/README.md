@@ -9,22 +9,29 @@ canvas atlas at boot, and every sound is synthesized with WebAudio.
 
 - **Infinite procedural terrain** — seeded Perlin/fBm heightmap (continents,
   mountain-masked hills), four biomes (plains, forest, desert, snow), beaches,
-  sea level, spaghetti + cavern caves, deterministic cross-chunk trees, cacti,
-  flowers and tall grass.
+  sea level, spaghetti + cavern caves (guarded so they never breach standing
+  water), coal/iron ore veins, deterministic grid-jittered cross-chunk trees,
+  cacti, flowers and tall grass.
 - **Minecraft-style rendering** — chunked meshing (16×96×16) with hidden-face
   culling, per-face directional shade, classic 3-sample vertex ambient
-  occlusion (with quad-diagonal flip), cutout bucket for plants/glass and a
-  translucent lowered-surface water bucket. Nearest-neighbor 16px textures.
+  occlusion (with quad-diagonal flip), cheap column sky-light so caves and
+  interiors actually get dark, cutout bucket for plants/glass and a
+  translucent, animated, lowered-surface water bucket. 16px nearest-neighbor
+  textures.
 - **Player physics** — AABB collision with substepping, gravity/jump tuned to
-  MC-like constants, double-tap-W sprint (with FOV kick), sneak, swimming,
-  double-tap-space creative flight.
+  MC-like constants, double-tap-W sprint (with FOV kick), sneak with an edge
+  guard (you can't walk off a ledge while sneaking), swimming with a water-exit
+  boost, double-tap-space creative flight, view bobbing, void respawn.
 - **Interaction** — 5-block voxel raycast, block highlight, instant break with
-  hold-repeat, placement with player-overlap rejection, middle-click pick
-  block, break particles, procedural dig/place sounds.
+  hold-repeat plus sweep-breaking (drag the crosshair to mow through blocks),
+  placement with player-overlap rejection, middle-click pick block, break
+  particles, procedural dig/place/footstep sounds. Bedrock is indestructible.
 - **World feel** — 10-minute day/night cycle: moving sun and moon, stars,
-  scrolling blocky clouds, dusk tint, fog matched to sky, underwater fog.
+  scrolling blocky clouds, dusk tint, genuinely dark blue-ish nights, fog
+  matched to sky and view distance, underwater fog.
 - **Persistence** — seed, player state, hotbar, time of day, and every block
-  edit autosaved to localStorage. Reset from the pause menu.
+  edit autosaved to localStorage (validated on load). Reset from the pause
+  menu.
 
 ## Controls
 
@@ -33,7 +40,7 @@ canvas atlas at boot, and every sound is synthesized with WebAudio.
 | WASD / Space | move / jump |
 | double-tap W | sprint |
 | double-tap Space | toggle flight (Space/Shift = up/down) |
-| Shift | sneak (slow) |
+| Shift | sneak (slow, won't fall off edges) |
 | LMB / RMB / MMB | break / place / pick block |
 | 1–9 / wheel | hotbar selection |
 | E | block picker |

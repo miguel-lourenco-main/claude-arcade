@@ -2,7 +2,7 @@
 // split into three buckets (opaque / cutout / water) that map to three materials.
 
 import * as THREE from "three";
-import { BLOCKS, AIR } from "./blocks.js";
+import { BLOCKS, AIR, LEAVES, LEAVES_COLD } from "./blocks.js";
 import { CHUNK, HEIGHT } from "./world.js";
 import { tileUV } from "./textures.js";
 import { hash2 } from "./noise.js";
@@ -16,17 +16,21 @@ const FACES = [
   { dir: [0, 0, 1],  shade: 0.8,  corners: [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]] },
   { dir: [0, 0, -1], shade: 0.8,  corners: [[1, 0, 0], [0, 0, 0], [0, 1, 0], [1, 1, 0]] },
 ];
-const CORNER_UV = [[0, 0], [1, 0], [1, 1], [0, 1]];
 const AO_MULT = [1.0, 0.78, 0.6, 0.46];
 const WATER_SURFACE = 0.85;
+const WATER_UV = { u0: 0, v0: 0, u1: 1, v1: 1 }; // own repeating texture
+// cheap sky light: brightness falloff per block of depth below the topmost
+// sky-blocking block of the column (caves and interiors get dark)
+const LIGHT_FALLOFF = 0.14;
+const LIGHT_FLOOR = 0.3;
 
-export function buildMaterials(atlasTexture) {
+export function buildMaterials(atlasTexture, waterTexture) {
   const opaque = new THREE.MeshLambertMaterial({ map: atlasTexture, vertexColors: true });
   const cutout = new THREE.MeshLambertMaterial({
     map: atlasTexture, vertexColors: true, alphaTest: 0.4, side: THREE.DoubleSide,
   });
   const water = new THREE.MeshLambertMaterial({
-    map: atlasTexture, vertexColors: true, transparent: true, opacity: 0.72,
+    map: waterTexture, vertexColors: true, transparent: true, opacity: 0.72,
     depthWrite: false, side: THREE.DoubleSide,
   });
   return { opaque, cutout, water };
@@ -41,8 +45,8 @@ class BucketBuffer {
     this.vertCount = 0;
   }
   // corners: 4x [x,y,z]; brightness: 4 scalars; flip: split quad along 1-3
-  quad(corners, tile, brightness, flip = false) {
-    const { u0, u1, v0, v1 } = tileUV(tile);
+  quad(corners, tile, brightness, flip = false, uvRect = null) {
+    const { u0, u1, v0, v1 } = uvRect || tileUV(tile);
     const us = [u0, u1, u1, u0], vs = [v0, v0, v1, v1];
     for (let i = 0; i < 4; i++) {
       this.positions.push(corners[i][0], corners[i][1], corners[i][2]);
@@ -70,7 +74,9 @@ class BucketBuffer {
 
 function faceVisible(id, def, neighborId) {
   const n = BLOCKS[neighborId];
-  if (def.bucket === "water") return neighborId !== id && !n.opaque;
+  // water only shows faces against air and plants — any cube (glass included)
+  // would otherwise produce a coplanar duplicate quad
+  if (def.bucket === "water") return neighborId === AIR || n.kind === "cross";
   if (def.cullSame) return neighborId !== id && !n.opaque;
   return !n.opaque;
 }
@@ -83,6 +89,27 @@ export function meshChunk(world, chunk, materials, scene) {
   const x0 = chunk.cx * CHUNK, z0 = chunk.cz * CHUNK;
   const get = (wx, wy, wz) => world.getBlock(wx, wy, wz);
 
+  // sky-light column map (chunk + 1-cell border): topmost sky-blocking block.
+  // Leaves don't block sky so forests stay lit underneath.
+  const top = new Int16Array((CHUNK + 2) * (CHUNK + 2)).fill(-1);
+  for (let lz = -1; lz <= CHUNK; lz++) {
+    for (let lx = -1; lx <= CHUNK; lx++) {
+      for (let y = HEIGHT - 1; y >= 0; y--) {
+        const id = get(x0 + lx, y, z0 + lz);
+        if (BLOCKS[id].opaque && id !== LEAVES && id !== LEAVES_COLD) {
+          top[(lx + 1) + (CHUNK + 2) * (lz + 1)] = y;
+          break;
+        }
+      }
+    }
+  }
+  // light of the cell a face is exposed to (depth below its column top)
+  const lightAt = (lx, y, lz) => {
+    const t = top[(lx + 1) + (CHUNK + 2) * (lz + 1)];
+    const depth = t - y;
+    return depth <= 0 ? 1 : Math.max(LIGHT_FLOOR, 1 - depth * LIGHT_FALLOFF);
+  };
+
   for (let y = 0; y < HEIGHT; y++) {
     for (let lz = 0; lz < CHUNK; lz++) {
       for (let lx = 0; lx < CHUNK; lx++) {
@@ -92,12 +119,16 @@ export function meshChunk(world, chunk, materials, scene) {
         const wx = x0 + lx, wz = z0 + lz;
 
         if (def.kind === "cross") {
-          addCross(buckets.cutout, def, lx, y, lz, wx, wz);
+          addCross(buckets.cutout, def, lx, y, lz, wx, wz, lightAt(lx, y, lz));
           continue;
         }
 
         const isWater = def.bucket === "water";
-        const waterTop = isWater && get(wx, y + 1, wz) !== id;
+        // only lower the surface when the water is actually open to the air —
+        // under an opaque block the top face is culled, so lowering the sides
+        // would open a visible gap
+        const above = get(wx, y + 1, wz);
+        const waterTop = isWater && above !== id && !BLOCKS[above].opaque;
 
         for (const face of FACES) {
           const [dx, dy, dz] = face.dir;
@@ -105,6 +136,7 @@ export function meshChunk(world, chunk, materials, scene) {
           if (!faceVisible(id, def, nb)) continue;
 
           const tile = dy > 0 ? def.tiles.top : dy < 0 ? def.tiles.bottom : def.tiles.side;
+          const light = lightAt(lx + dx, Math.max(0, y + dy), lz + dz);
           const corners = [];
           const brightness = [];
           let flip = false;
@@ -117,7 +149,7 @@ export function meshChunk(world, chunk, materials, scene) {
               ao.push(cornerAO(get, wx, y, wz, face.dir, p));
             }
             flip = ao[0] + ao[2] > ao[1] + ao[3];
-            for (let ci = 0; ci < 4; ci++) brightness.push(face.shade * AO_MULT[ao[ci]]);
+            for (let ci = 0; ci < 4; ci++) brightness.push(face.shade * AO_MULT[ao[ci]] * light);
           } else {
             for (let ci = 0; ci < 4; ci++) {
               const p = face.corners[ci];
@@ -125,10 +157,10 @@ export function meshChunk(world, chunk, materials, scene) {
               // lower exposed water surfaces below the block top
               if (isWater && waterTop && p[1] === 1) py = y + WATER_SURFACE;
               corners.push([lx + p[0], py, lz + p[2]]);
-              brightness.push(face.shade);
+              brightness.push(face.shade * light);
             }
           }
-          buckets[def.bucket].quad(corners, tile, brightness, flip);
+          buckets[def.bucket].quad(corners, tile, brightness, flip, isWater ? WATER_UV : null);
         }
       }
     }
@@ -150,13 +182,14 @@ export function meshChunk(world, chunk, materials, scene) {
   chunk.dirty = false;
 }
 
-function addCross(bucket, def, lx, y, lz, wx, wz) {
+function addCross(bucket, def, lx, y, lz, wx, wz, light = 1) {
   // deterministic little offset so plants don't sit on a perfect grid
   const ox = (hash2(wx, wz, 0x9e37) - 0.5) * 0.3;
   const oz = (hash2(wz, wx, 0x79b9) - 0.5) * 0.3;
   const l = 0.15 + ox, h = 0.85 + ox;
   const l2 = 0.15 + oz, h2 = 0.85 + oz;
-  const b = [0.95, 0.95, 0.95, 0.95];
+  const s = 0.95 * light;
+  const b = [s, s, s, s];
   bucket.quad(
     [[lx + l, y, lz + l2], [lx + h, y, lz + h2], [lx + h, y + 1, lz + h2], [lx + l, y + 1, lz + l2]],
     def.tiles.side, b);

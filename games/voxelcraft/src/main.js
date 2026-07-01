@@ -2,8 +2,8 @@
 // physics, HUD/debug, persistence.
 
 import * as THREE from "three";
-import { buildAtlas } from "./textures.js";
-import { BLOCKS } from "./blocks.js";
+import { buildAtlas, buildWaterTexture } from "./textures.js";
+import { BLOCKS, AIR } from "./blocks.js";
 import { World, CHUNK, HEIGHT } from "./world.js";
 import { makeGenerator, findSpawn } from "./terrain.js";
 import { buildMaterials, meshChunk, disposeChunkMeshes } from "./mesher.js";
@@ -18,6 +18,9 @@ const MESH_RADIUS = 5;
 const GEN_RADIUS = MESH_RADIUS + 1;
 const UNLOAD_RADIUS = GEN_RADIUS + 2;
 const FIXED_DT = 1 / 60;
+// test hook: ?nolock runs input+physics without pointer lock (headless browsers
+// can't grant pointer lock, so automated tests use this)
+const NO_LOCK = new URLSearchParams(location.search).has("nolock");
 
 // --- boot -------------------------------------------------------------------
 
@@ -25,7 +28,7 @@ const save = loadSave();
 const seed = save ? save.seed : (Math.random() * 0xffffffff) >>> 0;
 
 const atlas = buildAtlas(1337); // fixed texture seed: consistent look across worlds
-const materials = buildMaterials(atlas.texture);
+const materials = buildMaterials(atlas.texture, buildWaterTexture(1337));
 
 const world = new World(seed);
 const generator = makeGenerator(seed);
@@ -41,27 +44,32 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
 renderer.setSize(innerWidth, innerHeight);
 document.getElementById("app").appendChild(renderer.domElement);
 
+const spawnPoint = findSpawn(terrain);
 const player = new Player(world);
-if (save && save.player) {
+const validPos = (p) => p && [p.x, p.y, p.z].every(Number.isFinite) && p.y > 0 && p.y < HEIGHT + 60;
+if (save && validPos(save.player)) {
   Object.assign(player.pos, { x: save.player.x, y: save.player.y, z: save.player.z });
-  player.yaw = save.player.yaw || 0;
-  player.pitch = save.player.pitch || 0;
+  player.yaw = Number.isFinite(save.player.yaw) ? save.player.yaw : 0;
+  player.pitch = Number.isFinite(save.player.pitch)
+    ? Math.max(-1.5, Math.min(1.5, save.player.pitch)) : 0;
   player.flying = !!save.player.flying;
 } else {
-  Object.assign(player.pos, findSpawn(terrain));
+  Object.assign(player.pos, spawnPoint);
 }
 if (save && save.edits) world.loadEdits(save.edits);
 
 const sky = new Sky(scene, seed);
-if (save && typeof save.time === "number") sky.time = save.time;
+if (save && Number.isFinite(save.time)) sky.time = ((save.time % 1) + 1) % 1;
 
 const sfx = new Sfx();
+player.onStep = (blockId) => { if (blockId !== AIR) sfx.step(blockId); };
 
 const hud = new Hud(atlas.canvas, {
   onResume: () => requestLock(),
-  onReset: () => { clearSave(); location.reload(); },
+  onReset: () => { stopAutosave(); clearSave(); location.reload(); },
 });
-if (save && Array.isArray(save.hotbar) && save.hotbar.length === 9) {
+const validSlot = (id) => Number.isInteger(id) && id !== AIR && !!BLOCKS[id];
+if (save && Array.isArray(save.hotbar) && save.hotbar.length === 9 && save.hotbar.every(validSlot)) {
   hud.slots = save.hotbar;
   hud.select(0);
 }
@@ -73,7 +81,7 @@ const interaction = new Interaction(world, player, scene, hud, {
   avgColor: atlas.avgColor,
 });
 
-startAutosave(() => writeSave(world, player, sky, hud));
+const stopAutosave = startAutosave(() => writeSave(world, player, sky, hud));
 
 // --- chunk streaming --------------------------------------------------------
 
@@ -151,19 +159,27 @@ let started = false;
 
 function requestLock() {
   hud.closePicker();
-  canvas.requestPointerLock();
+  if (NO_LOCK) { hud.hidePause(); started = true; return; }
+  // the promise rejects during the browser's post-Escape cooldown — swallow
+  // it (the pause overlay is still up; the next click retries)
+  const p = canvas.requestPointerLock();
+  if (p && typeof p.catch === "function") p.catch(() => {});
 }
+
+document.addEventListener("pointerlockerror", () => {});
 
 canvas.addEventListener("click", () => {
   if (!document.pointerLockElement) requestLock();
 });
+
+const inputActive = () => NO_LOCK || document.pointerLockElement === canvas;
 
 document.addEventListener("pointerlockchange", () => {
   const locked = document.pointerLockElement === canvas;
   if (locked) {
     hud.hidePause();
     started = true;
-  } else {
+  } else if (!NO_LOCK) {
     player.clearInput();
     interaction.clearInput();
     if (!hud.pickerOpen) hud.showPause(!started);
@@ -171,11 +187,11 @@ document.addEventListener("pointerlockchange", () => {
 });
 
 document.addEventListener("mousemove", (e) => {
-  if (document.pointerLockElement === canvas) player.onMouseMove(e.movementX, e.movementY);
+  if (inputActive()) player.onMouseMove(e.movementX, e.movementY);
 });
 
 document.addEventListener("mousedown", (e) => {
-  if (document.pointerLockElement !== canvas) return;
+  if (!inputActive() || hud.pickerOpen) return;
   if (e.button === 1) e.preventDefault();
   interaction.onMouseDown(e.button);
 });
@@ -189,7 +205,7 @@ document.addEventListener("keydown", (e) => {
   if (e.code === "F3") { e.preventDefault(); debugVisible = !debugVisible; return; }
   if (e.code === "KeyE") {
     if (hud.pickerOpen) { hud.closePicker(); requestLock(); }
-    else if (document.pointerLockElement === canvas) hud.openPicker();
+    else if (inputActive()) hud.openPicker();
     return;
   }
   if (e.code === "Escape" && hud.pickerOpen) {
@@ -197,7 +213,7 @@ document.addEventListener("keydown", (e) => {
     hud.showPause();
     return;
   }
-  if (document.pointerLockElement === canvas) {
+  if (inputActive() && !hud.pickerOpen) {
     if (e.code.startsWith("Digit")) {
       const n = Number(e.code.slice(5));
       if (n >= 1 && n <= 9) { hud.select(n - 1); sfx.click(); return; }
@@ -208,7 +224,7 @@ document.addEventListener("keydown", (e) => {
 document.addEventListener("keyup", (e) => player.onKeyUp(e.code));
 
 document.addEventListener("wheel", (e) => {
-  if (document.pointerLockElement === canvas) { hud.scroll(e.deltaY); sfx.click(); }
+  if (e.deltaY !== 0 && inputActive() && !hud.pickerOpen) { hud.scroll(e.deltaY); sfx.click(); }
 }, { passive: true });
 
 addEventListener("resize", () => {
@@ -223,6 +239,8 @@ let last = performance.now();
 let accumulator = 0;
 let fps = 60;
 let frames = 0;
+let bobPhase = 0;
+let bobAmp = 0;
 
 const CARDINALS = ["north (-z)", "east (+x)", "south (+z)", "west (-x)"];
 
@@ -246,11 +264,12 @@ function tick(now) {
 
   streamChunks(frames < 90);
 
-  // physics only once the ground under the player exists
-  const playerChunkReady = world.isGenerated(
-    Math.floor(player.pos.x / CHUNK), Math.floor(player.pos.z / CHUNK));
+  // physics only once the ground around the whole AABB exists — the player's
+  // own chunk AND its neighbors (collision near a border reads into them)
+  const pcx = Math.floor(player.pos.x / CHUNK), pcz = Math.floor(player.pos.z / CHUNK);
+  const playerChunkReady = world.isGenerated(pcx, pcz) && neighborsGenerated(pcx, pcz);
 
-  if (playerChunkReady && document.pointerLockElement === canvas) {
+  if (playerChunkReady && inputActive()) {
     accumulator = Math.min(accumulator + frameDt, 0.25);
     while (accumulator >= FIXED_DT) {
       player.update(FIXED_DT);
@@ -258,9 +277,32 @@ function tick(now) {
     }
   }
 
-  camera.position.set(player.pos.x, player.eyeY, player.pos.z);
+  // void safety net: below the world, respawn instead of falling forever
+  if (player.pos.y < -16) {
+    Object.assign(player.pos, spawnPoint);
+    player.vel.x = player.vel.y = player.vel.z = 0;
+    player.flying = false;
+  }
+
+  // view bobbing while walking on the ground
+  const horizSpeed = Math.hypot(player.vel.x, player.vel.z);
+  bobAmp += ((player.onGround && horizSpeed > 0.5 ? 1 : 0) - bobAmp) * Math.min(1, frameDt * 8);
+  bobPhase += horizSpeed * frameDt * 1.7;
+  const bobY = Math.sin(bobPhase * 2) * 0.05 * bobAmp;
+  const bobX = Math.cos(bobPhase) * 0.03 * bobAmp;
+
+  camera.position.set(
+    player.pos.x + Math.cos(player.yaw) * bobX,
+    player.eyeY + bobY,
+    player.pos.z - Math.sin(player.yaw) * bobX);
   camera.rotation.y = player.yaw;
   camera.rotation.x = player.pitch;
+  camera.rotation.z = Math.sin(bobPhase) * 0.004 * bobAmp;
+
+  // scrolling water
+  const waterMap = materials.water.map;
+  waterMap.offset.x = (now * 0.000021) % 1;
+  waterMap.offset.y = (now * 0.000013) % 1;
 
   // sprint FOV kick
   const targetFov = player.sprinting && !player.flying ? 77 : 70;

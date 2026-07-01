@@ -16,7 +16,10 @@ const SNEAK_SPEED = 1.31;
 const FLY_SPEED = 11;
 const FLY_SPRINT_SPEED = 22;
 const SWIM_SPEED = 2.2;
+const SWIM_UP_MAX = 3.5;
+const WATER_EXIT_BOOST = 6;       // upward kick when swimming into a bank
 const MAX_STEP_DISP = 0.4;        // max movement per collision substep (anti-tunneling)
+const STEP_DISTANCE = 2.2;        // blocks walked between footstep sounds
 
 export class Player {
   constructor(world) {
@@ -34,6 +37,9 @@ export class Player {
     this.keys = new Set();
     this._lastSpaceTap = 0;
     this._lastForwardTap = 0;
+    this._hitWall = false;      // horizontal collision this tick
+    this._walked = 0;           // distance since last footstep
+    this.onStep = null;         // (blockIdUnderfoot) => void
   }
 
   get eyeY() { return this.pos.y + EYE_HEIGHT; }
@@ -115,9 +121,12 @@ export class Player {
     } else if (this.inWater) {
       this.vel.y -= 4 * dt;                      // gentle sink
       if (jumping) this.vel.y += 16 * dt;        // swim up
-      this.vel.y = Math.max(-3, Math.min(3.5, this.vel.y));
-      // hop out of the water at the edge
-      if (jumping && this.onGround) this.vel.y = JUMP_SPEED * 0.55;
+      this.vel.y = Math.max(-3, Math.min(SWIM_UP_MAX, this.vel.y));
+      // swimming against a bank while pressing up/forward: boost out of the
+      // water (exempt from the swim clamp, or the ledge is never clearable)
+      if (jumping && (this._hitWall || this.onGround) && (forward !== 0 || strafe !== 0)) {
+        this.vel.y = WATER_EXIT_BOOST;
+      }
     } else {
       this.vel.y -= GRAVITY * dt;
       if (this.vel.y < -TERMINAL_VELOCITY) this.vel.y = -TERMINAL_VELOCITY;
@@ -127,8 +136,24 @@ export class Player {
       }
     }
 
+    this._sneaking = sneaking;
     this._moveWithCollisions(dt);
     if (this.flying && this.onGround) this.flying = false;
+
+    // footsteps
+    if (this.onGround && !this.inWater) {
+      this._walked += Math.hypot(this.vel.x, this.vel.z) * dt;
+      if (this._walked > STEP_DISTANCE) {
+        this._walked = 0;
+        if (this.onStep) {
+          const below = this.world.getBlock(
+            Math.floor(this.pos.x), Math.floor(this.pos.y - 0.5), Math.floor(this.pos.z));
+          this.onStep(below);
+        }
+      }
+    } else {
+      this._walked = STEP_DISTANCE * 0.6; // land into a quick step
+    }
   }
 
   _updateWaterState() {
@@ -144,18 +169,42 @@ export class Player {
     const dispX = this.vel.x * dt, dispY = this.vel.y * dt, dispZ = this.vel.z * dt;
     const maxDisp = Math.max(Math.abs(dispX), Math.abs(dispY), Math.abs(dispZ));
     const steps = Math.max(1, Math.ceil(maxDisp / MAX_STEP_DISP));
+    const wasOnGround = this.onGround;
     this.onGround = false;
+    this._hitWall = false;
     for (let i = 0; i < steps; i++) {
-      this._moveAxis("x", dispX / steps);
-      this._moveAxis("z", dispZ / steps);
-      this._moveAxis("y", dispY / steps);
+      this._moveAxis("x", dispX / steps, wasOnGround);
+      this._moveAxis("z", dispZ / steps, wasOnGround);
+      this._moveAxis("y", dispY / steps, wasOnGround);
     }
   }
 
-  _moveAxis(axis, disp) {
+  // any solid block directly under the AABB (with a small tolerance)
+  _hasSupport() {
+    const p = this.pos;
+    const y = Math.floor(p.y - 0.05);
+    const x0 = Math.floor(p.x - HALF_W), x1 = Math.floor(p.x + HALF_W - 0.001);
+    const z0 = Math.floor(p.z - HALF_W), z1 = Math.floor(p.z + HALF_W - 0.001);
+    for (let bz = z0; bz <= z1; bz++) for (let bx = x0; bx <= x1; bx++) {
+      if (isSolid(this.world.getBlock(bx, y, bz))) return true;
+    }
+    return false;
+  }
+
+  _moveAxis(axis, disp, wasOnGround) {
     if (disp === 0) return;
     const p = this.pos;
+    const before = p[axis];
     p[axis] += disp;
+
+    // sneak edge-guard: never walk off a ledge while sneaking
+    if (axis !== "y" && this._sneaking && wasOnGround && !this.flying && !this.inWater) {
+      if (!this._hasSupport()) {
+        p[axis] = before;
+        this.vel[axis] = 0;
+        return;
+      }
+    }
 
     const minX = p.x - HALF_W, maxX = p.x + HALF_W;
     const minY = p.y, maxY = p.y + PLAYER_HEIGHT;
@@ -173,9 +222,11 @@ export class Player {
           if (axis === "x") {
             p.x = disp > 0 ? bx - HALF_W - eps : bx + 1 + HALF_W + eps;
             this.vel.x = 0;
+            this._hitWall = true;
           } else if (axis === "z") {
             p.z = disp > 0 ? bz - HALF_W - eps : bz + 1 + HALF_W + eps;
             this.vel.z = 0;
+            this._hitWall = true;
           } else {
             if (disp > 0) {
               p.y = by - PLAYER_HEIGHT - eps;

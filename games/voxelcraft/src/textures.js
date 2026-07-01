@@ -33,6 +33,8 @@ export const TILE = {
   SANDSTONE_SIDE: 22,
   SANDSTONE_TOP: 23,
   LEAVES_COLD: 24,
+  COAL_ORE: 25,
+  IRON_ORE: 26,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -261,6 +263,24 @@ const painters = {
   [TILE.SANDSTONE_TOP](p) {
     p.noiseFill([222, 208, 162], 6);
   },
+  [TILE.COAL_ORE](p) {
+    p.noiseFill([127, 127, 127], 9);
+    for (const [bx, by] of [[3, 3], [10, 5], [5, 10], [12, 12], [8, 8]]) {
+      for (let i = 0; i < 4; i++) {
+        const d = p.rand() * 14;
+        p.px(bx + ((p.rand() * 2) | 0), by + ((p.rand() * 2) | 0), 28 + d, 28 + d, 30 + d);
+      }
+    }
+  },
+  [TILE.IRON_ORE](p) {
+    p.noiseFill([127, 127, 127], 9);
+    for (const [bx, by] of [[4, 4], [11, 3], [3, 11], [10, 10], [7, 7]]) {
+      for (let i = 0; i < 4; i++) {
+        const d = (p.rand() * 2 - 1) * 12;
+        p.px(bx + ((p.rand() * 2) | 0), by + ((p.rand() * 2) | 0), 216 + d, 172 + d, 140 + d);
+      }
+    }
+  },
 };
 
 export function buildAtlas(seed = 1337) {
@@ -297,6 +317,32 @@ export function buildAtlas(seed = 1337) {
   texture.colorSpace = THREE.SRGBColorSpace;
 
   return { canvas, texture, avgColor: avg };
+}
+
+// Standalone repeating water texture (separate from the atlas so its UV
+// offset can be animated without dragging every other tile along).
+export function buildWaterTexture(seed = 1337) {
+  const canvas = document.createElement("canvas");
+  canvas.width = TILE_PX;
+  canvas.height = TILE_PX;
+  const ctx = canvas.getContext("2d");
+  const rand = mulberry32(seed ^ 0xaa77a);
+  for (let y = 0; y < TILE_PX; y++) {
+    for (let x = 0; x < TILE_PX; x++) {
+      const d = (rand() * 2 - 1) * 10;
+      // faint horizontal banding reads as ripples once it scrolls
+      const band = (y + ((x * 0.5) | 0)) % 4 === 0 ? 12 : 0;
+      ctx.fillStyle = `rgb(${53 + d + band},${105 + d + band},${200 + d + band})`;
+      ctx.fillRect(x, y, 1, 1);
+    }
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.magFilter = THREE.NearestFilter;
+  texture.minFilter = THREE.NearestFilter;
+  texture.generateMipmaps = false;
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
 }
 
 // UV rect for a tile, inset by half a texel to avoid atlas bleeding.
