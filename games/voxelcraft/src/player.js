@@ -29,7 +29,7 @@ const FRICTION_GROUND = 50;
 const ACCEL_AIR = 12;
 const ACCEL_WATER = 16;
 const ACCEL_FLY = 45;
-const FRICTION_FLY = 28;
+const FRICTION_FLY = 80; // firm enough that sprint-fly (22 bl/s) stops in ~2 blocks
 
 // move v toward target by at most maxDelta (linear approach, no overshoot)
 function approach(v, target, maxDelta) {
@@ -169,7 +169,7 @@ export class Player {
     // vertical
     if (this.flying) {
       const up = (jumping ? 1 : 0) - (sneaking ? 1 : 0);
-      this.vel.y = approach(this.vel.y, up * speed, 55 * dt);
+      this.vel.y = approach(this.vel.y, up * speed, (up !== 0 ? 55 : FRICTION_FLY) * dt);
     } else if (this.inWater) {
       this.vel.y -= 4 * dt;                      // gentle sink
       if (jumping) this.vel.y += 16 * dt;        // swim up
