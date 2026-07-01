@@ -36,6 +36,9 @@ export const TILE = {
   COAL_ORE: 25,
   IRON_ORE: 26,
   TORCH: 27,
+  CHEST_SIDE: 28,
+  CHEST_TOP: 29,
+  SAPLING: 30,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -293,6 +296,33 @@ const painters = {
     p.px(7, 5, 255, 190, 80); p.px(8, 5, 255, 190, 80);
     p.px(7, 4, 255, 232, 150); p.px(8, 4, 255, 232, 150);
     p.px(7, 3, 255, 250, 220); p.px(8, 3, 255, 250, 220);
+  },
+  [TILE.CHEST_SIDE](p) {
+    // wooden panel, dark rim, brass latch
+    for (let y = 0; y < TILE_PX; y++) for (let x = 0; x < TILE_PX; x++) {
+      const rim = x === 0 || x === 15 || y === 0 || y === 15 || y === 7;
+      const d = (p.rand() * 2 - 1) * 8;
+      if (rim) p.px(x, y, 96 + d, 70 + d, 40 + d);
+      else p.px(x, y, 158 + d, 116 + d, 66 + d);
+    }
+    for (const [x, y] of [[7, 6], [8, 6], [7, 7], [8, 7], [7, 8], [8, 8]]) p.px(x, y, 200, 190, 120);
+  },
+  [TILE.CHEST_TOP](p) {
+    for (let y = 0; y < TILE_PX; y++) for (let x = 0; x < TILE_PX; x++) {
+      const rim = x === 0 || x === 15 || y === 0 || y === 15;
+      const d = (p.rand() * 2 - 1) * 8;
+      if (rim) p.px(x, y, 96 + d, 70 + d, 40 + d);
+      else p.px(x, y, 150 + d, 110 + d, 62 + d);
+    }
+  },
+  [TILE.SAPLING](p) {
+    p.clear();
+    for (let i = 0; i < 6; i++) p.px(7 + (i > 3 ? 1 : 0), 15 - i, 96, 70, 40); // stem
+    const leaves = [[7, 7], [6, 7], [8, 7], [7, 6], [6, 6], [8, 6], [7, 5], [5, 7], [9, 7], [7, 8], [6, 5], [8, 5]];
+    for (const [x, y] of leaves) {
+      const d = (p.rand() * 2 - 1) * 14;
+      p.px(x, y, 58 + d, 122 + d, 40 + d);
+    }
   },
 };
 

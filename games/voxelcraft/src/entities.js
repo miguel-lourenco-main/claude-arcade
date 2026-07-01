@@ -29,18 +29,18 @@ export class ItemDrops {
     return geo;
   }
 
-  spawn(x, y, z, id) {
+  spawn(x, y, z, id, qty = 1) {
     if (!BLOCKS[id]) return;
     if (this.drops.length >= MAX_DROPS) this._remove(0);
     const mesh = new THREE.Mesh(
       this._geometry(id),
       BLOCKS[id].kind === "cross" ? this.materials.cutout : this.materials.opaque
     );
-    mesh.scale.setScalar(0.25);
+    mesh.scale.setScalar(qty > 1 ? 0.32 : 0.25); // stacks read slightly bigger
     mesh.position.set(x, y, z);
     this.scene.add(mesh);
     this.drops.push({
-      id, mesh,
+      id, qty, mesh,
       x, y, z,
       vx: (Math.random() - 0.5) * 2.2,
       vy: 2.4 + Math.random() * 1.2,
@@ -94,7 +94,7 @@ export class ItemDrops {
         const px = player.pos.x - d.x, py = player.pos.y + 0.9 - d.y, pz = player.pos.z - d.z;
         const dist = Math.hypot(px, py, pz);
         if (dist < PICKUP_DIST) {
-          onPickup(d.id);
+          onPickup(d.id, d.qty);
           this._remove(i);
           continue;
         }

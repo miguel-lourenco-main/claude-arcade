@@ -26,6 +26,8 @@ export const LEAVES_COLD = 20;
 export const COAL_ORE = 21;
 export const IRON_ORE = 22;
 export const TORCH = 23;
+export const CHEST = 24;
+export const SAPLING = 25;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -64,7 +66,9 @@ BLOCKS[LOG] = def("Oak Log", { hardness: 1.4,
   tiles: cube({ top: TILE.LOG_TOP, side: TILE.LOG_SIDE, bottom: TILE.LOG_TOP }),
   sound: "wood",
 });
-BLOCKS[LEAVES] = def("Oak Leaves", { hardness: 0.3, drops: null, tiles: cube(TILE.LEAVES), sound: "plant" });
+BLOCKS[LEAVES] = def("Oak Leaves", { hardness: 0.3, drops: null,
+  randomDrop: { id: SAPLING, chance: 0.1 },
+  tiles: cube(TILE.LEAVES), sound: "plant" });
 BLOCKS[PLANKS] = def("Oak Planks", { hardness: 1.4, tiles: cube(TILE.PLANKS), sound: "wood" });
 BLOCKS[GLASS] = def("Glass", { hardness: 0.4, drops: null,
   tiles: cube(TILE.GLASS),
@@ -118,7 +122,9 @@ BLOCKS[BRICKS] = def("Bricks", { hardness: 2.0, tiles: cube(TILE.BRICKS) });
 BLOCKS[SANDSTONE] = def("Sandstone", { hardness: 1.2,
   tiles: cube({ top: TILE.SANDSTONE_TOP, side: TILE.SANDSTONE_SIDE, bottom: TILE.SANDSTONE_TOP }),
 });
-BLOCKS[LEAVES_COLD] = def("Spruce Leaves", { hardness: 0.3, drops: null, tiles: cube(TILE.LEAVES_COLD), sound: "plant" });
+BLOCKS[LEAVES_COLD] = def("Spruce Leaves", { hardness: 0.3, drops: null,
+  randomDrop: { id: SAPLING, chance: 0.1 },
+  tiles: cube(TILE.LEAVES_COLD), sound: "plant" });
 BLOCKS[COAL_ORE] = def("Coal Ore", { hardness: 2.8, tiles: cube(TILE.COAL_ORE) });
 BLOCKS[IRON_ORE] = def("Iron Ore", { hardness: 3.2, tiles: cube(TILE.IRON_ORE) });
 BLOCKS[TORCH] = def("Torch", { hardness: 0.05,
@@ -129,6 +135,18 @@ BLOCKS[TORCH] = def("Torch", { hardness: 0.05,
   opaque: false,
   sound: "wood",
   lightEmit: 14,
+});
+BLOCKS[CHEST] = def("Chest", { hardness: 1.2,
+  tiles: cube({ top: TILE.CHEST_TOP, side: TILE.CHEST_SIDE, bottom: TILE.CHEST_TOP }),
+  sound: "wood",
+});
+BLOCKS[SAPLING] = def("Oak Sapling", { hardness: 0.05,
+  tiles: cube(TILE.SAPLING),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  sound: "plant",
 });
 
 // Blocks offered in the hotbar picker (everything but air).

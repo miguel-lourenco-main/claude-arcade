@@ -54,7 +54,24 @@ canvas atlas at boot, and every sound is synthesized with WebAudio.
   search the world outward from where you stand.
 - **First-person hand** — the selected block bobs in your hand and swings on
   every break/place.
-- **Persistence** — seed, player state, hotbar, movement mode, time of day, and
+- **Crafting** — a flat recipe list in the survival inventory (E): log → 4
+  planks, 8 planks → chest, coal ore + planks → 4 torches, sand → glass,
+  4 sand → sandstone, cobblestone → stone, 4 stone → 4 bricks. Smelting is
+  folded into recipes (no furnace) and there's no crafting grid — with no
+  tools or intermediate items, shapes would be ceremony without depth.
+- **Chests** — craft and place them, right-click to open (sneak-place to
+  build against them), click stacks to move them between chest and
+  inventory. Contents persist in the save and spill out as drops when the
+  chest is broken.
+- **Saplings** — leaves have a 10% chance to drop one; plant it and it grows
+  into a real tree after 30–60 seconds. Grown trees are written as block
+  edits, so they persist like anything you build.
+- **Mobs** — blocky pigs wander the grass around you: idle/walk AI, real
+  collision with 1-block hops, occasional oinks, day/night shading. Punch
+  them (3 HP) and they knock back; no drops — there's nothing to cook them
+  on yet.
+- **Persistence** — seed, player state, hotbar, movement mode, game mode,
+  health/air, inventory, chest contents, growing saplings, time of day, and
   every block edit autosaved to localStorage (validated on load). Reset from
   the pause menu.
 

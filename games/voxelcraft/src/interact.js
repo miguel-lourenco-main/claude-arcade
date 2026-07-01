@@ -2,7 +2,7 @@
 // with hold-repeat, pick-block, and break particles.
 
 import * as THREE from "three";
-import { AIR, BEDROCK, BLOCKS, isSolid, dropFor } from "./blocks.js";
+import { AIR, BEDROCK, CHEST, BLOCKS, isSolid, dropFor } from "./blocks.js";
 import { HEIGHT } from "./world.js";
 import { EYE_HEIGHT } from "./player.js";
 
@@ -51,6 +51,9 @@ export class Interaction {
     this.onSwing = opts.onSwing;     // () => held-item swing animation
     this.canConsume = opts.canConsume; // (id) => bool, takes from inventory (survival)
     this.onSpawnDrop = opts.onSpawnDrop; // (x, y, z, id) => item drop entity
+    this.onOpenChest = opts.onOpenChest;   // (x, y, z) => open chest UI (survival)
+    this.onChestBreak = opts.onChestBreak; // (x, y, z) => spill contents
+    this.mobs = opts.mobs;           // Mobs instance (punching)
     this.avgColor = opts.avgColor;   // tile -> [r,g,b]
 
     this.target = null;
@@ -184,6 +187,7 @@ export class Interaction {
 
   // survival break: remove the block, spawn its drop (and the popped plant's)
   _completeBreak(t) {
+    if (t.id === CHEST && this.onChestBreak) this.onChestBreak(t.x, t.y, t.z);
     const affected = this.world.setBlock(t.x, t.y, t.z, AIR);
     const above = this.world.getBlock(t.x, t.y + 1, t.z);
     let popped = null;
@@ -191,12 +195,16 @@ export class Interaction {
       popped = above;
       this.world.setBlock(t.x, t.y + 1, t.z, AIR);
     }
-    this.onEdit(affected, { ids: [t.id, popped] });
+    this.onEdit(affected, { ids: [t.id, popped], x: t.x, y: t.y, z: t.z, broken: t.id, popped });
     this.onSound("break", t.id);
     this.particles.burst(t.x, t.y, t.z, this.avgColor[BLOCKS[t.id].tiles.side] || [0.5, 0.5, 0.5]);
 
     const drop = dropFor(t.id);
     if (drop !== null) this.onSpawnDrop(t.x + 0.5, t.y + 0.4, t.z + 0.5, drop);
+    const rand = BLOCKS[t.id].randomDrop;
+    if (rand && Math.random() < rand.chance) {
+      this.onSpawnDrop(t.x + 0.5, t.y + 0.4, t.z + 0.5, rand.id);
+    }
     if (popped !== null) {
       const plantDrop = dropFor(popped);
       if (plantDrop !== null) this.onSpawnDrop(t.x + 0.5, t.y + 1.3, t.z + 0.5, plantDrop);
@@ -204,7 +212,14 @@ export class Interaction {
   }
 
   _act(button) {
-    if (this.target && this.onSwing) this.onSwing();
+    if ((this.target || button === 0) && this.onSwing) this.onSwing();
+    // punching a mob takes priority over the block behind it
+    if (button === 0 && this.mobs) {
+      const eye = { x: this.player.pos.x, y: this.player.eyeY, z: this.player.pos.z };
+      const reach = this.player.mode === "survival" ? REACH_SURVIVAL : REACH_CREATIVE;
+      const maxDist = this.target ? this.target.dist : reach;
+      if (this.mobs.punch(eye, this.player.lookDir(), Math.min(reach, maxDist), this.player.pos)) return;
+    }
     // survival LMB is handled by the mining loop, not instant breaking
     if (button === 0 && this.player.mode !== "survival") this._break();
     else if (button === 1 && this.target) this.onPick(this.target.id);
@@ -215,6 +230,7 @@ export class Interaction {
     const t = this.target;
     if (!t) return;
     if (t.id === BEDROCK) return; // the world floor is indestructible
+    if (t.id === CHEST && this.onChestBreak) this.onChestBreak(t.x, t.y, t.z);
     this._lastBreakKey = `${t.x},${t.y},${t.z}`;
     const def = BLOCKS[t.id];
     const affected = this.world.setBlock(t.x, t.y, t.z, AIR);
@@ -225,7 +241,7 @@ export class Interaction {
       popped = above;
       this.world.setBlock(t.x, t.y + 1, t.z, AIR);
     }
-    this.onEdit(affected, { ids: [t.id, popped] });
+    this.onEdit(affected, { ids: [t.id, popped], x: t.x, y: t.y, z: t.z, broken: t.id, popped });
     this.onSound("break", t.id);
     this.particles.burst(t.x, t.y, t.z, this.avgColor[def.tiles.side] || [0.5, 0.5, 0.5]);
   }
@@ -233,6 +249,11 @@ export class Interaction {
   _place() {
     const t = this.target;
     if (!t) return;
+    // right-click on a chest opens it (sneak to place against it instead)
+    if (t.id === CHEST && this.player.mode === "survival" && !this.player._sneaking && this.onOpenChest) {
+      this.onOpenChest(t.x, t.y, t.z);
+      return;
+    }
     const id = this.hotbar.selectedId();
     if (id === AIR) return;
     const def = BLOCKS[id];
@@ -268,7 +289,7 @@ export class Interaction {
     const affected = this.world.setBlock(px, py, pz, id);
     if (affected.length === 0) return;
     // include the replaced block: overwriting a torch must clear its light
-    this.onEdit(affected, { ids: [id, existing] });
+    this.onEdit(affected, { ids: [id, existing], x: px, y: py, z: pz, placed: id });
     this.onSound("place", id);
   }
 

@@ -62,6 +62,15 @@ export class Sfx {
 
   hurt() { this._noiseBurst(170, 0.18, 0.3); }
 
+  oink() {
+    this._noiseBurst(320, 0.09, 0.12);
+    setTimeout(() => this._noiseBurst(250, 0.1, 0.1), 100);
+  }
+
+  mobHurt() { this._noiseBurst(700, 0.12, 0.16); }
+
+  craft() { this._noiseBurst(900, 0.08, 0.1); }
+
   pickup() {
     if (!this.enabled || !this._ensure()) return;
     const ctx = this.ctx;

@@ -36,8 +36,28 @@ export class World {
     this.seed = seed;
     this.chunks = new Map();          // chunkKey -> Chunk
     this.edits = new Map();           // chunkKey -> Map(blockIndex -> id)
+    this.chests = new Map();          // "x,y,z" -> Map(blockId -> count)
     this.generator = null;            // set by terrain.js
     this._lastChunk = null;           // 1-entry lookup cache (meshing/physics locality)
+  }
+
+  serializeChests() {
+    return [...this.chests].map(([key, store]) => [key, [...store]]);
+  }
+
+  loadChests(arr) {
+    if (!Array.isArray(arr)) return;
+    for (const pair of arr) {
+      if (!Array.isArray(pair) || typeof pair[0] !== "string" || !Array.isArray(pair[1])) continue;
+      const store = new Map();
+      for (const entry of pair[1]) {
+        if (!Array.isArray(entry)) continue;
+        const [id, n] = entry;
+        if (!Number.isInteger(id) || !BLOCKS[id] || !Number.isInteger(n) || n <= 0) continue;
+        store.set(id, Math.min(9999, n));
+      }
+      if (store.size > 0) this.chests.set(pair[0], store);
+    }
   }
 
   getChunk(cx, cz) {

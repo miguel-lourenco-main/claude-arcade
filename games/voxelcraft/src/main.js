@@ -7,6 +7,9 @@ import { BLOCKS, AIR } from "./blocks.js";
 import { World, CHUNK, HEIGHT } from "./world.js";
 import { Inventory } from "./inventory.js";
 import { ItemDrops } from "./entities.js";
+import { Mobs } from "./mobs.js";
+import { craft } from "./craft.js";
+import { SAPLING, LOG, LEAVES, LEAVES_COLD } from "./blocks.js";
 import { makeGenerator, findSpawn, findBiomeLocation } from "./terrain.js";
 import {
   buildMaterials, meshChunk, disposeChunkMeshes, setDayLight, buildBlockGeometry,
@@ -83,6 +86,62 @@ if (save && Number.isFinite(save.air)) {
 const inventory = new Inventory();
 if (save && save.inventory) inventory.load(save.inventory);
 const drops = new ItemDrops(scene, materials);
+const mobs = new Mobs(scene);
+if (save && save.chests) world.loadChests(save.chests);
+
+// --- saplings: planted ones grow into real (edit-persisted) trees ----------
+
+let worldSeconds = 0;
+const saplings = new Map(); // "x,y,z" -> worldSeconds when it grows
+
+function registerSapling(x, y, z, delay = 30 + Math.random() * 30) {
+  saplings.set(`${x},${y},${z}`, worldSeconds + delay);
+}
+
+function growTree(x, y, z) {
+  const biome = terrain.biomeAt(x, z, y);
+  const leaves = biome === "snow" ? LEAVES_COLD : LEAVES;
+  const trunk = 4 + Math.floor(Math.random() * 3);
+  const affected = new Set();
+  const put = (dx, dy, dz, id, onlyAir = true) => {
+    const bx = x + dx, by = y + dy, bz = z + dz;
+    if (by <= 0 || by >= HEIGHT) return;
+    if (onlyAir && world.getBlock(bx, by, bz) !== AIR) return;
+    for (const c of world.setBlock(bx, by, bz, id)) affected.add(c);
+  };
+  for (let dy = trunk - 2; dy <= trunk - 1; dy++) {
+    for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) {
+      if (Math.abs(dx) === 2 && Math.abs(dz) === 2 && Math.random() < 0.5) continue;
+      put(dx, dy, dz, leaves);
+    }
+  }
+  for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+    if (Math.abs(dx) === 1 && Math.abs(dz) === 1) continue;
+    put(dx, trunk, dz, leaves);
+  }
+  put(0, trunk + 1, 0, leaves);
+  for (let dy = 0; dy < trunk; dy++) put(0, dy, 0, LOG, false); // overwrites the sapling
+  for (const c of affected) remeshNow(c);
+}
+
+function updateSaplings() {
+  for (const [key, due] of saplings) {
+    if (worldSeconds < due) continue;
+    const [x, y, z] = key.split(",").map(Number);
+    if (!world.isGenerated(x >> 4, z >> 4)) continue; // wait for the chunk
+    saplings.delete(key);
+    if (world.getBlock(x, y, z) === SAPLING) growTree(x, y, z);
+  }
+}
+if (save && Array.isArray(save.saplings)) {
+  for (const s of save.saplings) {
+    if (!Array.isArray(s) || s.length !== 4) continue;
+    const [x, y, z, remain] = s;
+    if ([x, y, z].every(Number.isInteger) && Number.isFinite(remain)) {
+      registerSapling(x, y, z, Math.max(1, Math.min(90, remain)));
+    }
+  }
+}
 if (save && save.edits) world.loadEdits(save.edits);
 
 const sky = new Sky(scene, seed);
@@ -139,6 +198,7 @@ const hud = new Hud(atlas.canvas, {
     hud.hideDeath();
     requestLock();
   },
+  onCraft: (recipe) => { if (craft(recipe, inventory)) sfx.craft(); },
   inventory,
 });
 hud.setMovementLabel(player.moveMode);
@@ -181,6 +241,12 @@ const interaction = new Interaction(world, player, scene, hud, {
     } else {
       for (const c of chunks) remeshNow(c);
     }
+    // sapling lifecycle
+    if (info) {
+      if (info.placed === SAPLING) registerSapling(info.x, info.y, info.z);
+      if (info.broken === SAPLING) saplings.delete(`${info.x},${info.y},${info.z}`);
+      if (info.popped === SAPLING) saplings.delete(`${info.x},${info.y + 1},${info.z}`);
+    }
   },
   onSound: (kind, id) => sfx.block(kind, id),
   onPick: (id) => hud.setSlot(id),
@@ -191,11 +257,33 @@ const interaction = new Interaction(world, player, scene, hud, {
     return ok;
   },
   onSpawnDrop: (x, y, z, id) => drops.spawn(x, y, z, id),
+  onOpenChest: (x, y, z) => {
+    const key = `${x},${y},${z}`;
+    let store = world.chests.get(key);
+    if (!store) { store = new Map(); world.chests.set(key, store); }
+    hud.openChest(store, () => sfx.click());
+  },
+  onChestBreak: (x, y, z) => {
+    const key = `${x},${y},${z}`;
+    const store = world.chests.get(key);
+    if (store) {
+      for (const [id, n] of store) drops.spawn(x + 0.5, y + 0.6, z + 0.5, id, n);
+      world.chests.delete(key);
+    }
+    if (hud.chestOpen) { hud.closeChest(); requestLock(); }
+  },
+  mobs,
   crackTextures: buildCrackTextures(1337),
   avgColor: atlas.avgColor,
 });
+mobs.onMobHurt = () => sfx.mobHurt();
 
-const stopAutosave = startAutosave(() => writeSave(world, player, sky, hud, inventory));
+const stopAutosave = startAutosave(() => writeSave(world, player, sky, hud, inventory, {
+  saplings: [...saplings].map(([key, due]) => {
+    const [x, y, z] = key.split(",").map(Number);
+    return [x, y, z, Math.max(1, due - worldSeconds)];
+  }),
+}));
 
 // --- held block (first-person hand) ------------------------------------------
 
@@ -318,7 +406,7 @@ canvas.addEventListener("click", () => {
 // in nolock mode the pointer-lock state can't encode "playing", so follow the
 // overlay state machine instead — otherwise UI clicks would break blocks
 const inputActive = () => NO_LOCK
-  ? !hud.paused && !hud.pickerOpen
+  ? !hud.paused && !hud.pickerOpen && !hud.chestOpen
   : document.pointerLockElement === canvas;
 
 document.addEventListener("pointerlockchange", () => {
@@ -329,7 +417,7 @@ document.addEventListener("pointerlockchange", () => {
   } else if (!NO_LOCK) {
     player.clearInput();
     interaction.clearInput();
-    if (!hud.pickerOpen && !hud.deathOpen) hud.showPause(!started);
+    if (!hud.pickerOpen && !hud.deathOpen && !hud.chestOpen) hud.showPause(!started);
   }
 });
 
@@ -351,8 +439,14 @@ document.addEventListener("keydown", (e) => {
   if (e.repeat) return;
   if (e.code === "F3") { e.preventDefault(); debugVisible = !debugVisible; return; }
   if (e.code === "KeyE") {
-    if (hud.pickerOpen) { hud.closePicker(); requestLock(); }
+    if (hud.chestOpen) { hud.closeChest(); requestLock(); }
+    else if (hud.pickerOpen) { hud.closePicker(); requestLock(); }
     else if (inputActive()) hud.openPicker();
+    return;
+  }
+  if (e.code === "Escape" && hud.chestOpen) {
+    hud.closeChest();
+    hud.showPause();
     return;
   }
   if (e.code === "Escape" && hud.pickerOpen) {
@@ -388,6 +482,7 @@ let fps = 60;
 let frames = 0;
 let bobPhase = 0;
 let bobAmp = 0;
+let nextSaplingCheck = 0;
 
 const CARDINALS = ["north (-z)", "east (+x)", "south (+z)", "west (-x)"];
 
@@ -422,12 +517,19 @@ function tick(now) {
       player.update(FIXED_DT);
       accumulator -= FIXED_DT;
     }
-    drops.update(frameDt, world, player, (id) => {
-      inventory.add(id);
+    drops.update(frameDt, world, player, (id, qty) => {
+      inventory.add(id, qty);
       sfx.pickup();
       hud.refreshCounts();
     });
+    mobs.update(frameDt, world, player, sfx);
+    worldSeconds += frameDt;
+    if (worldSeconds >= nextSaplingCheck) {
+      nextSaplingCheck = worldSeconds + 1;
+      updateSaplings();
+    }
   }
+  mobs.setLight(sky.lightLevel, sky.lightTint);
 
   if (player.mode === "survival") {
     hud.setHealth(player.health);
@@ -499,4 +601,9 @@ function tick(now) {
 requestAnimationFrame(tick);
 
 // automated-test handle (only in ?nolock mode, which headless tests use)
-if (NO_LOCK) window.voxelcraft = { player, world, hud, sky, terrain, interaction };
+if (NO_LOCK) {
+  window.voxelcraft = {
+    player, world, hud, sky, terrain, interaction, mobs, drops, saplings,
+    growAllSaplings: () => { for (const k of saplings.keys()) saplings.set(k, 0); },
+  };
+}

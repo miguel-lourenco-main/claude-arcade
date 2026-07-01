@@ -17,12 +17,14 @@ export function loadSave() {
 
 let warnedQuota = false;
 
-export function writeSave(world, player, sky, hud, inventory) {
+export function writeSave(world, player, sky, hud, inventory, extra = {}) {
   try {
     localStorage.setItem(KEY, JSON.stringify({
       v: 1,
       seed: world.seed,
       time: sky.time,
+      chests: world.serializeChests(),
+      saplings: extra.saplings || [],
       player: {
         x: player.pos.x, y: player.pos.y, z: player.pos.z,
         yaw: player.yaw, pitch: player.pitch, flying: player.flying,

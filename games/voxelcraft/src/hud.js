@@ -3,6 +3,7 @@
 
 import { BLOCKS, PLACEABLE, DEFAULT_HOTBAR } from "./blocks.js";
 import { ATLAS_TILES, TILE_PX } from "./textures.js";
+import { RECIPES, canCraft } from "./craft.js";
 
 const ICON = 40;
 
@@ -95,6 +96,7 @@ export class Hud {
     this.onSensitivity = opts.onSensitivity;       // (multiplier) => void
     this.onToggleMode = opts.onToggleMode;         // () => new game mode string
     this.onRespawn = opts.onRespawn;               // () => void
+    this.onCraft = opts.onCraft;                   // (recipe) => void
     this.inventory = opts.inventory;               // survival Inventory
     this.slots = [...DEFAULT_HOTBAR];
     this.selected = 0;
@@ -315,6 +317,9 @@ export class Hud {
     const survival = this.gameMode === "survival";
     const ids = survival ? this.inventory.ownedIds() : PLACEABLE;
 
+    if (survival) this._renderCrafting();
+    else document.getElementById("craft-list").innerHTML = "";
+
     if (survival && ids.length === 0) {
       const hint = document.createElement("p");
       hint.className = "picker-hint";
@@ -345,6 +350,39 @@ export class Hud {
     }
   }
 
+  // craft list: one row per recipe, clickable when the inputs are owned
+  _renderCrafting() {
+    const list = document.getElementById("craft-list");
+    list.innerHTML = "";
+    for (const recipe of RECIPES) {
+      const ok = canCraft(recipe, this.inventory);
+      const row = document.createElement("div");
+      row.className = "craft-row" + (ok ? "" : " uncraftable");
+
+      const outIcon = document.createElement("canvas");
+      outIcon.width = ICON; outIcon.height = ICON;
+      drawBlockIcon(outIcon.getContext("2d"), this.atlas, recipe.out[0]);
+      row.appendChild(outIcon);
+
+      const label = document.createElement("span");
+      const ins = recipe.in
+        .map(([id, n]) => `${n}× ${BLOCKS[id].name}`)
+        .join(" + ");
+      label.innerHTML =
+        `<b>${recipe.out[1]}× ${BLOCKS[recipe.out[0]].name}</b><small>${ins}</small>`;
+      row.appendChild(label);
+
+      if (ok) {
+        row.addEventListener("click", () => {
+          this.onCraft(recipe);
+          this._renderPicker(); // counts changed everywhere
+          this.refreshCounts();
+        });
+      }
+      list.appendChild(row);
+    }
+  }
+
   openPicker() {
     this._renderPicker();
     this.pickerOpen = true;
@@ -355,6 +393,67 @@ export class Hud {
   closePicker() {
     this.pickerOpen = false;
     this.pickerEl.classList.add("hidden");
+  }
+
+  // ---- chest UI: two panels, click a stack to move it wholesale ----
+
+  openChest(store, onChange) {
+    this.chestOpen = true;
+    this._chestStore = store;
+    this._chestChanged = onChange;
+    this._renderChest();
+    document.getElementById("chest-ui").classList.remove("hidden");
+    document.exitPointerLock();
+  }
+
+  closeChest() {
+    this.chestOpen = false;
+    this._chestStore = null;
+    document.getElementById("chest-ui").classList.add("hidden");
+  }
+
+  _renderChest() {
+    const store = this._chestStore;
+    const fill = (gridId, entries, onClickStack, emptyText) => {
+      const grid = document.getElementById(gridId);
+      grid.innerHTML = "";
+      if (entries.length === 0) {
+        const p = document.createElement("p");
+        p.className = "mini-empty";
+        p.textContent = emptyText;
+        grid.appendChild(p);
+        return;
+      }
+      for (const [id, n] of entries) {
+        const cell = document.createElement("div");
+        cell.className = "mini-cell";
+        cell.title = BLOCKS[id].name;
+        const canvas = document.createElement("canvas");
+        canvas.width = ICON; canvas.height = ICON;
+        drawBlockIcon(canvas.getContext("2d"), this.atlas, id);
+        cell.appendChild(canvas);
+        const count = document.createElement("span");
+        count.className = "n";
+        count.textContent = n;
+        cell.appendChild(count);
+        cell.addEventListener("click", () => {
+          onClickStack(id, n);
+          this._renderChest();
+          this.refreshCounts();
+          this._chestChanged();
+        });
+        grid.appendChild(cell);
+      }
+    };
+
+    fill("chest-grid", [...store.entries()], (id, n) => {
+      store.delete(id);
+      this.inventory.add(id, n);
+    }, "Empty");
+    fill("chest-inv-grid", [...this.inventory.counts.entries()], (id, n) => {
+      this.inventory.take(id, n);
+      store.set(id, (store.get(id) || 0) + n);
+    }, "Nothing to store");
   }
 
   showPause(firstTime = false) {

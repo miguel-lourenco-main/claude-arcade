@@ -102,6 +102,52 @@ body {
 
 .picker-hint { color: #7c8592; font-size: 13px; grid-column: 1 / -1; text-align: center; padding: 18px 0; }
 
+/* ---- crafting ---- */
+
+#craft-list:not(:empty) { margin-top: 16px; border-top: 1px solid #2a2f38; padding-top: 12px; }
+.craft-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 5px 8px; border-radius: 4px;
+  cursor: pointer;
+}
+.craft-row:hover { background: rgba(126, 231, 135, 0.08); }
+.craft-row.uncraftable { opacity: 0.35; cursor: default; }
+.craft-row.uncraftable:hover { background: none; }
+.craft-row canvas { width: 32px; height: 32px; image-rendering: pixelated; flex-shrink: 0; }
+.craft-row span { display: flex; flex-direction: column; }
+.craft-row b { color: #e8eaed; font-size: 13px; font-weight: normal; }
+.craft-row small { color: #7c8592; font-size: 11px; }
+
+/* ---- chest UI ---- */
+
+#chest-ui {
+  position: fixed; inset: 0; z-index: 12;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(8, 10, 14, 0.72);
+}
+#chest-panel {
+  background: #16191f; border: 1px solid #2a2f38; border-radius: 8px;
+  padding: 20px; min-width: 520px; max-height: 70vh; overflow-y: auto;
+}
+#chest-panel h2 { color: #e8eaed; font-size: 16px; margin-bottom: 14px; }
+#chest-panel .hint { color: #7c8592; font-size: 12px; font-weight: normal; }
+#chest-panel h3 { color: #9aa3af; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+.chest-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.mini-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; min-height: 52px; align-content: start; }
+.mini-cell {
+  position: relative;
+  border: 1px solid #2a2f38; border-radius: 4px;
+  padding: 4px; cursor: pointer;
+  display: flex; justify-content: center;
+}
+.mini-cell:hover { border-color: #7ee787; }
+.mini-cell canvas { width: 36px; height: 36px; image-rendering: pixelated; }
+.mini-cell .n {
+  position: absolute; right: 3px; bottom: 1px;
+  font-size: 11px; color: #fff; text-shadow: 1px 1px 0 rgba(0,0,0,0.9);
+}
+.mini-empty { color: #5a6270; font-size: 12px; grid-column: 1 / -1; text-align: center; padding: 14px 0; }
+
 #block-name {
   position: absolute; left: 50%; bottom: 76px;
   transform: translateX(-50%);
