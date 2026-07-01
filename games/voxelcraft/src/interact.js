@@ -3,6 +3,7 @@
 
 import * as THREE from "three";
 import { AIR, BEDROCK, BLOCKS, isSolid, dropFor } from "./blocks.js";
+import { HEIGHT } from "./world.js";
 import { EYE_HEIGHT } from "./player.js";
 
 const REACH_CREATIVE = 5;
@@ -249,9 +250,20 @@ export class Interaction {
     if (def.solid && this._overlapsPlayer(px, py, pz)) return;
     // plants need soil
     if (def.kind === "cross" && !isSolid(this.world.getBlock(px, py - 1, pz))) return;
-    // survival: consumes one from the inventory — LAST check, so a failed
+    // setBlock silently fails outside the world or in an ungenerated chunk —
+    // rule those out BEFORE consuming inventory
+    if (py < 0 || py >= HEIGHT) return;
+    const targetChunk = this.world.getChunk(px >> 4, pz >> 4);
+    if (!targetChunk || !targetChunk.generated) return;
+    // survival: consumes one from the inventory — last check, so a failed
     // placement never eats a block
     if (this.player.mode === "survival" && !this.canConsume(id)) return;
+    // overwriting a plant/torch in survival pops its drop instead of
+    // silently destroying it
+    if (this.player.mode === "survival" && existing !== AIR && BLOCKS[existing].kind === "cross") {
+      const plantDrop = dropFor(existing);
+      if (plantDrop !== null) this.onSpawnDrop(px + 0.5, py + 0.3, pz + 0.5, plantDrop);
+    }
 
     const affected = this.world.setBlock(px, py, pz, id);
     if (affected.length === 0) return;

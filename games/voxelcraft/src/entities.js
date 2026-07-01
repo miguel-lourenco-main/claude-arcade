@@ -53,23 +53,40 @@ export class ItemDrops {
   update(dt, world, player, onPickup) {
     for (let i = this.drops.length - 1; i >= 0; i--) {
       const d = this.drops[i];
+      // freeze drops whose chunk streamed out — otherwise getBlock reads AIR
+      // and they fall through the world and get deleted
+      if (!world.isGenerated(Math.floor(d.x) >> 4, Math.floor(d.z) >> 4)) continue;
       d.age += dt;
       d.life += dt;
       if (d.life > DESPAWN_SECONDS) { this._remove(i); continue; }
 
-      // physics: gravity, rest on solid ground, horizontal friction
-      d.vy -= GRAVITY * dt;
-      const ny = d.y + d.vy * dt;
-      if (d.vy < 0 && isSolid(world.getBlock(Math.floor(d.x), Math.floor(ny - 0.12), Math.floor(d.z)))) {
-        d.vy = 0;
-        d.y = Math.floor(ny - 0.12) + 1.12;
+      // physics: gravity + substepped per-axis integration so fast drops
+      // never tunnel through floors/walls (frame hitches make dt large)
+      d.vy = Math.max(-30, d.vy - GRAVITY * dt);
+      const maxDisp = Math.max(Math.abs(d.vx), Math.abs(d.vy), Math.abs(d.vz)) * dt;
+      const steps = Math.max(1, Math.ceil(maxDisp / 0.4));
+      const sdt = dt / steps;
+      let grounded = false;
+      for (let s = 0; s < steps; s++) {
+        const ny = d.y + d.vy * sdt;
+        const yCell = Math.floor(d.vy < 0 ? ny - 0.12 : ny + 0.12);
+        if (isSolid(world.getBlock(Math.floor(d.x), yCell, Math.floor(d.z)))) {
+          if (d.vy < 0) { d.y = yCell + 1.12; grounded = true; }
+          d.vy = 0;
+        } else {
+          d.y = ny;
+        }
+        const nx = d.x + d.vx * sdt;
+        if (isSolid(world.getBlock(Math.floor(nx), Math.floor(d.y), Math.floor(d.z)))) d.vx = 0;
+        else d.x = nx;
+        const nz = d.z + d.vz * sdt;
+        if (isSolid(world.getBlock(Math.floor(d.x), Math.floor(d.y), Math.floor(nz)))) d.vz = 0;
+        else d.z = nz;
+      }
+      if (grounded) {
         d.vx *= Math.max(0, 1 - 8 * dt);
         d.vz *= Math.max(0, 1 - 8 * dt);
-      } else {
-        d.y = ny;
       }
-      d.x += d.vx * dt;
-      d.z += d.vz * dt;
       if (d.y < -40) { this._remove(i); continue; }
 
       // pickup: drift toward a living player, collect on contact

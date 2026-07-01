@@ -70,14 +70,14 @@ player.sensitivity = save && Number.isFinite(save.sensitivity)
 player.mode = save
   ? (save.gameMode === "survival" ? "survival" : "creative")
   : "survival";
-if (player.mode === "survival") {
-  player.flying = false;
-  if (save && Number.isFinite(save.health)) {
-    player.health = Math.min(20, Math.max(1, save.health)); // never load in dead
-  }
-  if (save && Number.isFinite(save.air)) {
-    player.air = Math.min(player.maxAir, Math.max(0, save.air));
-  }
+if (player.mode === "survival") player.flying = false;
+// health/air persist regardless of the mode the save was written in — a
+// creative-saved world toggled back to survival keeps its wounds
+if (save && Number.isFinite(save.health)) {
+  player.health = Math.min(20, Math.max(1, save.health)); // never load in dead
+}
+if (save && Number.isFinite(save.air)) {
+  player.air = Math.min(player.maxAir, Math.max(0, save.air));
 }
 
 const inventory = new Inventory();
@@ -98,7 +98,21 @@ function teleportTo(kind) {
   if (!dest) return { ok: false, message: `No ${kind} found within 3000 blocks of here.` };
   Object.assign(player.pos, dest);
   player.vel.x = player.vel.y = player.vel.z = 0;
+  player.resetFall(); // or the landing charges fall damage from the old spot
   return { ok: true, message: `→ ${kind} at ${Math.round(dest.x)}, ${Math.round(dest.z)} — click to play.` };
+}
+
+// respawn/void landings must respect player edits: if the spawn column was
+// built over (or dug out), climb to the first clear spot above it
+function adjustToClearGround(pos) {
+  const bx = Math.floor(pos.x), bz = Math.floor(pos.z);
+  if (!world.isGenerated(bx >> 4, bz >> 4)) return;
+  let y = Math.max(1, Math.floor(pos.y));
+  while (y < HEIGHT - 2 &&
+    (BLOCKS[world.getBlock(bx, y, bz)].solid || BLOCKS[world.getBlock(bx, y + 1, bz)].solid)) {
+    y++;
+  }
+  pos.y = Math.max(pos.y, y + 0.05);
 }
 
 const hud = new Hud(atlas.canvas, {
@@ -112,11 +126,16 @@ const hud = new Hud(atlas.canvas, {
   onSensitivity: (v) => { player.sensitivity = v; },
   onToggleMode: () => {
     player.mode = player.mode === "survival" ? "creative" : "survival";
-    if (player.mode === "survival") player.flying = false;
+    if (player.mode === "survival") {
+      player.flying = false;
+      player.resetFall(); // creative altitude must not become a survival fall
+    }
     return player.mode;
   },
   onRespawn: () => {
     player.respawn(spawnPoint);
+    adjustToClearGround(player.pos);
+    player.resetFall();
     hud.hideDeath();
     requestLock();
   },
@@ -135,6 +154,7 @@ const validSlot = (id) => Number.isInteger(id) && id !== AIR && !!BLOCKS[id];
 if (save && Array.isArray(save.hotbar) && save.hotbar.length === 9 && save.hotbar.every(validSlot)) {
   hud.slots = save.hotbar;
   hud.select(0);
+  hud.refreshCounts(); // badges must track the LOADED slots, not the defaults
 }
 
 const interaction = new Interaction(world, player, scene, hud, {
@@ -411,14 +431,17 @@ function tick(now) {
 
   if (player.mode === "survival") {
     hud.setHealth(player.health);
-    hud.setAir(player.air, player.maxAir);
+    hud.setAir(player.air, player.maxAir, player.eyeInWater);
   }
 
-  // void safety net: below the world, respawn instead of falling forever
-  if (player.pos.y < -16) {
+  // void safety net (creative only — in survival the void deals damage and
+  // the death screen handles it)
+  if (player.pos.y < -16 && player.mode !== "survival") {
     Object.assign(player.pos, spawnPoint);
     player.vel.x = player.vel.y = player.vel.z = 0;
     player.flying = false;
+    adjustToClearGround(player.pos);
+    player.resetFall();
   }
 
   // view bobbing while walking on the ground
@@ -441,8 +464,8 @@ function tick(now) {
 
   animateHeld(frameDt, bobY);
 
-  // sprint FOV kick
-  const targetFov = player.sprintActive && !player.flying ? 77 : 70;
+  // sprint FOV kick (applies to sprint-flight too, like MC)
+  const targetFov = player.sprintActive ? 77 : 70;
   if (Math.abs(camera.fov - targetFov) > 0.1) {
     camera.fov += (targetFov - camera.fov) * Math.min(1, frameDt * 10);
     camera.updateProjectionMatrix();

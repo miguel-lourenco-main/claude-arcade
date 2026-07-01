@@ -103,6 +103,11 @@ export class Player {
     this._sinceDamage = 999;
   }
 
+  // forget any fall in progress — must be called on every non-physics
+  // relocation (teleport, mode switch, safety net) or the next landing
+  // computes fall damage from the stale peak
+  resetFall() { this._peakY = this.pos.y; }
+
   get eyeY() { return this.pos.y + EYE_HEIGHT; }
 
   lookDir() {
@@ -273,7 +278,14 @@ export class Player {
     this._moveWithCollisions(dt);
     if (this.flying && this.onGround) this.flying = false;
 
-    if (this.mode === "survival") this._updateSurvival(dt, wasAirborne);
+    if (this.mode === "survival") {
+      // re-sample water at the post-move position: a fast landing into
+      // shallow water must count as a water landing
+      this._updateWaterState();
+      this._updateSurvival(dt, wasAirborne);
+    } else {
+      this._peakY = this.pos.y; // creative can never leave a stale fall peak
+    }
 
     // footsteps
     if (this.onGround && !this.inWater) {

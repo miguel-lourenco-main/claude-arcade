@@ -170,7 +170,8 @@ export class Hud {
   }
 
   setHealth(hp) {
-    const half = Math.round(hp); // 20 HP -> 20 half-hearts
+    // ceil: any nonzero health shows at least half a heart
+    const half = Math.ceil(hp - 1e-9);
     if (half === this._lastHealth) return;
     this._lastHealth = half;
     for (let i = 0; i < 10; i++) {
@@ -179,14 +180,17 @@ export class Hud {
     }
   }
 
-  setAir(air, maxAir) {
+  setAir(air, maxAir, underwater) {
     const bubbles = air >= maxAir ? 10 : Math.ceil((air / maxAir) * 10);
-    if (bubbles === this._lastBubbles) return;
-    this._lastBubbles = bubbles;
+    // show the meter the moment the head goes under, not only once air dips
+    const state = bubbles + (underwater ? 100 : 0);
+    if (state === this._lastBubbles) return;
+    this._lastBubbles = state;
     for (let i = 0; i < 10; i++) {
       this.bubbleEls[i].style.visibility = i < bubbles ? "visible" : "hidden";
     }
-    document.getElementById("bubbles").style.opacity = bubbles >= 10 ? "0" : "1";
+    document.getElementById("bubbles").style.opacity =
+      underwater || air < maxAir - 0.01 ? "1" : "0";
   }
 
   flashDamage() {
