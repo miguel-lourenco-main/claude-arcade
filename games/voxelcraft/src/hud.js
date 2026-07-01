@@ -58,6 +58,33 @@ function drawBlockIcon(ctx, atlas, blockId) {
 
 const TELEPORTS = ["spawn", "forest", "plains", "desert", "snow", "mountain", "ocean"];
 
+// tiny pixel-art status icons, drawn once and reused as data URLs
+function pixelIcon(rows, colorFor) {
+  const canvas = document.createElement("canvas");
+  canvas.width = rows[0].length;
+  canvas.height = rows.length;
+  const ctx = canvas.getContext("2d");
+  rows.forEach((row, y) => {
+    [...row].forEach((ch, x) => {
+      const c = colorFor(ch, x, y);
+      if (!c) return;
+      ctx.fillStyle = c;
+      ctx.fillRect(x, y, 1, 1);
+    });
+  });
+  return canvas.toDataURL();
+}
+
+const HEART_ROWS = [".XX.XX.", "XXXXXXX", "XXXXXXX", ".XXXXX.", "..XXX..", "...X..."];
+const BUBBLE_ROWS = [".XXX.", "XXXXX", "XoXXX", "XXXXX", ".XXX."];
+
+const ICONS = {
+  heartFull: pixelIcon(HEART_ROWS, (ch) => (ch === "X" ? "#d4342a" : null)),
+  heartHalf: pixelIcon(HEART_ROWS, (ch, x) => (ch === "X" ? (x <= 3 ? "#d4342a" : "#3a3a44") : null)),
+  heartEmpty: pixelIcon(HEART_ROWS, (ch) => (ch === "X" ? "#3a3a44" : null)),
+  bubble: pixelIcon(BUBBLE_ROWS, (ch) => (ch === "X" ? "#7fb4ff" : ch === "o" ? "#e8f4ff" : null)),
+};
+
 export class Hud {
   constructor(atlasCanvas, opts) {
     this.atlas = atlasCanvas;
@@ -66,10 +93,16 @@ export class Hud {
     this.onTeleport = opts.onTeleport;             // (kind) => {ok, message}
     this.onToggleMovement = opts.onToggleMovement; // () => new mode string
     this.onSensitivity = opts.onSensitivity;       // (multiplier) => void
+    this.onToggleMode = opts.onToggleMode;         // () => new game mode string
+    this.onRespawn = opts.onRespawn;               // () => void
+    this.inventory = opts.inventory;               // survival Inventory
     this.slots = [...DEFAULT_HOTBAR];
     this.selected = 0;
     this.pickerOpen = false;
     this.paused = true; // the boot overlay is showing
+    this.gameMode = "creative";
+    this._lastHealth = -1;
+    this._lastBubbles = -1;
 
     this._buildHotbar();
     this._buildPicker();
@@ -97,7 +130,89 @@ export class Hud {
       this.onSensitivity(v);
     });
 
+    this.modeBtn = document.getElementById("mode-toggle");
+    this.modeBtn.addEventListener("click", () => this.setMode(this.onToggleMode()));
+
     this._buildTeleports();
+    this._buildStatus();
+
+    this.deathEl = document.getElementById("death");
+    this.flashEl = document.getElementById("damage-flash");
+    document.getElementById("respawn").addEventListener("click", () => this.onRespawn());
+  }
+
+  _buildStatus() {
+    this.statusEl = document.getElementById("status");
+    const hearts = document.getElementById("hearts");
+    const bubbles = document.getElementById("bubbles");
+    this.heartEls = [];
+    this.bubbleEls = [];
+    for (let i = 0; i < 10; i++) {
+      const h = document.createElement("div");
+      h.className = "icon";
+      hearts.appendChild(h);
+      this.heartEls.push(h);
+      const b = document.createElement("div");
+      b.className = "icon";
+      b.style.backgroundImage = `url(${ICONS.bubble})`;
+      bubbles.appendChild(b);
+      this.bubbleEls.push(b);
+    }
+  }
+
+  setMode(mode) {
+    this.gameMode = mode;
+    this.modeBtn.textContent = mode === "survival" ? "Mode: Survival" : "Mode: Creative";
+    this.statusEl.classList.toggle("hidden", mode !== "survival");
+    this._lastHealth = -1;
+    this._lastBubbles = -1;
+    this.refreshCounts();
+  }
+
+  setHealth(hp) {
+    const half = Math.round(hp); // 20 HP -> 20 half-hearts
+    if (half === this._lastHealth) return;
+    this._lastHealth = half;
+    for (let i = 0; i < 10; i++) {
+      const state = half >= (i + 1) * 2 ? "Full" : half === i * 2 + 1 ? "Half" : "Empty";
+      this.heartEls[i].style.backgroundImage = `url(${ICONS["heart" + state]})`;
+    }
+  }
+
+  setAir(air, maxAir) {
+    const bubbles = air >= maxAir ? 10 : Math.ceil((air / maxAir) * 10);
+    if (bubbles === this._lastBubbles) return;
+    this._lastBubbles = bubbles;
+    for (let i = 0; i < 10; i++) {
+      this.bubbleEls[i].style.visibility = i < bubbles ? "visible" : "hidden";
+    }
+    document.getElementById("bubbles").style.opacity = bubbles >= 10 ? "0" : "1";
+  }
+
+  flashDamage() {
+    this.flashEl.classList.add("active");
+    clearTimeout(this._flashTimeout);
+    this._flashTimeout = setTimeout(() => this.flashEl.classList.remove("active"), 320);
+  }
+
+  showDeath(cause) {
+    document.getElementById("death-cause").textContent =
+      cause ? `Killed by ${cause}.` : "";
+    this.deathEl.classList.remove("hidden");
+  }
+
+  hideDeath() { this.deathEl.classList.add("hidden"); }
+  get deathOpen() { return !this.deathEl.classList.contains("hidden"); }
+
+  // hotbar count badges (survival only)
+  refreshCounts() {
+    const survival = this.gameMode === "survival";
+    for (let i = 0; i < 9; i++) {
+      const { slot, count } = this.slotEls[i];
+      const n = survival ? this.inventory.count(this.slots[i]) : 0;
+      count.textContent = survival && n > 0 ? String(n) : "";
+      slot.classList.toggle("depleted", survival && n === 0);
+    }
   }
 
   setMovementLabel(mode) {
@@ -144,6 +259,7 @@ export class Hud {
   setSlot(blockId) {
     this.slots[this.selected] = blockId;
     this._refreshHotbar();
+    this.refreshCounts();
     this._announce(BLOCKS[blockId].name);
   }
 
@@ -167,8 +283,11 @@ export class Hud {
       key.className = "key";
       key.textContent = i + 1;
       slot.appendChild(key);
+      const count = document.createElement("span");
+      count.className = "count";
+      slot.appendChild(count);
       bar.appendChild(slot);
-      this.slotEls.push({ slot, canvas });
+      this.slotEls.push({ slot, canvas, count });
     }
     this._refreshHotbar();
   }
@@ -183,8 +302,24 @@ export class Hud {
 
   _buildPicker() {
     this.pickerEl = document.getElementById("picker");
+  }
+
+  // creative: every block; survival: only what the inventory holds, with counts
+  _renderPicker() {
     const grid = document.getElementById("picker-grid");
-    for (const id of PLACEABLE) {
+    grid.innerHTML = "";
+    const survival = this.gameMode === "survival";
+    const ids = survival ? this.inventory.ownedIds() : PLACEABLE;
+
+    if (survival && ids.length === 0) {
+      const hint = document.createElement("p");
+      hint.className = "picker-hint";
+      hint.textContent = "Nothing yet — mine some blocks!";
+      grid.appendChild(hint);
+      return;
+    }
+
+    for (const id of ids) {
       const cell = document.createElement("div");
       cell.className = "picker-cell";
       cell.title = BLOCKS[id].name;
@@ -193,7 +328,9 @@ export class Hud {
       drawBlockIcon(canvas.getContext("2d"), this.atlas, id);
       cell.appendChild(canvas);
       const label = document.createElement("span");
-      label.textContent = BLOCKS[id].name;
+      label.textContent = survival
+        ? `${BLOCKS[id].name} ×${this.inventory.count(id)}`
+        : BLOCKS[id].name;
       cell.appendChild(label);
       cell.addEventListener("click", () => {
         this.setSlot(id);
@@ -205,6 +342,7 @@ export class Hud {
   }
 
   openPicker() {
+    this._renderPicker();
     this.pickerOpen = true;
     this.pickerEl.classList.remove("hidden");
     document.exitPointerLock();

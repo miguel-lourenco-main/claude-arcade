@@ -2,9 +2,11 @@
 // physics, HUD/debug, persistence.
 
 import * as THREE from "three";
-import { buildAtlas, buildWaterTexture } from "./textures.js";
+import { buildAtlas, buildWaterTexture, buildCrackTextures } from "./textures.js";
 import { BLOCKS, AIR } from "./blocks.js";
 import { World, CHUNK, HEIGHT } from "./world.js";
+import { Inventory } from "./inventory.js";
+import { ItemDrops } from "./entities.js";
 import { makeGenerator, findSpawn, findBiomeLocation } from "./terrain.js";
 import {
   buildMaterials, meshChunk, disposeChunkMeshes, setDayLight, buildBlockGeometry,
@@ -62,6 +64,25 @@ player.moveMode = save && (save.movement2 === "static" || save.movement2 === "ca
   ? save.movement2 : "camera";
 player.sensitivity = save && Number.isFinite(save.sensitivity)
   ? Math.min(2.5, Math.max(0.3, save.sensitivity)) : 1;
+
+// game mode: new worlds start in survival ("normal"); saves from before the
+// mode existed stay creative — that's what those worlds were
+player.mode = save
+  ? (save.gameMode === "survival" ? "survival" : "creative")
+  : "survival";
+if (player.mode === "survival") {
+  player.flying = false;
+  if (save && Number.isFinite(save.health)) {
+    player.health = Math.min(20, Math.max(1, save.health)); // never load in dead
+  }
+  if (save && Number.isFinite(save.air)) {
+    player.air = Math.min(player.maxAir, Math.max(0, save.air));
+  }
+}
+
+const inventory = new Inventory();
+if (save && save.inventory) inventory.load(save.inventory);
+const drops = new ItemDrops(scene, materials);
 if (save && save.edits) world.loadEdits(save.edits);
 
 const sky = new Sky(scene, seed);
@@ -89,9 +110,27 @@ const hud = new Hud(atlas.canvas, {
     return player.moveMode;
   },
   onSensitivity: (v) => { player.sensitivity = v; },
+  onToggleMode: () => {
+    player.mode = player.mode === "survival" ? "creative" : "survival";
+    if (player.mode === "survival") player.flying = false;
+    return player.mode;
+  },
+  onRespawn: () => {
+    player.respawn(spawnPoint);
+    hud.hideDeath();
+    requestLock();
+  },
+  inventory,
 });
 hud.setMovementLabel(player.moveMode);
 hud.setSensitivity(player.sensitivity);
+hud.setMode(player.mode);
+
+player.onDamage = () => { hud.flashDamage(); sfx.hurt(); };
+player.onDeath = (cause) => {
+  hud.showDeath(cause);
+  if (document.pointerLockElement) document.exitPointerLock();
+};
 const validSlot = (id) => Number.isInteger(id) && id !== AIR && !!BLOCKS[id];
 if (save && Array.isArray(save.hotbar) && save.hotbar.length === 9 && save.hotbar.every(validSlot)) {
   hud.slots = save.hotbar;
@@ -126,10 +165,17 @@ const interaction = new Interaction(world, player, scene, hud, {
   onSound: (kind, id) => sfx.block(kind, id),
   onPick: (id) => hud.setSlot(id),
   onSwing: () => { swingT = 0; },
+  canConsume: (id) => {
+    const ok = inventory.take(id);
+    if (ok) hud.refreshCounts();
+    return ok;
+  },
+  onSpawnDrop: (x, y, z, id) => drops.spawn(x, y, z, id),
+  crackTextures: buildCrackTextures(1337),
   avgColor: atlas.avgColor,
 });
 
-const stopAutosave = startAutosave(() => writeSave(world, player, sky, hud));
+const stopAutosave = startAutosave(() => writeSave(world, player, sky, hud, inventory));
 
 // --- held block (first-person hand) ------------------------------------------
 
@@ -263,7 +309,7 @@ document.addEventListener("pointerlockchange", () => {
   } else if (!NO_LOCK) {
     player.clearInput();
     interaction.clearInput();
-    if (!hud.pickerOpen) hud.showPause(!started);
+    if (!hud.pickerOpen && !hud.deathOpen) hud.showPause(!started);
   }
 });
 
@@ -356,6 +402,16 @@ function tick(now) {
       player.update(FIXED_DT);
       accumulator -= FIXED_DT;
     }
+    drops.update(frameDt, world, player, (id) => {
+      inventory.add(id);
+      sfx.pickup();
+      hud.refreshCounts();
+    });
+  }
+
+  if (player.mode === "survival") {
+    hud.setHealth(player.health);
+    hud.setAir(player.air, player.maxAir);
   }
 
   // void safety net: below the world, respawn instead of falling forever
@@ -407,7 +463,7 @@ function tick(now) {
       `xyz: ${p.x.toFixed(2)} / ${p.y.toFixed(2)} / ${p.z.toFixed(2)}`,
       `chunk: ${Math.floor(p.x / CHUNK)} ${Math.floor(p.z / CHUNK)}  loaded: ${world.chunks.size}`,
       `biome: ${terrain.biomeAt(bx, bz, h)}  facing: ${facing()}  move: ${player.moveMode}`,
-      `time: ${clock()}  ${player.flying ? "[flying]" : player.onGround ? "[ground]" : "[air]"}${player.inWater ? " [water]" : ""}`,
+      `time: ${clock()}  ${player.flying ? "[flying]" : player.onGround ? "[ground]" : "[air]"}${player.inWater ? " [water]" : ""}  mode: ${player.mode}${player.mode === "survival" ? ` hp:${player.health.toFixed(0)}` : ""}`,
       `target: ${interaction.target ? BLOCKS[interaction.target.id].name : "none"}`,
     ], true);
   } else {

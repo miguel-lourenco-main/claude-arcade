@@ -34,10 +34,21 @@ canvas atlas at boot, and every sound is synthesized with WebAudio.
   two-channel voxel shader — sky light dims with the day/night cycle, torch
   light stays warm through the night.
 - **Movement feel** — classic camera-relative WASD with a proper
-  acceleration/friction model (crisp starts, firm stops, weaker steering
-  mid-air) instead of exponential velocity smoothing, plus a mouse-sensitivity
-  slider in the pause menu. An experimental world-static mode (W is always
-  north, camera fully decoupled) is available via the pause-menu toggle.
+  acceleration/friction model applied as a vector (crisp starts, firm stops,
+  no speed bleed while the camera turns), pointer-lock spike filtering, and a
+  mouse-sensitivity slider. Flight is omnidirectional: W follows the camera
+  pitch, so look down to descend. An experimental world-static mode (W is
+  always north) is available via the pause-menu toggle.
+- **Survival mode** — new worlds start as "normal" Steve: 10 hearts, fall
+  damage (blocks fallen − 3), drowning with an air-bubble meter, cactus and
+  void damage, slow passive regen, death screen with respawn. Blocks take
+  real time to mine (per-block hardness with a crack overlay) and drop
+  collectible items (MC rules: stone → cobblestone, grass → dirt, leaves and
+  glass → nothing) that magnetize into a counted inventory; placing consumes
+  them and the picker becomes your inventory. No flying, shorter reach.
+  Simplifications: no hunger (no food exists) and no tools (hand-mining times
+  are scaled to stay fun). Toggle Creative/Survival any time in the pause
+  menu; pre-survival saves stay creative.
 - **Getting around** — new worlds spawn in a forest; the pause menu has
   teleport buttons (spawn, forest, plains, desert, snow, mountain, ocean) that
   search the world outward from where you stand.
@@ -57,7 +68,7 @@ canvas atlas at boot, and every sound is synthesized with WebAudio.
 | Shift | sneak (slow, won't fall off edges) |
 | LMB / RMB / MMB | break / place / pick block |
 | 1–9 / wheel | hotbar selection |
-| E | block picker |
+| E | block picker (your inventory, in survival) |
 | F3 | debug overlay |
 | Esc | pause |
 

@@ -17,7 +17,7 @@ export function loadSave() {
 
 let warnedQuota = false;
 
-export function writeSave(world, player, sky, hud) {
+export function writeSave(world, player, sky, hud, inventory) {
   try {
     localStorage.setItem(KEY, JSON.stringify({
       v: 1,
@@ -31,6 +31,10 @@ export function writeSave(world, player, sky, hud) {
       // that was rolled back — ignoring it migrates old saves to camera mode
       movement2: player.moveMode,
       sensitivity: player.sensitivity,
+      gameMode: player.mode,
+      health: player.health,
+      air: player.air,
+      inventory: inventory ? inventory.serialize() : [],
       hotbar: hud.slots,
       edits: world.serializeEdits(),
     }));

@@ -40,8 +40,10 @@ const def = (name, opts) => ({
   opaque: true,
   cullSame: false,
   sound: "stone",
-  lightEmit: 0, // 0..14 block-light level this block radiates
-  tiles: null,  // {top, side, bottom}
+  lightEmit: 0,      // 0..14 block-light level this block radiates
+  hardness: 1,       // survival mining time in seconds (Infinity = unbreakable)
+  drops: undefined,  // survival drop: undefined = itself, null = nothing, id = that block
+  tiles: null,       // {top, side, bottom}
   ...opts,
 });
 
@@ -49,22 +51,22 @@ const cube = (t) => (typeof t === "number" ? { top: t, side: t, bottom: t } : t)
 
 export const BLOCKS = [];
 BLOCKS[AIR] = def("Air", { solid: false, opaque: false, bucket: null });
-BLOCKS[GRASS] = def("Grass Block", {
+BLOCKS[GRASS] = def("Grass Block", { hardness: 0.6, drops: DIRT,
   tiles: cube({ top: TILE.GRASS_TOP, side: TILE.GRASS_SIDE, bottom: TILE.DIRT }),
   sound: "dirt",
 });
-BLOCKS[DIRT] = def("Dirt", { tiles: cube(TILE.DIRT), sound: "dirt" });
-BLOCKS[STONE] = def("Stone", { tiles: cube(TILE.STONE) });
-BLOCKS[COBBLE] = def("Cobblestone", { tiles: cube(TILE.COBBLE) });
-BLOCKS[SAND] = def("Sand", { tiles: cube(TILE.SAND), sound: "sand" });
-BLOCKS[GRAVEL] = def("Gravel", { tiles: cube(TILE.GRAVEL), sound: "sand" });
-BLOCKS[LOG] = def("Oak Log", {
+BLOCKS[DIRT] = def("Dirt", { hardness: 0.5, tiles: cube(TILE.DIRT), sound: "dirt" });
+BLOCKS[STONE] = def("Stone", { hardness: 1.9, drops: COBBLE, tiles: cube(TILE.STONE) });
+BLOCKS[COBBLE] = def("Cobblestone", { hardness: 2.0, tiles: cube(TILE.COBBLE) });
+BLOCKS[SAND] = def("Sand", { hardness: 0.5, tiles: cube(TILE.SAND), sound: "sand" });
+BLOCKS[GRAVEL] = def("Gravel", { hardness: 0.6, tiles: cube(TILE.GRAVEL), sound: "sand" });
+BLOCKS[LOG] = def("Oak Log", { hardness: 1.4,
   tiles: cube({ top: TILE.LOG_TOP, side: TILE.LOG_SIDE, bottom: TILE.LOG_TOP }),
   sound: "wood",
 });
-BLOCKS[LEAVES] = def("Oak Leaves", { tiles: cube(TILE.LEAVES), sound: "plant" });
-BLOCKS[PLANKS] = def("Oak Planks", { tiles: cube(TILE.PLANKS), sound: "wood" });
-BLOCKS[GLASS] = def("Glass", {
+BLOCKS[LEAVES] = def("Oak Leaves", { hardness: 0.3, drops: null, tiles: cube(TILE.LEAVES), sound: "plant" });
+BLOCKS[PLANKS] = def("Oak Planks", { hardness: 1.4, tiles: cube(TILE.PLANKS), sound: "wood" });
+BLOCKS[GLASS] = def("Glass", { hardness: 0.4, drops: null,
   tiles: cube(TILE.GLASS),
   opaque: false,
   bucket: "cutout",
@@ -79,12 +81,12 @@ BLOCKS[WATER] = def("Water", {
   cullSame: true,
   sound: "plant",
 });
-BLOCKS[BEDROCK] = def("Bedrock", { tiles: cube(TILE.BEDROCK) });
-BLOCKS[SNOWY_GRASS] = def("Snowy Grass", {
+BLOCKS[BEDROCK] = def("Bedrock", { hardness: Infinity, drops: null, tiles: cube(TILE.BEDROCK) });
+BLOCKS[SNOWY_GRASS] = def("Snowy Grass", { hardness: 0.6, drops: DIRT,
   tiles: cube({ top: TILE.SNOW_TOP, side: TILE.SNOW_SIDE, bottom: TILE.DIRT }),
   sound: "dirt",
 });
-BLOCKS[TALLGRASS] = def("Tall Grass", {
+BLOCKS[TALLGRASS] = def("Tall Grass", { hardness: 0.05, drops: null,
   tiles: cube(TILE.TALLGRASS),
   kind: "cross",
   bucket: "cutout",
@@ -92,7 +94,7 @@ BLOCKS[TALLGRASS] = def("Tall Grass", {
   opaque: false,
   sound: "plant",
 });
-BLOCKS[POPPY] = def("Poppy", {
+BLOCKS[POPPY] = def("Poppy", { hardness: 0.05,
   tiles: cube(TILE.FLOWER_RED),
   kind: "cross",
   bucket: "cutout",
@@ -100,7 +102,7 @@ BLOCKS[POPPY] = def("Poppy", {
   opaque: false,
   sound: "plant",
 });
-BLOCKS[DANDELION] = def("Dandelion", {
+BLOCKS[DANDELION] = def("Dandelion", { hardness: 0.05,
   tiles: cube(TILE.FLOWER_YELLOW),
   kind: "cross",
   bucket: "cutout",
@@ -108,18 +110,18 @@ BLOCKS[DANDELION] = def("Dandelion", {
   opaque: false,
   sound: "plant",
 });
-BLOCKS[CACTUS] = def("Cactus", {
+BLOCKS[CACTUS] = def("Cactus", { hardness: 0.4,
   tiles: cube({ top: TILE.CACTUS_TOP, side: TILE.CACTUS_SIDE, bottom: TILE.CACTUS_TOP }),
   sound: "plant",
 });
-BLOCKS[BRICKS] = def("Bricks", { tiles: cube(TILE.BRICKS) });
-BLOCKS[SANDSTONE] = def("Sandstone", {
+BLOCKS[BRICKS] = def("Bricks", { hardness: 2.0, tiles: cube(TILE.BRICKS) });
+BLOCKS[SANDSTONE] = def("Sandstone", { hardness: 1.2,
   tiles: cube({ top: TILE.SANDSTONE_TOP, side: TILE.SANDSTONE_SIDE, bottom: TILE.SANDSTONE_TOP }),
 });
-BLOCKS[LEAVES_COLD] = def("Spruce Leaves", { tiles: cube(TILE.LEAVES_COLD), sound: "plant" });
-BLOCKS[COAL_ORE] = def("Coal Ore", { tiles: cube(TILE.COAL_ORE) });
-BLOCKS[IRON_ORE] = def("Iron Ore", { tiles: cube(TILE.IRON_ORE) });
-BLOCKS[TORCH] = def("Torch", {
+BLOCKS[LEAVES_COLD] = def("Spruce Leaves", { hardness: 0.3, drops: null, tiles: cube(TILE.LEAVES_COLD), sound: "plant" });
+BLOCKS[COAL_ORE] = def("Coal Ore", { hardness: 2.8, tiles: cube(TILE.COAL_ORE) });
+BLOCKS[IRON_ORE] = def("Iron Ore", { hardness: 3.2, tiles: cube(TILE.IRON_ORE) });
+BLOCKS[TORCH] = def("Torch", { hardness: 0.05,
   tiles: cube(TILE.TORCH),
   kind: "cross",
   bucket: "cutout",
@@ -136,3 +138,9 @@ export const DEFAULT_HOTBAR = [GRASS, DIRT, STONE, COBBLE, PLANKS, LOG, LEAVES, 
 
 export function isSolid(id) { return BLOCKS[id] !== undefined && BLOCKS[id].solid; }
 export function isOpaque(id) { return BLOCKS[id] !== undefined && BLOCKS[id].opaque; }
+
+// What a block yields when mined in survival (null = nothing).
+export function dropFor(id) {
+  const d = BLOCKS[id].drops;
+  return d === undefined ? id : d;
+}

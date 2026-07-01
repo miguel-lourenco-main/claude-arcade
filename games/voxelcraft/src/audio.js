@@ -49,6 +49,7 @@ export class Sfx {
     const def = BLOCKS[blockId];
     const base = MATERIAL_FREQ[def ? def.sound : "stone"] || 500;
     if (kind === "break") this._noiseBurst(base * 0.8, 0.14, 0.18);
+    else if (kind === "hit") this._noiseBurst(base * 0.9, 0.06, 0.07); // mining tick
     else this._noiseBurst(base * 1.25, 0.09, 0.14);
   }
 
@@ -57,6 +58,24 @@ export class Sfx {
     if (!def || def.sound === undefined) return;
     const base = MATERIAL_FREQ[def.sound] || 500;
     this._noiseBurst(base * 0.6 + Math.random() * 80, 0.07, 0.05);
+  }
+
+  hurt() { this._noiseBurst(170, 0.18, 0.3); }
+
+  pickup() {
+    if (!this.enabled || !this._ensure()) return;
+    const ctx = this.ctx;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    const now = ctx.currentTime;
+    osc.type = "square";
+    osc.frequency.setValueAtTime(520, now);
+    osc.frequency.exponentialRampToValueAtTime(880, now + 0.08);
+    g.gain.setValueAtTime(0.06, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+    osc.connect(g).connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.1);
   }
 
   click() { this._noiseBurst(2200, 0.04, 0.08); }

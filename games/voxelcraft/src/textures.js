@@ -332,6 +332,39 @@ export function buildAtlas(seed = 1337) {
   return { canvas, texture, avgColor: avg };
 }
 
+// Mining crack overlay: 4 stages of increasingly dense fracture lines on a
+// transparent tile, used on a slightly inflated box over the mined block.
+export function buildCrackTextures(seed = 1337) {
+  const stages = [];
+  for (let stage = 0; stage < 4; stage++) {
+    const canvas = document.createElement("canvas");
+    canvas.width = TILE_PX;
+    canvas.height = TILE_PX;
+    const ctx = canvas.getContext("2d");
+    const rand = mulberry32(seed ^ (0xc4ac + stage * 131));
+    ctx.clearRect(0, 0, TILE_PX, TILE_PX);
+    const cracks = 2 + stage * 2;
+    for (let c = 0; c < cracks; c++) {
+      let x = (rand() * TILE_PX) | 0;
+      let y = (rand() * TILE_PX) | 0;
+      const steps = 4 + ((rand() * 6) | 0) + stage * 2;
+      for (let s = 0; s < steps; s++) {
+        const shade = 20 + rand() * 30;
+        ctx.fillStyle = `rgba(${shade},${shade},${shade},0.85)`;
+        ctx.fillRect(x, y, 1, 1);
+        x = Math.max(0, Math.min(TILE_PX - 1, x + ((rand() * 3) | 0) - 1));
+        y = Math.max(0, Math.min(TILE_PX - 1, y + ((rand() * 3) | 0) - 1));
+      }
+    }
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.magFilter = THREE.NearestFilter;
+    tex.minFilter = THREE.NearestFilter;
+    tex.generateMipmaps = false;
+    stages.push(tex);
+  }
+  return stages;
+}
+
 // Standalone repeating water texture (separate from the atlas so its UV
 // offset can be animated without dragging every other tile along).
 export function buildWaterTexture(seed = 1337) {

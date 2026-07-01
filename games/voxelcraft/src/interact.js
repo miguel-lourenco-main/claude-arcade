@@ -2,14 +2,15 @@
 // with hold-repeat, pick-block, and break particles.
 
 import * as THREE from "three";
-import { AIR, BEDROCK, BLOCKS, isSolid } from "./blocks.js";
+import { AIR, BEDROCK, BLOCKS, isSolid, dropFor } from "./blocks.js";
 import { EYE_HEIGHT } from "./player.js";
 
-const REACH = 5;
+const REACH_CREATIVE = 5;
+const REACH_SURVIVAL = 4.5;
 const ACTION_REPEAT_MS = 240;
 
 // Amanatides & Woo voxel traversal.
-export function raycast(world, origin, dir, maxDist = REACH) {
+export function raycast(world, origin, dir, maxDist = REACH_CREATIVE) {
   let x = Math.floor(origin.x), y = Math.floor(origin.y), z = Math.floor(origin.z);
   const stepX = dir.x > 0 ? 1 : -1, stepY = dir.y > 0 ? 1 : -1, stepZ = dir.z > 0 ? 1 : -1;
   const tDeltaX = dir.x !== 0 ? Math.abs(1 / dir.x) : Infinity;
@@ -47,12 +48,30 @@ export class Interaction {
     this.onSound = opts.onSound;     // (kind, blockId) => audio
     this.onPick = opts.onPick;       // (blockId) => set hotbar slot
     this.onSwing = opts.onSwing;     // () => held-item swing animation
+    this.canConsume = opts.canConsume; // (id) => bool, takes from inventory (survival)
+    this.onSpawnDrop = opts.onSpawnDrop; // (x, y, z, id) => item drop entity
     this.avgColor = opts.avgColor;   // tile -> [r,g,b]
 
     this.target = null;
     this.buttons = new Set();
     this._nextAction = 0;
     this._lastBreakKey = null; // sweep-breaking: break as soon as target changes
+
+    // survival mining state
+    this._mineKey = null;
+    this._mineProgress = 0;
+    this._hitSoundTimer = 0;
+    this.crack = new THREE.Mesh(
+      new THREE.BoxGeometry(1.004, 1.004, 1.004),
+      new THREE.MeshBasicMaterial({
+        map: opts.crackTextures[0], transparent: true, depthWrite: false,
+        polygonOffset: true, polygonOffsetFactor: -4,
+      })
+    );
+    this.crackTextures = opts.crackTextures;
+    this.crack.renderOrder = 3;
+    this.crack.visible = false;
+    scene.add(this.crack);
 
     const box = new THREE.BoxGeometry(1.002, 1.002, 1.002);
     this.highlight = new THREE.LineSegments(
@@ -77,8 +96,18 @@ export class Interaction {
   clearInput() { this.buttons.clear(); this._lastBreakKey = null; }
 
   update(dt) {
+    if (this.player.dead) {
+      this.target = null;
+      this.highlight.visible = false;
+      this.crack.visible = false;
+      this.particles.update(dt);
+      return;
+    }
+
+    const survival = this.player.mode === "survival";
     const eye = { x: this.player.pos.x, y: this.player.eyeY, z: this.player.pos.z };
-    this.target = raycast(this.world, eye, this.player.lookDir());
+    this.target = raycast(this.world, eye, this.player.lookDir(),
+      survival ? REACH_SURVIVAL : REACH_CREATIVE);
 
     if (this.target) {
       this.highlight.visible = true;
@@ -87,26 +116,96 @@ export class Interaction {
       this.highlight.visible = false;
     }
 
-    // hold-to-repeat
     const now = performance.now();
-    if (this.buttons.size > 0 && now >= this._nextAction) {
-      for (const b of this.buttons) this._act(b);
-      this._nextAction = now + ACTION_REPEAT_MS;
-    } else if (this.buttons.has(0) && this.target) {
-      // sweeping the crosshair onto a new block breaks it immediately
-      const key = `${this.target.x},${this.target.y},${this.target.z}`;
-      if (this._lastBreakKey !== null && key !== this._lastBreakKey) {
-        this._break();
+    if (survival) {
+      this._updateMining(dt);
+      // place repeat still applies in survival
+      if (this.buttons.has(2) && now >= this._nextAction) {
+        this._place();
         this._nextAction = now + ACTION_REPEAT_MS;
+      }
+    } else {
+      this.crack.visible = false;
+      // creative: hold-to-repeat + sweep-breaking
+      if (this.buttons.size > 0 && now >= this._nextAction) {
+        for (const b of this.buttons) this._act(b);
+        this._nextAction = now + ACTION_REPEAT_MS;
+      } else if (this.buttons.has(0) && this.target) {
+        const key = `${this.target.x},${this.target.y},${this.target.z}`;
+        if (this._lastBreakKey !== null && key !== this._lastBreakKey) {
+          this._break();
+          this._nextAction = now + ACTION_REPEAT_MS;
+        }
       }
     }
 
     this.particles.update(dt);
   }
 
+  // survival: hold LMB on a block until its hardness timer completes
+  _updateMining(dt) {
+    const t = this.target;
+    if (!this.buttons.has(0) || !t || BLOCKS[t.id].hardness === Infinity) {
+      this._mineKey = null;
+      this._mineProgress = 0;
+      this.crack.visible = false;
+      return;
+    }
+    const key = `${t.x},${t.y},${t.z}`;
+    if (key !== this._mineKey) {
+      this._mineKey = key;
+      this._mineProgress = 0;
+      this._hitSoundTimer = 0;
+    }
+    const hardness = BLOCKS[t.id].hardness;
+    this._mineProgress += dt;
+
+    this._hitSoundTimer -= dt;
+    if (this._hitSoundTimer <= 0) {
+      this._hitSoundTimer = 0.25;
+      this.onSound("hit", t.id);
+      if (this.onSwing) this.onSwing();
+    }
+
+    if (this._mineProgress >= hardness) {
+      this._completeBreak(t);
+      this._mineKey = null;
+      this._mineProgress = 0;
+      this.crack.visible = false;
+      return;
+    }
+
+    const stage = Math.min(3, Math.floor((this._mineProgress / hardness) * 4));
+    this.crack.material.map = this.crackTextures[stage];
+    this.crack.position.set(t.x + 0.5, t.y + 0.5, t.z + 0.5);
+    this.crack.visible = true;
+  }
+
+  // survival break: remove the block, spawn its drop (and the popped plant's)
+  _completeBreak(t) {
+    const affected = this.world.setBlock(t.x, t.y, t.z, AIR);
+    const above = this.world.getBlock(t.x, t.y + 1, t.z);
+    let popped = null;
+    if (above !== AIR && BLOCKS[above].kind === "cross") {
+      popped = above;
+      this.world.setBlock(t.x, t.y + 1, t.z, AIR);
+    }
+    this.onEdit(affected, { ids: [t.id, popped] });
+    this.onSound("break", t.id);
+    this.particles.burst(t.x, t.y, t.z, this.avgColor[BLOCKS[t.id].tiles.side] || [0.5, 0.5, 0.5]);
+
+    const drop = dropFor(t.id);
+    if (drop !== null) this.onSpawnDrop(t.x + 0.5, t.y + 0.4, t.z + 0.5, drop);
+    if (popped !== null) {
+      const plantDrop = dropFor(popped);
+      if (plantDrop !== null) this.onSpawnDrop(t.x + 0.5, t.y + 1.3, t.z + 0.5, plantDrop);
+    }
+  }
+
   _act(button) {
     if (this.target && this.onSwing) this.onSwing();
-    if (button === 0) this._break();
+    // survival LMB is handled by the mining loop, not instant breaking
+    if (button === 0 && this.player.mode !== "survival") this._break();
     else if (button === 1 && this.target) this.onPick(this.target.id);
     else if (button === 2) this._place();
   }
@@ -150,6 +249,9 @@ export class Interaction {
     if (def.solid && this._overlapsPlayer(px, py, pz)) return;
     // plants need soil
     if (def.kind === "cross" && !isSolid(this.world.getBlock(px, py - 1, pz))) return;
+    // survival: consumes one from the inventory — LAST check, so a failed
+    // placement never eats a block
+    if (this.player.mode === "survival" && !this.canConsume(id)) return;
 
     const affected = this.world.setBlock(px, py, pz, id);
     if (affected.length === 0) return;
