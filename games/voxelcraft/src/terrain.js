@@ -238,7 +238,7 @@ export function makeGenerator(seed) {
 function safeColumn(terrain, x, z) {
   const h = terrain.heightAt(x, z);
   if (h <= SEA_LEVEL + 1 || h >= HEIGHT - 20) return null;
-  if (terrain.treeNear(x, z, 1)) return null;
+  if (terrain.treeNear(x, z, 2)) return null; // canopies span 2 blocks from the trunk
   if (terrain.cactusAt(x, z, terrain.biomeAt(x, z, h), h) > 0) return null;
   return { x: x + 0.5, y: h + 2.5, z: z + 0.5 };
 }
@@ -250,7 +250,7 @@ export function findBiomeLocation(terrain, kind, fromX = 0, fromZ = 0, maxRadius
     switch (kind) {
       case "forest": case "plains": case "desert": case "snow":
         return h > SEA_LEVEL + 1 && h < HEIGHT - 20 && terrain.biomeAt(x, z, h) === kind;
-      case "mountain": return h >= 58;
+      case "mountain": return h >= 50; // realistic peak range tops out mid-50s
       case "ocean": return h < SEA_LEVEL - 6;
       default: return false;
     }

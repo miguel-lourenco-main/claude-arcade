@@ -32,13 +32,14 @@ const LIGHT_FLOOR = 0.3;
 
 const VOXEL_VERT = /* glsl */ `
 attribute float blocklight;
+uniform vec2 uUvOffset;
 varying vec2 vUv;
 varying vec3 vColor;
 varying float vBlock;
 #include <common>
 #include <fog_pars_vertex>
 void main() {
-  vUv = uv;
+  vUv = uv + uUvOffset;
   vColor = color;
   vBlock = blocklight;
   vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
@@ -64,8 +65,10 @@ void main() {
   vec3 sky = vColor * uDayLight * uSkyTint;
   vec3 torch = vec3(vBlock) * vec3(1.0, 0.86, 0.62);
   gl_FragColor = vec4(tex.rgb * max(sky, torch), tex.a * uOpacity);
-  #include <fog_fragment>
+  // three.js order: colorspace BEFORE fog — the renderer supplies fogColor in
+  // output sRGB space so fully-fogged pixels converge to the sky background
   #include <colorspace_fragment>
+  #include <fog_fragment>
 }`;
 
 function voxelMaterial(map, opts = {}) {
@@ -74,6 +77,7 @@ function voxelMaterial(map, opts = {}) {
       THREE.UniformsLib.fog,
       {
         map: { value: null },
+        uUvOffset: { value: new THREE.Vector2(0, 0) },
         uDayLight: { value: 1 },
         uSkyTint: { value: new THREE.Color(1, 1, 1) },
         uOpacity: { value: opts.opacity ?? 1 },
@@ -93,7 +97,8 @@ function voxelMaterial(map, opts = {}) {
 }
 
 export function buildMaterials(atlasTexture, waterTexture) {
-  const held = voxelMaterial(atlasTexture);
+  // cutout so sprite items (torch, plants) keep their transparent pixels
+  const held = voxelMaterial(atlasTexture, { alphaTest: 0.4, side: THREE.DoubleSide });
   held.depthTest = false; // the hand never clips into walls
   return {
     opaque: voxelMaterial(atlasTexture),

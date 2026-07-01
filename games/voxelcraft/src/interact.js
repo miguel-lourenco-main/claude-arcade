@@ -153,7 +153,8 @@ export class Interaction {
 
     const affected = this.world.setBlock(px, py, pz, id);
     if (affected.length === 0) return;
-    this.onEdit(affected, { ids: [id] });
+    // include the replaced block: overwriting a torch must clear its light
+    this.onEdit(affected, { ids: [id, existing] });
     this.onSound("place", id);
   }
 

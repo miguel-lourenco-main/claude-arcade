@@ -74,17 +74,30 @@ export class Player {
         this._lastSpaceTap = now;
       }
     }
-    if (code === "KeyW") {
+    // double-tap-to-sprint: W in camera mode; any movement key in static
+    // mode (there W only ever means north, so sprint must arm from all four)
+    const sprintKeys = this.moveMode === "static"
+      ? ["KeyW", "KeyA", "KeyS", "KeyD"] : ["KeyW"];
+    if (sprintKeys.includes(code)) {
       const now = performance.now();
-      if (now - this._lastForwardTap < 260 && !this.keys.has("KeyW")) this.sprinting = true;
-      this._lastForwardTap = now;
+      if (now - (this._lastMoveTap?.[code] || 0) < 260 && !this.keys.has(code)) {
+        this.sprinting = true;
+      }
+      (this._lastMoveTap ??= {})[code] = now;
     }
     this.keys.add(code);
   }
 
   onKeyUp(code) {
     this.keys.delete(code);
-    if (code === "KeyW") this.sprinting = false;
+    if (this.moveMode === "static") {
+      // sprint ends when all movement input is released
+      if (!["KeyW", "KeyA", "KeyS", "KeyD"].some((k) => this.keys.has(k))) {
+        this.sprinting = false;
+      }
+    } else if (code === "KeyW") {
+      this.sprinting = false;
+    }
   }
 
   clearInput() { this.keys.clear(); this.sprinting = false; }
@@ -111,12 +124,17 @@ export class Player {
     const len = Math.hypot(dirX, dirZ);
     if (len > 1) { dirX /= len; dirZ /= len; }
 
+    // sprint needs actual movement input: forward in camera mode, any
+    // direction in static mode
+    const sprintInput = this.moveMode === "static"
+      ? (forward !== 0 || strafe !== 0) : forward > 0;
     let speed;
     if (this.flying) speed = this.sprinting ? FLY_SPRINT_SPEED : FLY_SPEED;
     else if (this.inWater) speed = SWIM_SPEED;
     else if (sneaking) speed = SNEAK_SPEED;
-    else if (this.sprinting && forward > 0) speed = SPRINT_SPEED;
+    else if (this.sprinting && sprintInput) speed = SPRINT_SPEED;
     else speed = WALK_SPEED;
+    this.sprintActive = speed === SPRINT_SPEED || (this.flying && this.sprinting);
 
     // horizontal smoothing: snappy on ground, floatier in air/water
     const control = this.flying ? 10 : this.onGround ? 14 : this.inWater ? 6 : 3.2;

@@ -29,15 +29,27 @@ canvas atlas at boot, and every sound is synthesized with WebAudio.
 - **World feel** — 10-minute day/night cycle: moving sun and moon, stars,
   scrolling blocky clouds, dusk tint, genuinely dark blue-ish nights, fog
   matched to sky and view distance, underwater fog.
-- **Persistence** — seed, player state, hotbar, time of day, and every block
-  edit autosaved to localStorage (validated on load). Reset from the pause
-  menu.
+- **Torch light** — a real block-light system: BFS flood fill from every torch
+  (level 14, blocked by walls, wraps around corners), rendered through a custom
+  two-channel voxel shader — sky light dims with the day/night cycle, torch
+  light stays warm through the night.
+- **Grid movement** — WASD moves along fixed world axes (W is always north),
+  decoupled from the camera; look around freely without changing your heading.
+  Toggle back to classic camera-relative movement in the pause menu.
+- **Getting around** — new worlds spawn in a forest; the pause menu has
+  teleport buttons (spawn, forest, plains, desert, snow, mountain, ocean) that
+  search the world outward from where you stand.
+- **First-person hand** — the selected block bobs in your hand and swings on
+  every break/place.
+- **Persistence** — seed, player state, hotbar, movement mode, time of day, and
+  every block edit autosaved to localStorage (validated on load). Reset from
+  the pause menu.
 
 ## Controls
 
 | Input | Action |
 | --- | --- |
-| WASD / Space | move / jump |
+| WASD / Space | move (world-fixed N/W/S/E by default) / jump |
 | double-tap W | sprint |
 | double-tap Space | toggle flight (Space/Shift = up/down) |
 | Shift | sneak (slow, won't fall off edges) |

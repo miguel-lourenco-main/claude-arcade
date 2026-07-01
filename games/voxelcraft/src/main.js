@@ -95,12 +95,21 @@ if (save && Array.isArray(save.hotbar) && save.hotbar.length === 9 && save.hotba
 
 const interaction = new Interaction(world, player, scene, hud, {
   onEdit: (chunks, info) => {
-    // torch placed/broken: its light reaches into neighboring chunks, so
-    // remesh the full 3x3 ring around the edit instead of just the borders
-    const lightTouched = info && info.ids &&
+    if (chunks.length === 0) return;
+    // torch light reaches up to 14 blocks into neighboring chunks, so any
+    // edit that adds/removes an emitter OR happens near one (occluders
+    // change the BFS result) must remesh the full 3x3 ring, not just the
+    // border-adjacent chunks
+    const { cx, cz } = chunks[0];
+    let lightTouched = info && info.ids &&
       info.ids.some((id) => id != null && BLOCKS[id].lightEmit > 0);
-    if (lightTouched && chunks.length > 0) {
-      const { cx, cz } = chunks[0];
+    if (!lightTouched) {
+      outer: for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+        const c = world.getChunk(cx + dx, cz + dz);
+        if (c && c.emitters.size > 0) { lightTouched = true; break outer; }
+      }
+    }
+    if (lightTouched) {
       for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
         const c = world.getChunk(cx + dx, cz + dz);
         if (c) remeshNow(c);
@@ -235,7 +244,11 @@ canvas.addEventListener("click", () => {
   if (!document.pointerLockElement) requestLock();
 });
 
-const inputActive = () => NO_LOCK || document.pointerLockElement === canvas;
+// in nolock mode the pointer-lock state can't encode "playing", so follow the
+// overlay state machine instead — otherwise UI clicks would break blocks
+const inputActive = () => NO_LOCK
+  ? !hud.paused && !hud.pickerOpen
+  : document.pointerLockElement === canvas;
 
 document.addEventListener("pointerlockchange", () => {
   const locked = document.pointerLockElement === canvas;
@@ -362,15 +375,13 @@ function tick(now) {
   camera.rotation.x = player.pitch;
   camera.rotation.z = Math.sin(bobPhase) * 0.004 * bobAmp;
 
-  // scrolling water
-  const waterMap = materials.water.uniforms.map.value;
-  waterMap.offset.x = (now * 0.000021) % 1;
-  waterMap.offset.y = (now * 0.000013) % 1;
+  // scrolling water (uv-offset uniform — ShaderMaterial ignores texture.offset)
+  materials.water.uniforms.uUvOffset.value.set((now * 0.000021) % 1, (now * 0.000013) % 1);
 
   animateHeld(frameDt, bobY);
 
   // sprint FOV kick
-  const targetFov = player.sprinting && !player.flying ? 77 : 70;
+  const targetFov = player.sprintActive && !player.flying ? 77 : 70;
   if (Math.abs(camera.fov - targetFov) > 0.1) {
     camera.fov += (targetFov - camera.fov) * Math.min(1, frameDt * 10);
     camera.updateProjectionMatrix();
@@ -402,3 +413,6 @@ function tick(now) {
 }
 
 requestAnimationFrame(tick);
+
+// automated-test handle (only in ?nolock mode, which headless tests use)
+if (NO_LOCK) window.voxelcraft = { player, world, hud, sky, terrain, interaction };

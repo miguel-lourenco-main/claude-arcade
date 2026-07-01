@@ -68,6 +68,7 @@ export class Hud {
     this.slots = [...DEFAULT_HOTBAR];
     this.selected = 0;
     this.pickerOpen = false;
+    this.paused = true; // the boot overlay is showing
 
     this._buildHotbar();
     this._buildPicker();
@@ -201,10 +202,11 @@ export class Hud {
   }
 
   showPause(firstTime = false) {
+    this.paused = true;
     this.overlayEl.classList.remove("hidden");
     document.getElementById("overlay-title").textContent = firstTime ? "VOXELCRAFT" : "Paused";
   }
-  hidePause() { this.overlayEl.classList.add("hidden"); }
+  hidePause() { this.paused = false; this.overlayEl.classList.add("hidden"); }
 
   setUnderwater(on) { this.waterTintEl.classList.toggle("hidden", !on); }
 
