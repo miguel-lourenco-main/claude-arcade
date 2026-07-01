@@ -33,6 +33,9 @@ export class Player {
     this.sprinting = false;
     this.inWater = false;
     this.eyeInWater = false;
+    // "static": WASD moves along fixed world axes (W=north/-z, D=east/+x),
+    // independent of where the camera looks. "camera": classic FPS movement.
+    this.moveMode = "static";
 
     this.keys = new Set();
     this._lastSpaceTap = 0;
@@ -95,9 +98,16 @@ export class Player {
     const jumping = this.keys.has("Space");
 
     // wanted horizontal velocity in world space
-    const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
-    let dirX = -sin * forward + cos * strafe;
-    let dirZ = -cos * forward + sin * strafe;
+    let dirX, dirZ;
+    if (this.moveMode === "camera") {
+      const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
+      dirX = -sin * forward + cos * strafe;
+      dirZ = -cos * forward + sin * strafe;
+    } else {
+      // world-static: the camera can look anywhere, movement stays on the grid
+      dirX = strafe;
+      dirZ = -forward;
+    }
     const len = Math.hypot(dirX, dirZ);
     if (len > 1) { dirX /= len; dirZ /= len; }
 
