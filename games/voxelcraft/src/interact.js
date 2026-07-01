@@ -43,9 +43,10 @@ export class Interaction {
     this.player = player;
     this.scene = scene;
     this.hotbar = hotbar; // {selectedId()}
-    this.onEdit = opts.onEdit;       // (affectedChunks) => remesh now
+    this.onEdit = opts.onEdit;       // (affectedChunks, {ids}) => remesh now
     this.onSound = opts.onSound;     // (kind, blockId) => audio
     this.onPick = opts.onPick;       // (blockId) => set hotbar slot
+    this.onSwing = opts.onSwing;     // () => held-item swing animation
     this.avgColor = opts.avgColor;   // tile -> [r,g,b]
 
     this.target = null;
@@ -104,6 +105,7 @@ export class Interaction {
   }
 
   _act(button) {
+    if (this.target && this.onSwing) this.onSwing();
     if (button === 0) this._break();
     else if (button === 1 && this.target) this.onPick(this.target.id);
     else if (button === 2) this._place();
@@ -118,10 +120,12 @@ export class Interaction {
     const affected = this.world.setBlock(t.x, t.y, t.z, AIR);
     // breaking the support under a plant pops the plant too
     const above = this.world.getBlock(t.x, t.y + 1, t.z);
+    let popped = null;
     if (above !== AIR && BLOCKS[above].kind === "cross") {
+      popped = above;
       this.world.setBlock(t.x, t.y + 1, t.z, AIR);
     }
-    this.onEdit(affected);
+    this.onEdit(affected, { ids: [t.id, popped] });
     this.onSound("break", t.id);
     this.particles.burst(t.x, t.y, t.z, this.avgColor[def.tiles.side] || [0.5, 0.5, 0.5]);
   }
@@ -149,7 +153,7 @@ export class Interaction {
 
     const affected = this.world.setBlock(px, py, pz, id);
     if (affected.length === 0) return;
-    this.onEdit(affected);
+    this.onEdit(affected, { ids: [id] });
     this.onSound("place", id);
   }
 

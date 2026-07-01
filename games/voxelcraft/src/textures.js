@@ -35,6 +35,7 @@ export const TILE = {
   LEAVES_COLD: 24,
   COAL_ORE: 25,
   IRON_ORE: 26,
+  TORCH: 27,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -280,6 +281,18 @@ const painters = {
         p.px(bx + ((p.rand() * 2) | 0), by + ((p.rand() * 2) | 0), 216 + d, 172 + d, 140 + d);
       }
     }
+  },
+  [TILE.TORCH](p) {
+    p.clear();
+    for (let y = 6; y < 16; y++) {
+      const d = (p.rand() * 2 - 1) * 8;
+      p.px(7, y, 122 + d, 92 + d, 54 + d);
+      p.px(8, y, 106 + d, 78 + d, 44 + d);
+    }
+    // glowing tip
+    p.px(7, 5, 255, 190, 80); p.px(8, 5, 255, 190, 80);
+    p.px(7, 4, 255, 232, 150); p.px(8, 4, 255, 232, 150);
+    p.px(7, 3, 255, 250, 220); p.px(8, 3, 255, 250, 220);
   },
 };
 

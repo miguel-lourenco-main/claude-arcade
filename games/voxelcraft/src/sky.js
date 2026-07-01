@@ -20,12 +20,13 @@ export class Sky {
     this.scene = scene;
     this.time = 0.3; // fraction of a day; 0.25 = noon-ish start
 
-    this.ambient = new THREE.AmbientLight(0xffffff, 0.6);
-    scene.add(this.ambient);
-    this.sun = new THREE.DirectionalLight(0xfff4e0, 0.9);
-    scene.add(this.sun);
-    this.moon = new THREE.DirectionalLight(0xbdd0ff, 0.12);
-    scene.add(this.moon);
+    // world lighting is driven through the voxel-shader uniforms, not scene
+    // lights: main.js reads lightLevel/lightTint each frame
+    this.lightLevel = 1;
+    this.lightTint = new THREE.Color(1, 1, 1);
+    this._tintNight = new THREE.Color(0.55, 0.63, 0.9); // moonlit blue
+    this._tintDay = new THREE.Color(1, 1, 1);
+    this._tintDusk = new THREE.Color(1.0, 0.82, 0.7);
 
     // celestial rig follows the camera so bodies stay on the horizon
     this.rig = new THREE.Group();
@@ -51,8 +52,6 @@ export class Sky {
     this.skyColor = new THREE.Color();
     // fog must swallow the meshed world edge (5 chunks = 80 blocks)
     scene.fog = new THREE.Fog(0x87ceeb, 45, 82);
-    this.ambientDay = new THREE.Color(0xffffff);
-    this.ambientNight = new THREE.Color(0x7683b8); // moonlit blue
   }
 
   _makeStars(seed) {
@@ -123,13 +122,10 @@ export class Sky {
 
     this.skyColor.copy(NIGHT_SKY).lerp(DAY_SKY, day).lerp(DUSK, duskiness * 0.45);
 
-    this.sun.intensity = 0.95 * day;
-    this.sun.position.copy(sunDir).multiplyScalar(100);
-    this.moon.intensity = 0.18 * (1 - day);
-    this.moon.position.copy(sunDir).multiplyScalar(-100);
-    // genuinely dark, slightly blue nights
-    this.ambient.intensity = 0.12 + 0.55 * day;
-    this.ambient.color.copy(this.ambientNight).lerp(this.ambientDay, day);
+    // genuinely dark, slightly blue nights; warm cast at dusk/dawn
+    this.lightLevel = 0.18 + 0.82 * day;
+    this.lightTint.copy(this._tintNight).lerp(this._tintDay, day)
+      .lerp(this._tintDusk, duskiness * 0.6);
 
     this.rig.position.copy(camera.position);
     this.sunMesh.position.copy(sunDir).multiplyScalar(350);

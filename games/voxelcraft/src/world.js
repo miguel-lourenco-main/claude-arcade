@@ -19,6 +19,7 @@ export class Chunk {
     this.generated = false;
     this.dirty = false;       // needs (re)meshing
     this.meshes = null;       // {opaque, cutout, water} THREE.Mesh or null
+    this.emitters = new Map(); // blockIndex -> lightEmit level (torches etc.)
   }
   get(lx, y, lz) {
     if (y < 0 || y >= HEIGHT) return AIR;
@@ -68,12 +69,18 @@ export class World {
     const chunk = this.getChunk(cx, cz);
     if (!chunk || !chunk.generated) return [];
     const lx = x - (cx << 4), lz = z - (cz << 4);
+    const idx = blockIndex(lx, y, lz);
+    const prev = chunk.data[idx];
     chunk.set(lx, y, lz, id);
+
+    // keep the chunk's light-emitter registry current
+    if (BLOCKS[prev].lightEmit > 0) chunk.emitters.delete(idx);
+    if (BLOCKS[id].lightEmit > 0) chunk.emitters.set(idx, BLOCKS[id].lightEmit);
 
     const key = chunkKey(cx, cz);
     let overlay = this.edits.get(key);
     if (!overlay) { overlay = new Map(); this.edits.set(key, overlay); }
-    overlay.set(blockIndex(lx, y, lz), id);
+    overlay.set(idx, id);
 
     const affected = [chunk];
     chunk.dirty = true;
@@ -103,8 +110,14 @@ export class World {
     }
     this.generator(this, chunk);
     // apply persisted player edits on top of the generated terrain
+    chunk.emitters.clear();
     const overlay = this.edits.get(key);
-    if (overlay) for (const [idx, id] of overlay) chunk.data[idx] = id;
+    if (overlay) {
+      for (const [idx, id] of overlay) {
+        chunk.data[idx] = id;
+        if (BLOCKS[id].lightEmit > 0) chunk.emitters.set(idx, BLOCKS[id].lightEmit);
+      }
+    }
     chunk.generated = true;
     chunk.dirty = true;
     // neighbors that were already meshed may show stale border faces

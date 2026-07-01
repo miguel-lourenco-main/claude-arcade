@@ -25,6 +25,7 @@ export const SANDSTONE = 19;
 export const LEAVES_COLD = 20;
 export const COAL_ORE = 21;
 export const IRON_ORE = 22;
+export const TORCH = 23;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -39,7 +40,8 @@ const def = (name, opts) => ({
   opaque: true,
   cullSame: false,
   sound: "stone",
-  tiles: null, // {top, side, bottom}
+  lightEmit: 0, // 0..14 block-light level this block radiates
+  tiles: null,  // {top, side, bottom}
   ...opts,
 });
 
@@ -117,11 +119,20 @@ BLOCKS[SANDSTONE] = def("Sandstone", {
 BLOCKS[LEAVES_COLD] = def("Spruce Leaves", { tiles: cube(TILE.LEAVES_COLD), sound: "plant" });
 BLOCKS[COAL_ORE] = def("Coal Ore", { tiles: cube(TILE.COAL_ORE) });
 BLOCKS[IRON_ORE] = def("Iron Ore", { tiles: cube(TILE.IRON_ORE) });
+BLOCKS[TORCH] = def("Torch", {
+  tiles: cube(TILE.TORCH),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  sound: "wood",
+  lightEmit: 14,
+});
 
 // Blocks offered in the hotbar picker (everything but air).
 export const PLACEABLE = BLOCKS.map((b, id) => id).filter((id) => id !== AIR);
 
-export const DEFAULT_HOTBAR = [GRASS, DIRT, STONE, COBBLE, PLANKS, LOG, LEAVES, GLASS, SAND];
+export const DEFAULT_HOTBAR = [GRASS, DIRT, STONE, COBBLE, PLANKS, LOG, LEAVES, GLASS, TORCH];
 
 export function isSolid(id) { return BLOCKS[id] !== undefined && BLOCKS[id].solid; }
 export function isOpaque(id) { return BLOCKS[id] !== undefined && BLOCKS[id].opaque; }
