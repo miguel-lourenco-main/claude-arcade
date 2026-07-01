@@ -33,9 +33,11 @@ canvas atlas at boot, and every sound is synthesized with WebAudio.
   (level 14, blocked by walls, wraps around corners), rendered through a custom
   two-channel voxel shader — sky light dims with the day/night cycle, torch
   light stays warm through the night.
-- **Grid movement** — WASD moves along fixed world axes (W is always north),
-  decoupled from the camera; look around freely without changing your heading.
-  Toggle back to classic camera-relative movement in the pause menu.
+- **Movement feel** — classic camera-relative WASD with a proper
+  acceleration/friction model (crisp starts, firm stops, weaker steering
+  mid-air) instead of exponential velocity smoothing, plus a mouse-sensitivity
+  slider in the pause menu. An experimental world-static mode (W is always
+  north, camera fully decoupled) is available via the pause-menu toggle.
 - **Getting around** — new worlds spawn in a forest; the pause menu has
   teleport buttons (spawn, forest, plains, desert, snow, mountain, ocean) that
   search the world outward from where you stand.
@@ -49,7 +51,7 @@ canvas atlas at boot, and every sound is synthesized with WebAudio.
 
 | Input | Action |
 | --- | --- |
-| WASD / Space | move (world-fixed N/W/S/E by default) / jump |
+| WASD / Space | move / jump |
 | double-tap W | sprint |
 | double-tap Space | toggle flight (Space/Shift = up/down) |
 | Shift | sneak (slow, won't fall off edges) |

@@ -21,6 +21,23 @@ const WATER_EXIT_BOOST = 6;       // upward kick when swimming into a bank
 const MAX_STEP_DISP = 0.4;        // max movement per collision substep (anti-tunneling)
 const STEP_DISTANCE = 2.2;        // blocks walked between footstep sounds
 
+// horizontal acceleration (blocks/s²): crisp starts, crisper stops on ground,
+// deliberately weaker steering in the air — replaces the old exponential
+// velocity blend, whose long tail made stopping feel like gliding on ice
+const ACCEL_GROUND = 70;
+const FRICTION_GROUND = 50;
+const ACCEL_AIR = 12;
+const ACCEL_WATER = 16;
+const ACCEL_FLY = 45;
+const FRICTION_FLY = 28;
+
+// move v toward target by at most maxDelta (linear approach, no overshoot)
+function approach(v, target, maxDelta) {
+  const d = target - v;
+  if (Math.abs(d) <= maxDelta) return target;
+  return v + Math.sign(d) * maxDelta;
+}
+
 export class Player {
   constructor(world) {
     this.world = world;
@@ -33,9 +50,10 @@ export class Player {
     this.sprinting = false;
     this.inWater = false;
     this.eyeInWater = false;
-    // "static": WASD moves along fixed world axes (W=north/-z, D=east/+x),
-    // independent of where the camera looks. "camera": classic FPS movement.
-    this.moveMode = "static";
+    // "camera": classic FPS movement, WASD relative to where you look.
+    // "static": WASD along fixed world axes (W=north/-z), camera independent.
+    this.moveMode = "camera";
+    this.sensitivity = 1; // mouse-look multiplier (pause-menu setting)
 
     this.keys = new Set();
     this._lastSpaceTap = 0;
@@ -56,9 +74,10 @@ export class Player {
     };
   }
 
-  onMouseMove(dx, dy, sensitivity = 0.0023) {
-    this.yaw -= dx * sensitivity;
-    this.pitch -= dy * sensitivity;
+  onMouseMove(dx, dy) {
+    const k = 0.0023 * this.sensitivity;
+    this.yaw -= dx * k;
+    this.pitch -= dy * k;
     const lim = Math.PI / 2 - 0.001;
     this.pitch = Math.max(-lim, Math.min(lim, this.pitch));
   }
@@ -80,7 +99,7 @@ export class Player {
       ? ["KeyW", "KeyA", "KeyS", "KeyD"] : ["KeyW"];
     if (sprintKeys.includes(code)) {
       const now = performance.now();
-      if (now - (this._lastMoveTap?.[code] || 0) < 260 && !this.keys.has(code)) {
+      if (now - (this._lastMoveTap?.[code] || 0) < 300 && !this.keys.has(code)) {
         this.sprinting = true;
       }
       (this._lastMoveTap ??= {})[code] = now;
@@ -136,16 +155,21 @@ export class Player {
     else speed = WALK_SPEED;
     this.sprintActive = speed === SPRINT_SPEED || (this.flying && this.sprinting);
 
-    // horizontal smoothing: snappy on ground, floatier in air/water
-    const control = this.flying ? 10 : this.onGround ? 14 : this.inWater ? 6 : 3.2;
-    const blend = 1 - Math.exp(-control * dt);
-    this.vel.x += (dirX * speed - this.vel.x) * blend;
-    this.vel.z += (dirZ * speed - this.vel.z) * blend;
+    // linear acceleration toward the wanted velocity: constant response time
+    // at any speed, and a firm stop instead of an exponential glide
+    const hasInput = forward !== 0 || strafe !== 0;
+    let accel;
+    if (this.flying) accel = hasInput ? ACCEL_FLY : FRICTION_FLY;
+    else if (this.inWater) accel = ACCEL_WATER;
+    else if (this.onGround) accel = hasInput ? ACCEL_GROUND : FRICTION_GROUND;
+    else accel = ACCEL_AIR;
+    this.vel.x = approach(this.vel.x, dirX * speed, accel * dt);
+    this.vel.z = approach(this.vel.z, dirZ * speed, accel * dt);
 
     // vertical
     if (this.flying) {
       const up = (jumping ? 1 : 0) - (sneaking ? 1 : 0);
-      this.vel.y += (up * speed - this.vel.y) * blend;
+      this.vel.y = approach(this.vel.y, up * speed, 55 * dt);
     } else if (this.inWater) {
       this.vel.y -= 4 * dt;                      // gentle sink
       if (jumping) this.vel.y += 16 * dt;        // swim up

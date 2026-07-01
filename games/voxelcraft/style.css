@@ -112,6 +112,12 @@ body {
 #tp-status { margin-top: 10px; color: #9aa3af; font-size: 12px; min-height: 16px; }
 
 .row { margin-top: 26px; display: flex; gap: 16px; justify-content: center; align-items: center; }
+#sens-setting {
+  display: flex; align-items: center; gap: 8px;
+  color: #b7c0cc; font-size: 12px;
+}
+#sens-setting input[type="range"] { width: 110px; accent-color: #7ee787; }
+#sens-val { min-width: 34px; color: #e8eaed; }
 .secondary {
   font: inherit; font-size: 12px;
   padding: 7px 14px;

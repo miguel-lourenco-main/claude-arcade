@@ -58,7 +58,10 @@ if (save && validPos(save.player)) {
 } else {
   Object.assign(player.pos, spawnPoint);
 }
-player.moveMode = save && save.movement === "camera" ? "camera" : "static";
+player.moveMode = save && (save.movement2 === "static" || save.movement2 === "camera")
+  ? save.movement2 : "camera";
+player.sensitivity = save && Number.isFinite(save.sensitivity)
+  ? Math.min(2.5, Math.max(0.3, save.sensitivity)) : 1;
 if (save && save.edits) world.loadEdits(save.edits);
 
 const sky = new Sky(scene, seed);
@@ -85,8 +88,10 @@ const hud = new Hud(atlas.canvas, {
     player.moveMode = player.moveMode === "static" ? "camera" : "static";
     return player.moveMode;
   },
+  onSensitivity: (v) => { player.sensitivity = v; },
 });
 hud.setMovementLabel(player.moveMode);
+hud.setSensitivity(player.sensitivity);
 const validSlot = (id) => Number.isInteger(id) && id !== AIR && !!BLOCKS[id];
 if (save && Array.isArray(save.hotbar) && save.hotbar.length === 9 && save.hotbar.every(validSlot)) {
   hud.slots = save.hotbar;

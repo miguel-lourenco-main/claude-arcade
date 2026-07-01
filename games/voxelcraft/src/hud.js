@@ -65,6 +65,7 @@ export class Hud {
     this.onReset = opts.onReset;
     this.onTeleport = opts.onTeleport;             // (kind) => {ok, message}
     this.onToggleMovement = opts.onToggleMovement; // () => new mode string
+    this.onSensitivity = opts.onSensitivity;       // (multiplier) => void
     this.slots = [...DEFAULT_HOTBAR];
     this.selected = 0;
     this.pickerOpen = false;
@@ -88,12 +89,25 @@ export class Hud {
       this.setMovementLabel(this.onToggleMovement());
     });
 
+    this.sensEl = document.getElementById("sensitivity");
+    this.sensValEl = document.getElementById("sens-val");
+    this.sensEl.addEventListener("input", () => {
+      const v = parseFloat(this.sensEl.value);
+      this.sensValEl.textContent = v.toFixed(2) + "×";
+      this.onSensitivity(v);
+    });
+
     this._buildTeleports();
   }
 
   setMovementLabel(mode) {
     this.movementBtn.textContent =
       mode === "static" ? "Movement: World-static" : "Movement: Camera-relative";
+  }
+
+  setSensitivity(v) {
+    this.sensEl.value = String(v);
+    this.sensValEl.textContent = v.toFixed(2) + "×";
   }
 
   _buildTeleports() {
