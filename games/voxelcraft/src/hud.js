@@ -56,11 +56,15 @@ function drawBlockIcon(ctx, atlas, blockId) {
   ctx.restore();
 }
 
+const TELEPORTS = ["spawn", "forest", "plains", "desert", "snow", "mountain", "ocean"];
+
 export class Hud {
   constructor(atlasCanvas, opts) {
     this.atlas = atlasCanvas;
     this.onResume = opts.onResume;
     this.onReset = opts.onReset;
+    this.onTeleport = opts.onTeleport;             // (kind) => {ok, message}
+    this.onToggleMovement = opts.onToggleMovement; // () => new mode string
     this.slots = [...DEFAULT_HOTBAR];
     this.selected = 0;
     this.pickerOpen = false;
@@ -77,6 +81,39 @@ export class Hud {
     document.getElementById("reset").addEventListener("click", () => {
       if (confirm("Delete this world and generate a new one?")) this.onReset();
     });
+
+    this.movementBtn = document.getElementById("movement-toggle");
+    this.movementBtn.addEventListener("click", () => {
+      this.setMovementLabel(this.onToggleMovement());
+    });
+
+    this._buildTeleports();
+  }
+
+  setMovementLabel(mode) {
+    this.movementBtn.textContent =
+      mode === "static" ? "Movement: World-static" : "Movement: Camera-relative";
+  }
+
+  _buildTeleports() {
+    const row = document.getElementById("tp-buttons");
+    const status = document.getElementById("tp-status");
+    for (const kind of TELEPORTS) {
+      const btn = document.createElement("button");
+      btn.className = "tp-btn";
+      btn.textContent = kind[0].toUpperCase() + kind.slice(1);
+      btn.addEventListener("click", () => {
+        status.textContent = `Searching for ${kind}…`;
+        btn.disabled = true;
+        // yield a frame so the status paints before the synchronous search
+        requestAnimationFrame(() => setTimeout(() => {
+          const res = this.onTeleport(kind);
+          status.textContent = res.message;
+          btn.disabled = false;
+        }, 20));
+      });
+      row.appendChild(btn);
+    }
   }
 
   selectedId() { return this.slots[this.selected]; }

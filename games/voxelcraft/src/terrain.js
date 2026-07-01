@@ -233,22 +233,66 @@ export function makeGenerator(seed) {
   return generate;
 }
 
-// Find a dry-land spawn column near the origin that isn't inside a tree or
-// cactus (expanding ring search).
+// A column the player can safely stand on: dry land, not inside a tree or
+// cactus, not up against the world ceiling.
+function safeColumn(terrain, x, z) {
+  const h = terrain.heightAt(x, z);
+  if (h <= SEA_LEVEL + 1 || h >= HEIGHT - 20) return null;
+  if (terrain.treeNear(x, z, 1)) return null;
+  if (terrain.cactusAt(x, z, terrain.biomeAt(x, z, h), h) > 0) return null;
+  return { x: x + 0.5, y: h + 2.5, z: z + 0.5 };
+}
+
+// Expanding ring search for a biome/feature, coarse first, then refined to a
+// safe standing column. Returns null when nothing matches within maxRadius.
+export function findBiomeLocation(terrain, kind, fromX = 0, fromZ = 0, maxRadius = 3000) {
+  const matches = (x, z, h) => {
+    switch (kind) {
+      case "forest": case "plains": case "desert": case "snow":
+        return h > SEA_LEVEL + 1 && h < HEIGHT - 20 && terrain.biomeAt(x, z, h) === kind;
+      case "mountain": return h >= 58;
+      case "ocean": return h < SEA_LEVEL - 6;
+      default: return false;
+    }
+  };
+  const fx = Math.round(fromX), fz = Math.round(fromZ);
+
+  for (let r = 0; r <= maxRadius; r += 24) {
+    const samples = r === 0 ? 1 : Math.max(8, Math.floor((2 * Math.PI * r) / 24));
+    for (let a = 0; a < samples; a++) {
+      const x = fx + Math.round(Math.cos((a / samples) * Math.PI * 2) * r);
+      const z = fz + Math.round(Math.sin((a / samples) * Math.PI * 2) * r);
+      const h = terrain.heightAt(x, z);
+      if (!matches(x, z, h)) continue;
+
+      if (kind === "ocean") return { x: x + 0.5, y: SEA_LEVEL + 2.5, z: z + 0.5 };
+
+      // refine: find a safe column nearby that still matches
+      for (let dz = 0; dz <= 6; dz += 2) for (let dx = 0; dx <= 6; dx += 2) {
+        const sx = x + dx, sz = z + dz;
+        if (!matches(sx, sz, terrain.heightAt(sx, sz))) continue;
+        const spot = safeColumn(terrain, sx, sz);
+        if (spot) return spot;
+      }
+    }
+  }
+  return null;
+}
+
+// Spawn in a forest when one exists near the origin; fall back to any safe
+// land column, then to floating over the origin.
 export function findSpawn(terrain) {
+  const forest = findBiomeLocation(terrain, "forest", 0, 0, 1500);
+  if (forest) return forest;
   for (let r = 0; r < 200; r += 4) {
     const samples = Math.max(8, r);
     for (let a = 0; a < samples; a++) {
       const x = Math.round(Math.cos((a / samples) * Math.PI * 2) * r);
       const z = Math.round(Math.sin((a / samples) * Math.PI * 2) * r);
-      const h = terrain.heightAt(x, z);
-      if (h <= SEA_LEVEL + 1 || h >= HEIGHT - 20) continue;
-      if (terrain.treeNear(x, z, 1)) continue;
-      if (terrain.cactusAt(x, z, terrain.biomeAt(x, z, h), h) > 0) continue;
-      return { x: x + 0.5, y: h + 2.5, z: z + 0.5 };
+      const spot = safeColumn(terrain, x, z);
+      if (spot) return spot;
     }
   }
-  // desperate fallback: over the origin column, swimming if need be
   const h0 = terrain.heightAt(0, 0);
   return { x: 0.5, y: Math.max(h0, SEA_LEVEL) + 2.5, z: 0.5 };
 }

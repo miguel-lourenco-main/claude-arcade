@@ -27,6 +27,7 @@ export function writeSave(world, player, sky, hud) {
         x: player.pos.x, y: player.pos.y, z: player.pos.z,
         yaw: player.yaw, pitch: player.pitch, flying: player.flying,
       },
+      movement: player.moveMode,
       hotbar: hud.slots,
       edits: world.serializeEdits(),
     }));

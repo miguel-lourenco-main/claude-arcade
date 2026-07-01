@@ -92,7 +92,34 @@ body {
 #controls { margin-top: 26px; color: #b7c0cc; font-size: 13px; line-height: 2; }
 #controls b { color: #fff; }
 
+/* ---- teleport ---- */
+
+#teleport { margin-top: 24px; }
+.tp-title {
+  color: #9aa3af; font-size: 11px; text-transform: uppercase;
+  letter-spacing: 2px; margin-bottom: 10px;
+}
+#tp-buttons { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.tp-btn {
+  font: inherit; font-size: 12px;
+  padding: 6px 14px;
+  background: rgba(255, 255, 255, 0.06); color: #d6dbe2;
+  border: 1px solid #3a414c; border-radius: 4px;
+  cursor: pointer;
+}
+.tp-btn:hover { border-color: #7ee787; color: #fff; }
+.tp-btn:disabled { opacity: 0.5; cursor: wait; }
+#tp-status { margin-top: 10px; color: #9aa3af; font-size: 12px; min-height: 16px; }
+
 .row { margin-top: 26px; display: flex; gap: 16px; justify-content: center; align-items: center; }
+.secondary {
+  font: inherit; font-size: 12px;
+  padding: 7px 14px;
+  background: transparent; color: #b7c0cc;
+  border: 1px solid #3a414c; border-radius: 4px;
+  cursor: pointer;
+}
+.secondary:hover { border-color: #7ee787; color: #fff; }
 .danger {
   font: inherit; font-size: 12px;
   padding: 7px 14px;

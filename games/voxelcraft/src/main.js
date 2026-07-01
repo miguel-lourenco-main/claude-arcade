@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { buildAtlas, buildWaterTexture } from "./textures.js";
 import { BLOCKS, AIR } from "./blocks.js";
 import { World, CHUNK, HEIGHT } from "./world.js";
-import { makeGenerator, findSpawn } from "./terrain.js";
+import { makeGenerator, findSpawn, findBiomeLocation } from "./terrain.js";
 import { buildMaterials, meshChunk, disposeChunkMeshes } from "./mesher.js";
 import { Player } from "./player.js";
 import { Interaction } from "./interact.js";
@@ -56,6 +56,7 @@ if (save && validPos(save.player)) {
 } else {
   Object.assign(player.pos, spawnPoint);
 }
+player.moveMode = save && save.movement === "camera" ? "camera" : "static";
 if (save && save.edits) world.loadEdits(save.edits);
 
 const sky = new Sky(scene, seed);
@@ -64,10 +65,26 @@ if (save && Number.isFinite(save.time)) sky.time = ((save.time % 1) + 1) % 1;
 const sfx = new Sfx();
 player.onStep = (blockId) => { if (blockId !== AIR) sfx.step(blockId); };
 
+function teleportTo(kind) {
+  const dest = kind === "spawn"
+    ? spawnPoint
+    : findBiomeLocation(terrain, kind, player.pos.x, player.pos.z);
+  if (!dest) return { ok: false, message: `No ${kind} found within 3000 blocks of here.` };
+  Object.assign(player.pos, dest);
+  player.vel.x = player.vel.y = player.vel.z = 0;
+  return { ok: true, message: `→ ${kind} at ${Math.round(dest.x)}, ${Math.round(dest.z)} — click to play.` };
+}
+
 const hud = new Hud(atlas.canvas, {
   onResume: () => requestLock(),
   onReset: () => { stopAutosave(); clearSave(); location.reload(); },
+  onTeleport: teleportTo,
+  onToggleMovement: () => {
+    player.moveMode = player.moveMode === "static" ? "camera" : "static";
+    return player.moveMode;
+  },
 });
+hud.setMovementLabel(player.moveMode);
 const validSlot = (id) => Number.isInteger(id) && id !== AIR && !!BLOCKS[id];
 if (save && Array.isArray(save.hotbar) && save.hotbar.length === 9 && save.hotbar.every(validSlot)) {
   hud.slots = save.hotbar;
@@ -324,7 +341,7 @@ function tick(now) {
       `${fps.toFixed(0)} fps / ${renderer.info.render.calls} draws / ${renderer.info.render.triangles} tris`,
       `xyz: ${p.x.toFixed(2)} / ${p.y.toFixed(2)} / ${p.z.toFixed(2)}`,
       `chunk: ${Math.floor(p.x / CHUNK)} ${Math.floor(p.z / CHUNK)}  loaded: ${world.chunks.size}`,
-      `biome: ${terrain.biomeAt(bx, bz, h)}  facing: ${facing()}`,
+      `biome: ${terrain.biomeAt(bx, bz, h)}  facing: ${facing()}  move: ${player.moveMode}`,
       `time: ${clock()}  ${player.flying ? "[flying]" : player.onGround ? "[ground]" : "[air]"}${player.inWater ? " [water]" : ""}`,
       `target: ${interaction.target ? BLOCKS[interaction.target.id].name : "none"}`,
     ], true);
