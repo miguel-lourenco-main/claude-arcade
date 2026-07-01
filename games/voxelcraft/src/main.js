@@ -6,7 +6,9 @@ import { buildAtlas, buildWaterTexture } from "./textures.js";
 import { BLOCKS, AIR } from "./blocks.js";
 import { World, CHUNK, HEIGHT } from "./world.js";
 import { makeGenerator, findSpawn, findBiomeLocation } from "./terrain.js";
-import { buildMaterials, meshChunk, disposeChunkMeshes } from "./mesher.js";
+import {
+  buildMaterials, meshChunk, disposeChunkMeshes, setDayLight, buildBlockGeometry,
+} from "./mesher.js";
 import { Player } from "./player.js";
 import { Interaction } from "./interact.js";
 import { Hud } from "./hud.js";
@@ -92,13 +94,57 @@ if (save && Array.isArray(save.hotbar) && save.hotbar.length === 9 && save.hotba
 }
 
 const interaction = new Interaction(world, player, scene, hud, {
-  onEdit: (chunks) => { for (const c of chunks) remeshNow(c); },
+  onEdit: (chunks, info) => {
+    // torch placed/broken: its light reaches into neighboring chunks, so
+    // remesh the full 3x3 ring around the edit instead of just the borders
+    const lightTouched = info && info.ids &&
+      info.ids.some((id) => id != null && BLOCKS[id].lightEmit > 0);
+    if (lightTouched && chunks.length > 0) {
+      const { cx, cz } = chunks[0];
+      for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+        const c = world.getChunk(cx + dx, cz + dz);
+        if (c) remeshNow(c);
+      }
+    } else {
+      for (const c of chunks) remeshNow(c);
+    }
+  },
   onSound: (kind, id) => sfx.block(kind, id),
   onPick: (id) => hud.setSlot(id),
+  onSwing: () => { swingT = 0; },
   avgColor: atlas.avgColor,
 });
 
 const stopAutosave = startAutosave(() => writeSave(world, player, sky, hud));
+
+// --- held block (first-person hand) ------------------------------------------
+
+scene.add(camera); // children of the camera render only if it's in the scene
+const heldMesh = new THREE.Mesh(undefined, materials.held);
+heldMesh.frustumCulled = false;
+heldMesh.renderOrder = 20;
+heldMesh.scale.setScalar(0.32);
+camera.add(heldMesh);
+let heldBlockId = null;
+let swingT = 1; // 0..1 swing animation progress (1 = at rest)
+
+function refreshHeldMesh() {
+  const id = hud.selectedId();
+  if (id === heldBlockId) return;
+  heldBlockId = id;
+  if (heldMesh.geometry) heldMesh.geometry.dispose();
+  const geo = buildBlockGeometry(id);
+  geo.translate(-0.5, -0.5, -0.5); // rotate around the block center
+  heldMesh.geometry = geo;
+}
+
+function animateHeld(frameDt, bobY) {
+  refreshHeldMesh();
+  swingT = Math.min(1, swingT + frameDt / 0.22);
+  const s = Math.sin(Math.PI * swingT); // 0 -> 1 -> 0 dip
+  heldMesh.position.set(0.42, -0.38 + bobY * 0.6 - s * 0.16, -0.65 - s * 0.08);
+  heldMesh.rotation.set(0.18 - s * 1.1, -0.4 + s * 0.25, 0);
+}
 
 // --- chunk streaming --------------------------------------------------------
 
@@ -317,9 +363,11 @@ function tick(now) {
   camera.rotation.z = Math.sin(bobPhase) * 0.004 * bobAmp;
 
   // scrolling water
-  const waterMap = materials.water.map;
+  const waterMap = materials.water.uniforms.map.value;
   waterMap.offset.x = (now * 0.000021) % 1;
   waterMap.offset.y = (now * 0.000013) % 1;
+
+  animateHeld(frameDt, bobY);
 
   // sprint FOV kick
   const targetFov = player.sprinting && !player.flying ? 77 : 70;
@@ -330,6 +378,7 @@ function tick(now) {
 
   interaction.update(frameDt);
   sky.update(frameDt, camera, player.eyeInWater);
+  setDayLight(materials, sky.lightLevel, sky.lightTint);
   hud.setUnderwater(player.eyeInWater);
 
   if (debugVisible) {
