@@ -90,6 +90,13 @@ export const SLING_STONE = 65;
 // a boat ENTITY there (see interact.js routing and boats.js for its life
 // afloat: buoyancy, boarding, paddling, and its two-kick demise).
 export const BOAT = 66;
+// fishing: the Dib-Pole is a carried tool (never placed, never consumed) —
+// right-clicking with it selected casts a dib-float; see interact.js routing
+// and fishing.js for the patient part. SILVERFIN is what the water repays,
+// and the kiln sears it into SEARED_SILVERFIN.
+export const FISHING_POLE = 67;
+export const SILVERFIN = 68;
+export const SEARED_SILVERFIN = 69;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -511,6 +518,44 @@ BLOCKS[BOAT] = def("Reed Skiff", {
   hardness: 0.05,
   placeable: false,
   sound: "wood",
+});
+
+// the Dib-Pole: three planks whittled into a springy rod with a line and a
+// little cork dib-float. A tool: never placed, never consumed by use.
+BLOCKS[FISHING_POLE] = def("Dib-Pole", {
+  tiles: cube(TILE.DIB_POLE),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  hardness: 0.05,
+  placeable: false,
+  sound: "wood",
+});
+
+// the Silverfin: raw it's a thin, cold snack; the kiln sears it into a
+// proper shoreline meal (see SMELTS in kiln.js)
+BLOCKS[SILVERFIN] = def("Silverfin", {
+  tiles: cube(TILE.SILVERFIN),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  hardness: 0.05,
+  placeable: false,
+  sound: "plant",
+  food: { restore: 2 },
+});
+BLOCKS[SEARED_SILVERFIN] = def("Seared Silverfin", {
+  tiles: cube(TILE.SEARED_SILVERFIN),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  hardness: 0.05,
+  placeable: false,
+  sound: "plant",
+  food: { restore: 6 },
 });
 
 export const CROP_STAGES = [CROP_SPROUT, CROP_HALF, CROP_RIPE];

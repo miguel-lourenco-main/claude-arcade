@@ -11,13 +11,14 @@ import { PrimedKegs } from "./explosives.js";
 import { SlingStones } from "./projectiles.js";
 import { Mobs } from "./mobs.js";
 import { Boats } from "./boats.js";
+import { Fishing } from "./fishing.js";
 import { craft } from "./craft.js";
 import { makeKiln, tickKilns } from "./kiln.js";
 import { PlayerModel, buildHeldFoot, setHeldSkinLight } from "./player-model.js";
 import { PlayerViewer } from "./player-viewer.js";
 import {
   SAPLING, LOG, LEAVES, LEAVES_COLD, BED, WATER as WATER_ID, dropFor,
-  CROP_SPROUT, CROP_RIPE, CROP_STAGES, isCrop, SLING_STONE, BOAT,
+  CROP_SPROUT, CROP_RIPE, CROP_STAGES, isCrop, SLING_STONE, BOAT, FISHING_POLE,
 } from "./blocks.js";
 import { makeGenerator, findSpawn, findBiomeLocation } from "./terrain.js";
 import {
@@ -459,6 +460,21 @@ function sleepInCot(x, y, z) {
   }, 1050);
 }
 
+// the Dib-Pole's dib-float: one at a time, never persisted (see fishing.js
+// for the documented no-save contract — reeling in is free, so a reload
+// simply forgets an in-flight cast)
+const fishing = new Fishing(scene, {
+  onSpawnDrop: (x, y, z, id, qty, vel) =>
+    drops.spawn(x, y, z, id, qty, { vel, pickupDelay: 0 }),
+  onSound: (kind) => {
+    if (kind === "cast") sfx.whip();
+    else if (kind === "plip") sfx.plip();
+    else sfx.splash();
+  },
+  onCue: (text) => hud.announce(text, 1500),
+  poleSelected: () => hud.selectedId() === FISHING_POLE,
+});
+
 const interaction = new Interaction(world, player, scene, hud, {
   onEdit: (chunks, info) => {
     if (chunks.length === 0) return;
@@ -556,6 +572,7 @@ const interaction = new Interaction(world, player, scene, hud, {
   },
   mobs,
   boats,
+  fishing,
   // seat the Wanderling: player physics suspends itself while riding (see
   // player.update) and boats.update carries the seat from here on
   onBoardBoat: (b) => {
@@ -905,6 +922,7 @@ function tick(now) {
     boats.update(frameDt, world, player);
     kegs.update(frameDt, world, player);
     stones.update(frameDt, world);
+    fishing.update(frameDt, world, player);
     worldSeconds += frameDt;
     growthSeconds += frameDt * (1 + sky.rain); // rain doubles sapling growth
     if (worldSeconds >= nextSaplingCheck) {
@@ -916,6 +934,7 @@ function tick(now) {
   }
   mobs.setLight(sky.lightLevel, sky.lightTint);
   boats.setLight(sky.lightLevel, sky.lightTint);
+  fishing.setLight(sky.lightLevel, sky.lightTint);
 
   // kilns burn whenever the game is up — including while a window is open
   // (the whole point: watch the smelt arrow fill). Paused = time stops.
@@ -992,6 +1011,9 @@ function tick(now) {
   }
 
   interaction.update(frameDt);
+  // the fishing line hangs from a camera-space rod-tip anchor — rewrite it
+  // after the camera has settled for this frame (bob, third-person boom)
+  fishing.updateLine(camera);
   // underwater fog/tint follow the RENDERING viewpoint: the boomed camera in
   // third person, the player's eye otherwise
   const viewInWater = thirdPerson
@@ -1042,7 +1064,7 @@ requestAnimationFrame(tick);
 if (NO_LOCK) {
   window.voxelcraft = {
     player, world, hud, sky, terrain, interaction, mobs, drops, saplings, crops,
-    inventory, kegs, stones, boats,
+    inventory, kegs, stones, boats, fishing,
     rain: rainFx, sfx,
     growAllSaplings: () => { for (const k of saplings.keys()) saplings.set(k, 0); },
     growAllCrops: () => { for (const k of crops.keys()) crops.set(k, 0); },

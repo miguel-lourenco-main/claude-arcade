@@ -175,6 +175,26 @@ export class Sfx {
     setTimeout(() => this._noiseBurst(900, 0.06, 0.08), 30);
   }
 
+  // the dib-float touching down on the water: a soft slap
+  splash() { this._noiseBurst(560, 0.09, 0.09); }
+
+  // a bite pulling the float under: a quick hollow descending plip
+  plip() {
+    if (!this.enabled || !this._ensure()) return;
+    const ctx = this.ctx;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    const now = ctx.currentTime;
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(880, now);
+    osc.frequency.exponentialRampToValueAtTime(240, now + 0.09);
+    g.gain.setValueAtTime(0.14, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
+    osc.connect(g).connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.12);
+  }
+
   // the Blast Keg's fuse: a dry, urgent little tick...
   kegTick() { this._noiseBurst(2400, 0.03, 0.09); }
 

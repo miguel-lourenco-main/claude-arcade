@@ -9,7 +9,7 @@
 
 import {
   SAND, GLASS, COBBLE, STONE, IRON_ORE, IRON_BLOCK, SNUFFET_LOIN, ROAST_LOIN,
-  MEAL_ROOT, BAKED_ROOT, COAL_ORE, LOG, PLANKS,
+  MEAL_ROOT, BAKED_ROOT, SILVERFIN, SEARED_SILVERFIN, COAL_ORE, LOG, PLANKS,
 } from "./blocks.js";
 import { MAX_STACK } from "./inventory.js";
 
@@ -20,6 +20,7 @@ export const SMELTS = {
   [IRON_ORE]: IRON_BLOCK,
   [SNUFFET_LOIN]: ROAST_LOIN,
   [MEAL_ROOT]: BAKED_ROOT,
+  [SILVERFIN]: SEARED_SILVERFIN,
 };
 
 // seconds of heat per unit of fuel

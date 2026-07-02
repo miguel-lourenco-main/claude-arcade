@@ -65,6 +65,9 @@ export const TILE = {
   BAKED_ROOT: 54,
   SLING_STONE: 55,
   SKIFF: 56,
+  DIB_POLE: 57,
+  SILVERFIN: 58,
+  SEARED_SILVERFIN: 59,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -931,6 +934,78 @@ const painters = {
     for (let i = 0; i < 4; i++) p.px(5 + i, 6 - i, 138, 106, 58);
     p.px(9, 2, 160, 126, 66); p.px(10, 2, 160, 126, 66);
     p.px(9, 1, 172, 138, 72); p.px(10, 1, 172, 138, 72);
+  },
+  [TILE.DIB_POLE](p) {
+    // the Dib-Pole: a whittled plank rod, thick at the butt and tapering to
+    // a springy tip, with mustard grip-wraps (Wanderling trim) and a pale
+    // line dropping to a little rust-capped dib-float — stamped like a
+    // field-journal specimen
+    p.clear();
+    // the rod: butt at bottom-left, tip at top-right
+    for (let i = 0; i < 12; i++) {
+      const x = 2 + i, y = 13 - i;
+      const d = (p.rand() * 2 - 1) * 8;
+      p.px(x, y, 148 + d, 112 + d, 62 + d);
+      if (i < 5) p.px(x, y + 1, 116 + d, 88 + d, 50 + d); // the thick butt half
+    }
+    // mustard grip-wraps near the butt
+    p.px(3, 13, 198, 160, 64); p.px(4, 12, 198, 160, 64);
+    p.px(6, 10, 176, 140, 56);
+    // the line, hanging off the tip
+    for (let y = 2; y <= 10; y++) p.px(14, y, 216, 220, 226, 170);
+    // the dib-float: a rust-orange cap over a pale cork belly
+    p.px(13, 11, 178, 74, 38); p.px(14, 11, 196, 84, 42);
+    p.px(13, 12, 206, 192, 162); p.px(14, 12, 226, 214, 186);
+  },
+  [TILE.SILVERFIN](p) {
+    // the Silverfin, side-on: slate-blue back over a bright silver flank,
+    // forked tail, one wary eye — what patience over water repays
+    p.clear();
+    for (let x = 3; x <= 12; x++) {
+      const half = x <= 4 ? 1 : x <= 10 ? 2 : 1; // lens body, head right
+      for (let dy = -half; dy <= half; dy++) {
+        const d = (p.rand() * 2 - 1) * 8;
+        if (dy < 0) p.px(x, 8 + dy, 92 + d, 112 + d, 138 + d); // the back
+        else p.px(x, 8 + dy, 198 + d, 206 + d, 216 + d);       // the flank
+      }
+    }
+    // forked tail off the left
+    p.px(2, 6, 92, 112, 138); p.px(1, 5, 84, 102, 126);
+    p.px(2, 10, 92, 112, 138); p.px(1, 11, 84, 102, 126);
+    p.px(2, 8, 132, 148, 170);
+    // dorsal spine + a belly fin
+    p.px(7, 5, 110, 130, 156); p.px(8, 5, 110, 130, 156);
+    p.px(8, 11, 170, 180, 194);
+    // the head: eye, gill line, a wet glint along the flank
+    p.px(11, 7, 32, 36, 44);
+    p.px(10, 8, 162, 172, 186); p.px(10, 9, 162, 172, 186);
+    p.px(6, 7, 230, 236, 244);
+  },
+  [TILE.SEARED_SILVERFIN](p) {
+    // the same fish out of the kiln: skin gone amber, sear lines across the
+    // flank, still steaming — a proper shoreline meal
+    p.clear();
+    for (let x = 3; x <= 12; x++) {
+      const half = x <= 4 ? 1 : x <= 10 ? 2 : 1;
+      for (let dy = -half; dy <= half; dy++) {
+        const d = (p.rand() * 2 - 1) * 9;
+        if (dy < 0) p.px(x, 8 + dy, 118 + d, 76 + d, 34 + d);  // seared back
+        else p.px(x, 8 + dy, 186 + d, 132 + d, 62 + d);        // amber flank
+      }
+    }
+    p.px(2, 6, 104, 66, 30); p.px(1, 5, 92, 58, 26); // crisped tail
+    p.px(2, 10, 104, 66, 30); p.px(1, 11, 92, 58, 26);
+    p.px(2, 8, 140, 96, 44);
+    // sear lines across the grain
+    for (const sx of [5, 8, 11]) {
+      if (p.rand() < 0.9) p.px(sx, 7, 88, 54, 26);
+      p.px(sx, 8, 82, 50, 24);
+      if (p.rand() < 0.9) p.px(sx, 9, 88, 54, 26);
+    }
+    p.px(11, 7, 44, 32, 22); // the eye, gone cloudy
+    // a curl of steam — it's still warm
+    p.px(6, 3, 226, 222, 214, 150); p.px(7, 2, 226, 222, 214, 120);
+    p.px(9, 3, 226, 222, 214, 150);
   },
   [TILE.SAPLING](p) {
     p.clear();

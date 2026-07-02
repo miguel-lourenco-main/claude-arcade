@@ -5,6 +5,7 @@ import * as THREE from "three";
 import {
   AIR, BEDROCK, CHEST, WORKBENCH, KILN, BED, LADDER, DOOR, DOOR_TOP, BLAST_KEG,
   GATE, GATE_OPEN, ROOT_SEED, CROP_SPROUT, DIRT, GRASS, SLING_STONE, BOAT, WATER,
+  FISHING_POLE,
   BLOCKS, isSolid, isPlant, isDoor, isDoorLower, isGate, DOOR_TOGGLE,
   dropFor, yawToFacing,
 } from "./blocks.js";
@@ -100,6 +101,7 @@ export class Interaction {
     this.canThrowStone = opts.canThrow;    // () => bool (projectile cap)
     this.mobs = opts.mobs;           // Mobs instance (punching)
     this.boats = opts.boats;         // Boats instance (board/deploy/kick)
+    this.fishing = opts.fishing;     // Fishing instance (cast/reel)
     this.onBoardBoat = opts.onBoardBoat;   // (boat) => seat the player
     this.onDeployBoat = opts.onDeployBoat; // (x, topWaterY, z) => launch one
     this.avgColor = opts.avgColor;   // tile -> [r,g,b]
@@ -121,6 +123,10 @@ export class Interaction {
 
     // throwing state (right-click with a sling stone selected)
     this._nextThrow = 0;
+    // fishing state: cast/reel fire once per PHYSICAL press (armed on
+    // mousedown, spent by _fish) — the hold-repeat must never toggle the
+    // line, and two quick real clicks must both land (cast, then reel)
+    this._fishArmed = false;
     this.crack = new THREE.Mesh(
       new THREE.BoxGeometry(1.004, 1.004, 1.004),
       new THREE.MeshBasicMaterial({
@@ -146,14 +152,16 @@ export class Interaction {
 
   onMouseDown(button) {
     this.buttons.add(button);
+    if (button === 2) this._fishArmed = true;
     this._act(button);
     this._nextAction = performance.now() + ACTION_REPEAT_MS + 60;
   }
   onMouseUp(button) {
     this.buttons.delete(button);
     if (button === 0) this._lastBreakKey = null;
+    if (button === 2) this._fishArmed = false;
   }
-  clearInput() { this.buttons.clear(); this._lastBreakKey = null; }
+  clearInput() { this.buttons.clear(); this._lastBreakKey = null; this._fishArmed = false; }
 
   update(dt) {
     if (this.player.dead) {
@@ -475,6 +483,24 @@ export class Interaction {
     if (this.onSwing) this.onSwing();
   }
 
+  // a Dib-Pole in hand owns right-click: no float out -> cast one; a float
+  // out -> reel it in (which is the catch, if something is dibbing). Armed
+  // once per physical press: the hold-repeat can't cast-and-instantly-reel,
+  // and a quick cast-then-reel double-click has no dead window.
+  _fish() {
+    if (!this.fishing || !this._fishArmed) return;
+    this._fishArmed = false;
+    if (this.fishing.active) {
+      this.fishing.reel(this.player);
+    } else {
+      const dir = this.player.lookDir();
+      this.fishing.cast(
+        this.player.pos.x + dir.x * 0.4, this.player.eyeY + dir.y * 0.4,
+        this.player.pos.z + dir.z * 0.4, dir);
+    }
+    if (this.onSwing) this.onSwing();
+  }
+
   // a Reed Skiff in hand owns right-click over water: launch it there.
   // Consume-last discipline: the water target, headroom, and the boat cap
   // are all ruled out BEFORE the inventory take.
@@ -516,6 +542,12 @@ export class Interaction {
     // a skiff in hand launches onto water instead of placing
     if (this.hotbar.selectedId() === BOAT && !this._interactiveTarget()) {
       this._deployBoat();
+      return;
+    }
+    // a Dib-Pole in hand casts/reels instead of placing — same sneak-to-
+    // override escape hatch as the stone and the skiff
+    if (this.hotbar.selectedId() === FISHING_POLE && !this._interactiveTarget()) {
+      this._fish();
       return;
     }
     if (!t) return;
