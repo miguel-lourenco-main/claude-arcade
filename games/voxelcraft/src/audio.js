@@ -144,6 +144,37 @@ export class Sfx {
     setTimeout(() => this._noiseBurst(open ? 560 : 250, 0.13, 0.11), 80);
   }
 
+  // a sling stone leaving the foot-hand: a soft rising swoosh of air
+  whip() {
+    if (!this.enabled || !this._ensure()) return;
+    const ctx = this.ctx;
+    const dur = 0.14;
+    const frames = Math.floor(ctx.sampleRate * dur);
+    const buffer = ctx.createBuffer(1, frames, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < frames; i++) data[i] = Math.random() * 2 - 1;
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.Q.value = 2.2;
+    const now = ctx.currentTime;
+    filter.frequency.setValueAtTime(520, now);
+    filter.frequency.exponentialRampToValueAtTime(2400, now + dur);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.001, now);
+    g.gain.exponentialRampToValueAtTime(0.09, now + dur * 0.4);
+    g.gain.exponentialRampToValueAtTime(0.001, now + dur);
+    src.connect(filter).connect(g).connect(ctx.destination);
+    src.start();
+  }
+
+  // ...and the dry snick of one shattering against something harder
+  stoneCrack() {
+    this._noiseBurst(1400, 0.05, 0.13);
+    setTimeout(() => this._noiseBurst(900, 0.06, 0.08), 30);
+  }
+
   // the Blast Keg's fuse: a dry, urgent little tick...
   kegTick() { this._noiseBurst(2400, 0.03, 0.09); }
 

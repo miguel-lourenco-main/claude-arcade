@@ -4,7 +4,7 @@
 import * as THREE from "three";
 import {
   AIR, BEDROCK, CHEST, WORKBENCH, KILN, BED, LADDER, DOOR, DOOR_TOP, BLAST_KEG,
-  GATE, GATE_OPEN, ROOT_SEED, CROP_SPROUT, DIRT, GRASS,
+  GATE, GATE_OPEN, ROOT_SEED, CROP_SPROUT, DIRT, GRASS, SLING_STONE,
   BLOCKS, isSolid, isPlant, isDoor, isDoorLower, isGate, DOOR_TOGGLE,
   dropFor, yawToFacing,
 } from "./blocks.js";
@@ -16,6 +16,7 @@ const REACH_SURVIVAL = 4.5;
 const ACTION_REPEAT_MS = 240;
 const EAT_SECONDS = 1.2;      // hold right-click this long to finish a bite
 const CHEW_INTERVAL = 0.28;   // chewing sound cadence while eating
+const THROW_COOLDOWN_MS = 350; // between sling-stone throws
 
 // Amanatides & Woo voxel traversal.
 export function raycast(world, origin, dir, maxDist = REACH_CREATIVE) {
@@ -67,6 +68,8 @@ export class Interaction {
     this.onKilnBreak = opts.onKilnBreak;   // (x, y, z) => spill kiln slots
     this.onEat = opts.onEat;               // (kind) => chew/swallow sfx
     this.onDoor = opts.onDoor;             // (opened) => hinge-creak sfx
+    this.onThrow = opts.onThrow;           // () => launch a sling stone
+    this.canThrowStone = opts.canThrow;    // () => bool (projectile cap)
     this.mobs = opts.mobs;           // Mobs instance (punching)
     this.avgColor = opts.avgColor;   // tile -> [r,g,b]
 
@@ -84,6 +87,9 @@ export class Interaction {
     this.eating = false;
     this._eatProgress = 0;
     this._chewTimer = 0;
+
+    // throwing state (right-click with a sling stone selected)
+    this._nextThrow = 0;
     this.crack = new THREE.Mesh(
       new THREE.BoxGeometry(1.004, 1.004, 1.004),
       new THREE.MeshBasicMaterial({
@@ -168,18 +174,24 @@ export class Interaction {
     this.particles.update(dt);
   }
 
+  // right-click routes to the targeted block (chest/workbench/kiln/cot/keg/
+  // door/gate) no matter what's in hand — unless the player sneaks to
+  // override. Shared by the eating and throwing owners of the button.
+  _interactiveTarget() {
+    const t = this.target;
+    return !!t &&
+      (t.id === CHEST || t.id === WORKBENCH || t.id === KILN || t.id === BED ||
+       t.id === BLAST_KEG || isDoor(t.id) || isGate(t.id)) &&
+      !this.player._sneaking;
+  }
+
   // survival: hold RMB with a food item selected to eat it — a real per-frame
   // progress timer, not the coarse place-repeat cadence
   _updateEating(dt) {
     const id = this.hotbar.selectedId();
     const def = BLOCKS[id];
     // right-click on a chest/workbench/kiln/cot still routes, food in hand or not
-    const t = this.target;
-    const interactive = t &&
-      (t.id === CHEST || t.id === WORKBENCH || t.id === KILN || t.id === BED ||
-       t.id === BLAST_KEG || isDoor(t.id) || isGate(t.id)) &&
-      !this.player._sneaking;
-    const wants = this.buttons.has(2) && def && def.food && !interactive &&
+    const wants = this.buttons.has(2) && def && def.food && !this._interactiveTarget() &&
       this.player.hunger < MAX_HUNGER - 1e-9;
     if (!wants) {
       this.eating = false;
@@ -411,8 +423,28 @@ export class Interaction {
     if (this.onDoor) this.onDoor(opening);
   }
 
+  // a sling stone in hand owns right-click the way food does: throw it.
+  // Consume-last discipline: the cap and cooldown are ruled out BEFORE the
+  // inventory take, so a refused throw never eats a stone.
+  _throw() {
+    if (!this.onThrow) return;
+    const now = performance.now();
+    if (now < this._nextThrow) return;
+    if (this.canThrowStone && !this.canThrowStone()) return; // 24 already aloft
+    if (this.player.mode === "survival" && !this.canConsume(SLING_STONE)) return;
+    this._nextThrow = now + THROW_COOLDOWN_MS;
+    this.onThrow();
+    if (this.onSwing) this.onSwing();
+  }
+
   _place() {
     const t = this.target;
+    // a sling stone throws instead of placing — unless an interactive block
+    // is targeted (sneak-throw at a chest works, like sneak-place does)
+    if (this.hotbar.selectedId() === SLING_STONE && !this._interactiveTarget()) {
+      this._throw();
+      return;
+    }
     if (!t) return;
     // right-click on a door toggles it — in BOTH modes (sneak to place against)
     if (isDoor(t.id) && !this.player._sneaking) {

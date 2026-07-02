@@ -63,6 +63,7 @@ export const TILE = {
   CROP_RIPE: 52,
   MEAL_ROOT: 53,
   BAKED_ROOT: 54,
+  SLING_STONE: 55,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -869,6 +870,33 @@ const painters = {
     // a curl of steam — it's still warm
     p.px(6, 2, 226, 222, 214, 150); p.px(7, 1, 226, 222, 214, 120);
     p.px(9, 2, 226, 222, 214, 150);
+  },
+  [TILE.SLING_STONE](p) {
+    // a knapped sling stone: a palm-of-the-foot-sized river pebble chipped
+    // to a blunt point, flake scars stepping down one flank — Wanderling
+    // field ammunition, stamped like a journal specimen
+    p.clear();
+    // the pebble: rounded at the crown, knapped narrower toward the tail
+    for (let y = 4; y <= 12; y++) {
+      const half = y <= 5 ? 2 : y <= 8 ? 4 : y <= 10 ? 3 : y === 11 ? 2 : 1;
+      for (let x = 7 - half; x <= 7 + half; x++) {
+        const d = (p.rand() * 2 - 1) * 8;
+        const edge = x === 7 - half || x === 7 + half || y === 4 || y === 12;
+        if (edge) p.px(x, y, 92 + d, 94 + d, 100 + d);
+        else p.px(x, y, 136 + d, 138 + d, 146 + d);
+      }
+    }
+    // flake scars: pale stepped crescents where chips were struck off
+    for (const [sx, sy] of [[5, 7], [9, 6], [6, 10], [9, 9]]) {
+      p.px(sx, sy, 172, 174, 182);
+      p.px(sx + 1, sy, 160, 162, 170);
+      p.px(sx, sy + 1, 108, 110, 118); // the scar's shadowed step
+    }
+    // one bright striking-edge glint at the point
+    p.px(7, 12, 190, 192, 198);
+    // knapping chips scattered beside it
+    p.px(3, 13, 118, 120, 126); p.px(12, 12, 118, 120, 126);
+    p.px(11, 14, 100, 102, 108);
   },
   [TILE.SAPLING](p) {
     p.clear();

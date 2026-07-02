@@ -81,6 +81,10 @@ export const CROP_HALF = 61;
 export const CROP_RIPE = 62;
 export const MEAL_ROOT = 63;
 export const BAKED_ROOT = 64;
+// the Sling Stone: knapped throwing ammunition — an item, never a world
+// block. Right-click with one selected THROWS it (see interact.js routing
+// and projectiles.js for its short ballistic career).
+export const SLING_STONE = 65;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -477,6 +481,20 @@ BLOCKS[BAKED_ROOT] = def("Baked Meal Root", cropCross({
   placeable: false,
   food: { restore: 7 },
 }));
+
+// the Sling Stone: a knapped pebble, carried and thrown, never placed.
+// Kicking a cobble apart yields four (see craft.js) — it's considered
+// good manners to throw the pieces politely.
+BLOCKS[SLING_STONE] = def("Sling Stone", {
+  tiles: cube(TILE.SLING_STONE),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  hardness: 0.05,
+  placeable: false,
+  sound: "stone",
+});
 
 export const CROP_STAGES = [CROP_SPROUT, CROP_HALF, CROP_RIPE];
 export function isCrop(id) {

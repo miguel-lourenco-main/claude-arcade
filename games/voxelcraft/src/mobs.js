@@ -393,7 +393,8 @@ export class Mobs {
       const aggro = spec.aggro || 0;
       let chasing = false;
       if (canFight) {
-        if (spec.behavior === "hostile" && dist3 < aggro) chasing = true;
+        // hostiles chase in range — or while angry about a hit from outside it
+        if (spec.behavior === "hostile" && (dist3 < aggro || m.angryT > 0)) chasing = true;
         if (spec.behavior === "ambush") {
           if (m.state === "wait" && dist3 < aggro) m.state = "hunt";
           if (m.state === "hunt") {
@@ -577,7 +578,14 @@ export class Mobs {
   punch(origin, dir, maxDist, fromPos) {
     const m = this.rayHit(origin, dir, maxDist);
     if (!m) return false;
-    m.hp -= 1;
+    this.strike(m, 1, fromPos);
+    return true;
+  }
+
+  // land a hit on a mob: damage, knockback away from fromPos, and the full
+  // reaction suite. Shared by punches and thrown sling-stones.
+  strike(m, dmg, fromPos) {
+    m.hp -= dmg;
     m.hurtT = 0.3;
     const resist = 1 - (m.spec.knockResist || 0);
     const dx = m.x - fromPos.x, dz = m.z - fromPos.z;
@@ -585,12 +593,12 @@ export class Mobs {
     m.vx += (dx / len) * 6 * resist;
     m.vz += (dz / len) * 6 * resist;
     m.vy = 5 * resist;
-    // reactions: passives flee, neutrals get angry, ambushers wake up
+    // reactions: passives flee, neutrals get angry, ambushers wake up,
+    // hostiles hold a grudge (a stone from beyond aggro range still counts)
     if (m.spec.behavior === "passive") { m.state = "flee"; m.stateT = 3.5; m.yaw = Math.atan2(m.x - fromPos.x, m.z - fromPos.z); }
-    if (m.spec.behavior === "neutral") m.angryT = 8;
+    if (m.spec.behavior === "neutral" || m.spec.behavior === "hostile") m.angryT = 8;
     if (m.spec.behavior === "ambush") m.state = "hunt";
     this.onMobHurt?.();
-    return true;
   }
 
   _remove(i) {

@@ -8,6 +8,7 @@ import { World, CHUNK, HEIGHT } from "./world.js";
 import { Inventory } from "./inventory.js";
 import { ItemDrops } from "./entities.js";
 import { PrimedKegs } from "./explosives.js";
+import { SlingStones } from "./projectiles.js";
 import { Mobs } from "./mobs.js";
 import { craft } from "./craft.js";
 import { makeKiln, tickKilns } from "./kiln.js";
@@ -15,7 +16,7 @@ import { PlayerModel, buildHeldFoot, setHeldSkinLight } from "./player-model.js"
 import { PlayerViewer } from "./player-viewer.js";
 import {
   SAPLING, LOG, LEAVES, LEAVES_COLD, BED, WATER as WATER_ID, dropFor,
-  CROP_SPROUT, CROP_RIPE, CROP_STAGES, isCrop,
+  CROP_SPROUT, CROP_RIPE, CROP_STAGES, isCrop, SLING_STONE,
 } from "./blocks.js";
 import { makeGenerator, findSpawn, findBiomeLocation } from "./terrain.js";
 import {
@@ -496,6 +497,16 @@ const interaction = new Interaction(world, player, scene, hud, {
   },
   onOpenBench: () => hud.openBench(),
   onSleep: (x, y, z) => sleepInCot(x, y, z),
+  // a sling stone leaves the eye along the look ray (`stones` is a later
+  // const, like `kegs` — these callbacks only fire at runtime)
+  canThrow: () => stones.canThrow(),
+  onThrow: () => {
+    const dir = player.lookDir();
+    stones.throw(
+      player.pos.x + dir.x * 0.2, player.eyeY + dir.y * 0.2, player.pos.z + dir.z * 0.2,
+      dir);
+    sfx.whip();
+  },
   // priming swaps the keg BLOCK for a primed keg ENTITY (see explosives.js);
   // `kegs` is a later const, but this callback only fires at runtime
   onPrimeKeg: (x, y, z) => {
@@ -548,6 +559,17 @@ const kegs = new PrimedKegs(scene, materials, {
     // a big two-tone burst: flying embers under a gray dust plume
     interaction.particles.burst(x - 0.5, y - 0.5, z - 0.5, [1.0, 0.62, 0.22], 70);
     interaction.particles.burst(x - 0.5, y - 0.5, z - 0.5, [0.34, 0.32, 0.3], 70);
+  },
+});
+
+const stones = new SlingStones(scene, materials, {
+  mobs,
+  onSpawnDrop: (x, y, z, id) => drops.spawn(x, y, z, id),
+  onImpact: (x, y, z, shattered) => {
+    if (!shattered) return; // survivors just drop; only shatters crack + dust
+    sfx.stoneCrack();
+    interaction.particles.burst(x - 0.5, y - 0.5, z - 0.5,
+      atlas.avgColor[BLOCKS[SLING_STONE].tiles.side] || [0.5, 0.5, 0.5], 6);
   },
 });
 
@@ -856,6 +878,7 @@ function tick(now) {
     });
     mobs.update(frameDt, { world, player, terrain, night: sky.lightLevel < 0.45 });
     kegs.update(frameDt, world, player);
+    stones.update(frameDt, world);
     worldSeconds += frameDt;
     growthSeconds += frameDt * (1 + sky.rain); // rain doubles sapling growth
     if (worldSeconds >= nextSaplingCheck) {
@@ -987,7 +1010,7 @@ requestAnimationFrame(tick);
 if (NO_LOCK) {
   window.voxelcraft = {
     player, world, hud, sky, terrain, interaction, mobs, drops, saplings, crops,
-    inventory, kegs,
+    inventory, kegs, stones,
     rain: rainFx, sfx,
     growAllSaplings: () => { for (const k of saplings.keys()) saplings.set(k, 0); },
     growAllCrops: () => { for (const k of crops.keys()) crops.set(k, 0); },
