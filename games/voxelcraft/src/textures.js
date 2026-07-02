@@ -96,6 +96,11 @@ export const TILE = {
   JERKIN_IRON: 82,
   LEGGINGS_IRON: 83,
   TREADS_IRON: 84,
+  // the Pearlfall's gifts (see meteors.js): the landed pearl-block, its
+  // kiln-molten pane, and the icon of the blade it edges
+  STARSTONE: 85,
+  STARGLASS: 86,
+  BLADE_STAR: 87,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -1152,6 +1157,57 @@ painters[TILE.SHOVEL_IRON] = toolPainter("shovel", TOOL_PALETTES.iron);
 painters[TILE.BLADE_PLANK] = toolPainter("blade", TOOL_PALETTES.plank);
 painters[TILE.BLADE_STONE] = toolPainter("blade", TOOL_PALETTES.stone);
 painters[TILE.BLADE_IRON] = toolPainter("blade", TOOL_PALETTES.iron);
+
+// --- the Pearlfall's gifts ----------------------------------------------------
+// Starstone reads as nacre over slate — a fallen pearl of the old sky, still
+// glowing (the block emits light; see meteors.js for how it arrives). The
+// shimmer is painted, not shaded: bright star-flecks with four-point
+// twinkles over a faintly veined pearl base.
+const STAR_PALETTE = { hi: [238, 238, 255], mid: [202, 198, 240], lo: [140, 136, 194] };
+
+painters[TILE.STARSTONE] = (p) => {
+  p.noiseFill([198, 200, 218], 10);
+  // slate veins wandering down the face — the old seabed showing through
+  for (let v = 0; v < 3; v++) {
+    let x = (p.rand() * TILE_PX) | 0;
+    for (let y = 0; y < TILE_PX; y++) {
+      const d = (p.rand() * 2 - 1) * 8;
+      p.px(x, y, 152 + d, 154 + d, 180 + d);
+      if (p.rand() < 0.45) x = Math.max(0, Math.min(15, x + (p.rand() < 0.5 ? -1 : 1)));
+    }
+  }
+  // star-flecks: white-hot cores with a four-point twinkle
+  for (const [fx, fy] of [[3, 4], [11, 3], [6, 10], [13, 12], [9, 7]]) {
+    p.px(fx, fy, 255, 255, 250);
+    p.px(fx + 1, fy, 226, 234, 255); p.px(fx - 1, fy, 226, 234, 255);
+    p.px(fx, fy + 1, 226, 234, 255); p.px(fx, fy - 1, 226, 234, 255);
+  }
+  p.speckle(12, [226, 230, 246], 8); // nacre glimmer between the flecks
+};
+
+painters[TILE.STARGLASS] = (p) => {
+  // starglass: starstone run molten in the kiln — a pane that keeps the
+  // glow. Mostly clear like common glass, but rimmed pale and crossed by
+  // drifting nacre wisps with a few star-flecks caught mid-swirl
+  p.clear();
+  for (let i = 0; i < TILE_PX; i++) {
+    p.px(i, 0, 228, 232, 250); p.px(i, 15, 228, 232, 250);
+    p.px(0, i, 228, 232, 250); p.px(15, i, 228, 232, 250);
+  }
+  for (let i = 2; i < 9; i++) p.px(i, 14 - i, 236, 240, 255, 190);
+  for (let i = 8; i < 13; i++) p.px(i, 20 - i, 216, 224, 252, 150);
+  p.px(4, 4, 255, 255, 252, 220); p.px(11, 9, 255, 255, 252, 220);
+  p.px(7, 13, 238, 242, 255, 180);
+};
+
+// the Star-Edge Shiv's icon: the blade silhouette in pearl-lavender, with a
+// pair of star-flecks the honing couldn't rub off
+const starBladeBase = toolPainter("blade", STAR_PALETTE);
+painters[TILE.BLADE_STAR] = (p) => {
+  starBladeBase(p);
+  p.px(8, 7, 255, 255, 255);
+  p.px(11, 4, 255, 255, 255);
+};
 
 // --- armor tiles ------------------------------------------------------------
 // Front-view piece silhouettes on transparent tiles, per kind × tier. Bark

@@ -13,6 +13,7 @@ import {
   IRON_INGOT, IRON_BLOCK, COMPASS, CLOCK, CHART,
   BARK_CROWN, BARK_JERKIN, BARK_LEGGINGS, BARK_TREADS,
   IRON_CROWN, IRON_JERKIN, IRON_LEGGINGS, IRON_TREADS,
+  STARSTONE, STAR_BLADE,
 } from "./blocks.js";
 
 // in: [[blockId, count], ...]  out: [blockId, count]  note: extra recipe copy
@@ -65,6 +66,9 @@ export const RECIPES = [
   { in: [[IRON_INGOT, 3], [PLANKS, 2]], out: [IRON_AXE, 1], note: "the planks are the haft" },
   { in: [[IRON_INGOT, 1], [PLANKS, 2]], out: [IRON_SHOVEL, 1], note: "the planks are the haft" },
   { in: [[IRON_INGOT, 2], [PLANKS, 2]], out: [IRON_BLADE, 1], note: "the planks are the haft" },
+  // the Star-Edge Shiv: a landed pearl of the old sky (the Pearlfall
+  // delivers them — see meteors.js), honed onto a finished sky-iron blade
+  { in: [[STARSTONE, 1], [IRON_BLADE, 1]], out: [STAR_BLADE, 1], note: "a pearl's edge on a sky-iron spine" },
   // --- armor (workbench). Classic piece shapes: crown 5, jerkin 8,
   // leggings 7, treads 4 of the material. The bark set is planks boiled and
   // beaten back into stiff bark plate (cheap, modest); the sky-iron set is

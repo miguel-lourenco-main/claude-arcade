@@ -143,6 +143,14 @@ export const IRON_CROWN = 94;
 export const IRON_JERKIN = 95;
 export const IRON_LEGGINGS = 96;
 export const IRON_TREADS = 97;
+// the Pearlfall's gifts (see meteors.js): STARSTONE is the landed pearl of
+// the old sky — a glowing block delivered by meteor landings, never found in
+// terrain. The kiln runs it molten into STARGLASS (a pane that keeps the
+// glow), and the workbench hones one onto a sky-iron blade as the
+// STAR_BLADE, the tier-4 Star-Edge Shiv.
+export const STARSTONE = 98;
+export const STARGLASS = 99;
+export const STAR_BLADE = 100;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -785,6 +793,45 @@ defArmor(IRON_CROWN, "Crown", "crown", "iron", TILE.CROWN_IRON);
 defArmor(IRON_JERKIN, "Jerkin", "jerkin", "iron", TILE.JERKIN_IRON);
 defArmor(IRON_LEGGINGS, "Leggings", "leggings", "iron", TILE.LEGGINGS_IRON);
 defArmor(IRON_TREADS, "Treads", "treads", "iron", TILE.TREADS_IRON);
+
+// --- the Pearlfall's gifts ------------------------------------------------------
+// Starstone: a landed pearl of the old sky, dense and still glowing. It only
+// ever enters the world through a meteor landing (meteors.js writes it via
+// setBlock, so it persists in the edit overlay like anything player-placed).
+// Pick-gated at stone tier — prying a pearl wants proper ironmongery.
+BLOCKS[STARSTONE] = def("Starstone", {
+  tiles: cube(TILE.STARSTONE),
+  hardness: 4.5,
+  toolKind: "pick",
+  needsPick: 2,
+  lightEmit: 13,
+});
+// Starglass: starstone run molten in the kiln — a glowing pane, glass-like
+// (cutout + cullSame, exactly the common-glass mesh rules) but too precious
+// to shatter into nothing: it drops itself.
+BLOCKS[STARGLASS] = def("Starglass", {
+  tiles: cube(TILE.STARGLASS),
+  hardness: 0.5,
+  opaque: false,
+  bucket: "cutout",
+  cullSame: true,
+  sound: "glass",
+  lightEmit: 11,
+});
+// the Star-Edge Shiv: a starstone edge honed onto a sky-iron blade — the
+// tier above sky-iron (damage 7), and it holds that edge twice as long
+BLOCKS[STAR_BLADE] = def("Star-Edge Shiv", {
+  tiles: cube(TILE.BLADE_STAR),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  hardness: 0.05,
+  placeable: false,
+  sound: "wood",
+  maxStack: 1,
+  tool: { kind: "blade", tier: 4, speed: 6, damage: 7, maxDur: 512 },
+});
 
 // total damage-reduction fraction of a wear-slot array (entries are stacks or
 // null), capped at 0.60. Falls are a special case: armor helps a fall at only

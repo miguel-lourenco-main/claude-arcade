@@ -235,6 +235,21 @@ function computeBlockLight(world, chunk) {
   return light;
 }
 
+// test/debug helper: the torch-light level the mesher would bake at a cell —
+// runs the same BFS a chunk mesh uses and samples one voxel. NOT for the hot
+// path (it floods the whole padded volume); tests use it to assert that a
+// placed emitter (a torch, a landed starstone) actually propagates.
+export function sampleBlockLight(world, x, y, z) {
+  if (y < 0 || y >= HEIGHT) return 0;
+  const chunk = world.getChunk(x >> 4, z >> 4);
+  if (!chunk || !chunk.generated) return 0;
+  const light = computeBlockLight(world, chunk);
+  if (!light) return 0;
+  const vx = x - chunk.cx * CHUNK + LIGHT_PAD;
+  const vz = z - chunk.cz * CHUNK + LIGHT_PAD;
+  return light[vx + LDIM * (vz + LDIM * y)];
+}
+
 // --- shaped blocks (slabs, stairs, later fences) ------------------------------
 // A shape is a list of axis-aligned boxes in unit-cell coordinates. Faces that
 // lie exactly on the cell boundary cull against opaque full-cube neighbors;

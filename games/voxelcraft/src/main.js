@@ -10,6 +10,7 @@ import { ItemDrops } from "./entities.js";
 import { PrimedKegs } from "./explosives.js";
 import { SlingStones } from "./projectiles.js";
 import { Mobs } from "./mobs.js";
+import { MeteorShowers } from "./meteors.js";
 import { Boats } from "./boats.js";
 import { Fishing } from "./fishing.js";
 import { SignBoards } from "./signs.js";
@@ -30,6 +31,7 @@ import {
 import { makeGenerator, findSpawn, findBiomeLocation } from "./terrain.js";
 import {
   buildMaterials, meshChunk, disposeChunkMeshes, setDayLight, buildBlockGeometry,
+  sampleBlockLight,
 } from "./mesher.js";
 import { raycast } from "./interact.js";
 import { Player } from "./player.js";
@@ -721,6 +723,23 @@ const kegs = new PrimedKegs(scene, materials, {
   },
 });
 
+// the Pearlfall: meteor showers on clear nights, with the occasional landing
+// that delivers a starstone (see meteors.js / LORE.md). The landing never
+// hurts the player — the sky is done hurting people — so no player hook here.
+const meteors = new MeteorShowers(scene, seed, {
+  world,
+  player,
+  onLand: (chunks) => lightAwareRemesh(chunks, true), // starstone glows
+  onBoom: (x, y, z) => {
+    sfx.starfall();
+    // a pale nacre burst under a cooler dust plume
+    interaction.particles.burst(x - 0.5, y - 0.5, z - 0.5, [0.95, 0.96, 1.0], 50);
+    interaction.particles.burst(x - 0.5, y - 0.5, z - 0.5, [0.6, 0.62, 0.82], 40);
+  },
+  onSpawnDrop: (x, y, z, id) => drops.spawn(x, y, z, id),
+  onAnnounce: (text) => hud.announce(text, 3200),
+});
+
 const stones = new SlingStones(scene, materials, {
   mobs,
   onSpawnDrop: (x, y, z, id) => drops.spawn(x, y, z, id),
@@ -1113,6 +1132,7 @@ function tick(now) {
     kegs.update(frameDt, world, player);
     stones.update(frameDt, world);
     fishing.update(frameDt, world, player);
+    meteors.update(frameDt, sky, camera);
     worldSeconds += frameDt;
     growthSeconds += frameDt * (1 + sky.rain); // rain doubles sapling growth
     if (worldSeconds >= nextSaplingCheck) {
@@ -1282,9 +1302,12 @@ requestAnimationFrame(tick);
 if (NO_LOCK) {
   window.voxelcraft = {
     player, world, hud, sky, terrain, interaction, mobs, drops, saplings, crops,
-    inventory, kegs, stones, boats, fishing, signBoards, wayfinder,
+    inventory, kegs, stones, boats, fishing, signBoards, wayfinder, meteors,
     wear: wearSlots, playerModel,
     rain: rainFx, sfx, music, camera,
+    // torch-light probe (the same BFS the mesher bakes) — lets tests assert
+    // that a landed starstone's glow actually propagates to its neighbors
+    sampleBlockLight: (x, y, z) => sampleBlockLight(world, x, y, z),
     spawnTarget: () => player.spawnPoint || spawnPoint,
     growAllSaplings: () => { for (const k of saplings.keys()) saplings.set(k, 0); },
     growAllCrops: () => { for (const k of crops.keys()) crops.set(k, 0); },

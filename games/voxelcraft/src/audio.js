@@ -251,6 +251,16 @@ export class Sfx {
     osc.stop(now + 0.12);
   }
 
+  // a pearl of the old sky landing (the Pearlfall, meteors.js): a bright
+  // glassy crack over a deep, rolling boom — big, but softer-shouldered than
+  // a blast keg. The sky is done hurting people; it still knocks loudly.
+  starfall() {
+    this._noiseBurst(2600, 0.08, 0.1);   // the glassy crack
+    this._noiseBurst(700, 0.18, 0.2);    // the body of the impact
+    this._noiseBurst(90, 0.8, 0.38);     // the ground answering
+    setTimeout(() => this._noiseBurst(60, 0.6, 0.18), 140); // the roll-off
+  }
+
   // the Blast Keg's fuse: a dry, urgent little tick...
   kegTick() { this._noiseBurst(2400, 0.03, 0.09); }
 

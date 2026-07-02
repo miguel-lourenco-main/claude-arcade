@@ -10,6 +10,7 @@
 import {
   SAND, GLASS, COBBLE, STONE, IRON_ORE, IRON_INGOT, SNUFFET_LOIN, ROAST_LOIN,
   MEAL_ROOT, BAKED_ROOT, SILVERFIN, SEARED_SILVERFIN, COAL_ORE, LOG, PLANKS,
+  STARSTONE, STARGLASS,
 } from "./blocks.js";
 import { MAX_STACK } from "./inventory.js";
 
@@ -23,6 +24,9 @@ export const SMELTS = {
   [SNUFFET_LOIN]: ROAST_LOIN,
   [MEAL_ROOT]: BAKED_ROOT,
   [SILVERFIN]: SEARED_SILVERFIN,
+  // a landed pearl of the old sky runs molten into a pane that keeps the
+  // glow (see the Pearlfall in meteors.js)
+  [STARSTONE]: STARGLASS,
 };
 
 // seconds of heat per unit of fuel

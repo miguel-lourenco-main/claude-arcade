@@ -83,6 +83,19 @@ specific item vocabulary.
 - **Sky-Iron** — all iron of the Upturn (ore, ingot, block, tools); it fell
   from the old seabed-sky as meteor-stone, which is why it's found in the
   deep old-sky caves.
+- **The Pearlfall** — some clear nights the old sky sheds a few of its
+  pearls: streaks across the dome, and now and then one dives all the way
+  down and lands. It falls the way everything in the Upturn behaves — the
+  sky is done hurting people. A landing keeps its distance, knocks once,
+  and never undoes a Wanderling's work; it only leaves a gift.
+- **Starstone** — a landed pearl of the old sky: nacre over slate, dense as
+  regret, and still glowing — the light of the drowned stars never quite
+  went out. Prying one loose is pick-work.
+- **Starglass** — starstone run molten in the kiln: a pane that keeps the
+  glow. Wanderlings glaze a window with one and call the room "star-lit",
+  which is technically true.
+- **Star-Edge** — a starstone edge honed onto a sky-iron shiv; the keenest
+  blade a Wanderling can carry, and it hums very faintly on clear nights.
 
 Generic category words (Dirt, Sand, Stone, Gravel, Water, Glass, Torch,
 Chest, Workbench, Bricks, Sandstone, Coal Ore, Tall Grass, Cactus) stay
