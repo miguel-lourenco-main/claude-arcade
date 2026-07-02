@@ -2,7 +2,7 @@
 // oink occasionally, and can be punched around (3 HP).
 
 import * as THREE from "three";
-import { GRASS, isSolid } from "./blocks.js";
+import { GRASS, WATER, isSolid } from "./blocks.js";
 import { mulberry32 } from "./noise.js";
 
 const MAX_MOBS = 6;
@@ -13,7 +13,9 @@ const HALF_W = 0.35;
 const MOB_HEIGHT = 0.85;
 const WALK_SPEED = 1.5;
 const GRAVITY = 32;
-const HOP_SPEED = 8;          // enough for a 1-block step
+// v²/2g must clear 1.0 blocks with discrete-integration losses: 8 gave an
+// apex strictly below 1.0 at every framerate (pigs pogo against steps forever)
+const HOP_SPEED = 9.2;
 const MAX_STEP = 0.4;         // collision substep displacement
 
 function pigTexture(face) {
@@ -155,13 +157,20 @@ export class Mobs {
       const tz = walking ? Math.cos(m.yaw) * WALK_SPEED : 0;
       m.vx += (tx - m.vx) * Math.min(1, 10 * dt);
       m.vz += (tz - m.vz) * Math.min(1, 10 * dt);
-      m.vy = Math.max(-30, m.vy - GRAVITY * dt);
+
+      // water: float up instead of pacing the pond floor forever
+      const inWater = world.getBlock(Math.floor(m.x), Math.floor(m.y + 0.3), Math.floor(m.z)) === WATER;
+      if (inWater) {
+        m.vy = Math.min(2.5, m.vy + 10 * dt); // buoyant rise
+      } else {
+        m.vy = Math.max(-30, m.vy - GRAVITY * dt);
+      }
 
       this._move(world, m, dt);
 
-      // hop up 1-block steps; give up on walls sometimes
-      if (m.hitWall && m.onGround) {
-        if (Math.random() < 0.8) m.vy = HOP_SPEED;
+      // hop up 1-block steps (or clamber out of water); give up sometimes
+      if (m.hitWall && (m.onGround || inWater)) {
+        if (Math.random() < 0.8) m.vy = inWater ? 6 : HOP_SPEED;
         else { m.yaw += Math.PI * (0.5 + Math.random()); m.stateT = Math.min(m.stateT, 0.6); }
       }
 

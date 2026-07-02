@@ -155,6 +155,17 @@ export class Interaction {
       this.crack.visible = false;
       return;
     }
+    // a mob standing in front of the block absorbs the mining, MC-style —
+    // otherwise the crack renders through the pig and the wall breaks
+    if (this.mobs) {
+      const eye = { x: this.player.pos.x, y: this.player.eyeY, z: this.player.pos.z };
+      if (this.mobs.rayHit(eye, this.player.lookDir(), t.dist)) {
+        this._mineKey = null;
+        this._mineProgress = 0;
+        this.crack.visible = false;
+        return;
+      }
+    }
     const key = `${t.x},${t.y},${t.z}`;
     if (key !== this._mineKey) {
       this._mineKey = key;
@@ -213,12 +224,15 @@ export class Interaction {
 
   _act(button) {
     if ((this.target || button === 0) && this.onSwing) this.onSwing();
-    // punching a mob takes priority over the block behind it
+    // punching a mob takes priority over the block behind it. Recompute the
+    // block clamp with a FRESH raycast — this.target is from last frame's
+    // camera direction and a flick+click could punch through a wall
     if (button === 0 && this.mobs) {
       const eye = { x: this.player.pos.x, y: this.player.eyeY, z: this.player.pos.z };
+      const dir = this.player.lookDir();
       const reach = this.player.mode === "survival" ? REACH_SURVIVAL : REACH_CREATIVE;
-      const maxDist = this.target ? this.target.dist : reach;
-      if (this.mobs.punch(eye, this.player.lookDir(), Math.min(reach, maxDist), this.player.pos)) return;
+      const block = raycast(this.world, eye, dir, reach);
+      if (this.mobs.punch(eye, dir, block ? block.dist : reach, this.player.pos)) return;
     }
     // survival LMB is handled by the mining loop, not instant breaking
     if (button === 0 && this.player.mode !== "survival") this._break();

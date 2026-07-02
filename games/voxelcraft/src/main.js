@@ -9,7 +9,7 @@ import { Inventory } from "./inventory.js";
 import { ItemDrops } from "./entities.js";
 import { Mobs } from "./mobs.js";
 import { craft } from "./craft.js";
-import { SAPLING, LOG, LEAVES, LEAVES_COLD } from "./blocks.js";
+import { SAPLING, LOG, LEAVES, LEAVES_COLD, dropFor } from "./blocks.js";
 import { makeGenerator, findSpawn, findBiomeLocation } from "./terrain.js";
 import {
   buildMaterials, meshChunk, disposeChunkMeshes, setDayLight, buildBlockGeometry,
@@ -103,6 +103,7 @@ function growTree(x, y, z) {
   const leaves = biome === "snow" ? LEAVES_COLD : LEAVES;
   const trunk = 4 + Math.floor(Math.random() * 3);
   const affected = new Set();
+  let lightTouched = false;
   const put = (dx, dy, dz, id, onlyAir = true) => {
     const bx = x + dx, by = y + dy, bz = z + dz;
     if (by <= 0 || by >= HEIGHT) return;
@@ -120,15 +121,54 @@ function growTree(x, y, z) {
     put(dx, trunk, dz, leaves);
   }
   put(0, trunk + 1, 0, leaves);
-  for (let dy = 0; dy < trunk; dy++) put(0, dy, 0, LOG, false); // overwrites the sapling
-  for (const c of affected) remeshNow(c);
+  // trunk: only ever grows through air, the sapling itself, plants, and its
+  // own leaves — a player-built block (chest!) stops the trunk instead of
+  // being silently destroyed
+  for (let dy = 0; dy < trunk; dy++) {
+    const existing = world.getBlock(x, y + dy, z);
+    const exDef = BLOCKS[existing];
+    const passable = existing === AIR || existing === SAPLING ||
+      existing === LEAVES || existing === LEAVES_COLD || exDef.kind === "cross";
+    if (!passable) break;
+    if (exDef.kind === "cross" && existing !== SAPLING) {
+      if (exDef.lightEmit > 0) lightTouched = true; // replaced a torch
+      const d = dropFor(existing);
+      if (d !== null) drops.spawn(x + 0.5, y + dy + 0.3, z + 0.5, d);
+    }
+    for (const c of world.setBlock(x, y + dy, z, LOG)) affected.add(c);
+  }
+  lightAwareRemesh([...affected], lightTouched);
+}
+
+// remesh after a world edit: widen to the full 3x3 ring when the edit adds/
+// removes an emitter or happens near one (occluders change the light BFS)
+function lightAwareRemesh(chunks, lightTouched) {
+  if (chunks.length === 0) return;
+  const { cx, cz } = chunks[0];
+  if (!lightTouched) {
+    outer: for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+      const c = world.getChunk(cx + dx, cz + dz);
+      if (c && c.emitters.size > 0) { lightTouched = true; break outer; }
+    }
+  }
+  if (lightTouched) {
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+      const c = world.getChunk(cx + dx, cz + dz);
+      if (c) remeshNow(c);
+    }
+  } else {
+    for (const c of chunks) remeshNow(c);
+  }
 }
 
 function updateSaplings() {
   for (const [key, due] of saplings) {
     if (worldSeconds < due) continue;
     const [x, y, z] = key.split(",").map(Number);
-    if (!world.isGenerated(x >> 4, z >> 4)) continue; // wait for the chunk
+    // the canopy spans 2 blocks into neighbor chunks: growing while any of
+    // them is ungenerated would silently drop those leaves forever (setBlock
+    // refuses ungenerated chunks BEFORE recording the edit). Wait instead.
+    if (!world.isGenerated(x >> 4, z >> 4) || !neighborsGenerated(x >> 4, z >> 4)) continue;
     saplings.delete(key);
     if (world.getBlock(x, y, z) === SAPLING) growTree(x, y, z);
   }
@@ -220,27 +260,9 @@ if (save && Array.isArray(save.hotbar) && save.hotbar.length === 9 && save.hotba
 const interaction = new Interaction(world, player, scene, hud, {
   onEdit: (chunks, info) => {
     if (chunks.length === 0) return;
-    // torch light reaches up to 14 blocks into neighboring chunks, so any
-    // edit that adds/removes an emitter OR happens near one (occluders
-    // change the BFS result) must remesh the full 3x3 ring, not just the
-    // border-adjacent chunks
-    const { cx, cz } = chunks[0];
-    let lightTouched = info && info.ids &&
-      info.ids.some((id) => id != null && BLOCKS[id].lightEmit > 0);
-    if (!lightTouched) {
-      outer: for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
-        const c = world.getChunk(cx + dx, cz + dz);
-        if (c && c.emitters.size > 0) { lightTouched = true; break outer; }
-      }
-    }
-    if (lightTouched) {
-      for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
-        const c = world.getChunk(cx + dx, cz + dz);
-        if (c) remeshNow(c);
-      }
-    } else {
-      for (const c of chunks) remeshNow(c);
-    }
+    const lightTouched = !!(info && info.ids &&
+      info.ids.some((id) => id != null && BLOCKS[id].lightEmit > 0));
+    lightAwareRemesh(chunks, lightTouched);
     // sapling lifecycle
     if (info) {
       if (info.placed === SAPLING) registerSapling(info.x, info.y, info.z);

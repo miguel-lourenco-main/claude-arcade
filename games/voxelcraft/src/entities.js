@@ -31,7 +31,18 @@ export class ItemDrops {
 
   spawn(x, y, z, id, qty = 1) {
     if (!BLOCKS[id]) return;
-    if (this.drops.length >= MAX_DROPS) this._remove(0);
+    if (this.drops.length >= MAX_DROPS) {
+      // evict the oldest SINGLE first — FIFO could delete a 9999-item
+      // chest-spill stack to make room for one leaf
+      let evict = this.drops.findIndex((d) => d.qty === 1);
+      if (evict === -1) {
+        evict = 0;
+        for (let i = 1; i < this.drops.length; i++) {
+          if (this.drops[i].qty < this.drops[evict].qty) evict = i;
+        }
+      }
+      this._remove(evict);
+    }
     const mesh = new THREE.Mesh(
       this._geometry(id),
       BLOCKS[id].kind === "cross" ? this.materials.cutout : this.materials.opaque

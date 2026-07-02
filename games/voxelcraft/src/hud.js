@@ -446,13 +446,21 @@ export class Hud {
       }
     };
 
+    // both directions move only what fits under the 9999 cap and leave the
+    // remainder behind — the old delete-then-clamp destroyed the overflow
+    const CAP = 9999;
     fill("chest-grid", [...store.entries()], (id, n) => {
-      store.delete(id);
-      this.inventory.add(id, n);
+      const moved = Math.min(CAP - this.inventory.count(id), n);
+      if (moved <= 0) return;
+      this.inventory.add(id, moved);
+      if (moved === n) store.delete(id);
+      else store.set(id, n - moved);
     }, "Empty");
     fill("chest-inv-grid", [...this.inventory.counts.entries()], (id, n) => {
-      this.inventory.take(id, n);
-      store.set(id, (store.get(id) || 0) + n);
+      const moved = Math.min(CAP - (store.get(id) || 0), n);
+      if (moved <= 0) return;
+      this.inventory.take(id, moved);
+      store.set(id, (store.get(id) || 0) + moved);
     }, "Nothing to store");
   }
 
