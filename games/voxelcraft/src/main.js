@@ -91,8 +91,25 @@ if (save && Number.isFinite(save.air)) {
 }
 
 const inventory = new Inventory();
-if (save && save.inventory) inventory.load(save.inventory);
+let migrationOverflow = [];
+if (save) {
+  if (save.v === 2) {
+    inventory.load(save.inventory);
+  } else {
+    // v1 save: pool counts + a 9-id hotbar -> 64-stacks in slots, layout kept
+    const migrated = Inventory.migrateV1(
+      save.inventory, save.hotbar,
+      save.gameMode === "survival" ? "survival" : "creative");
+    inventory.slots = migrated.inv.slots;
+    migrationOverflow = migrated.overflow;
+  }
+}
 const drops = new ItemDrops(scene, materials);
+// anything that didn't fit during migration lands at the player's feet
+for (const stack of migrationOverflow) {
+  drops.spawn(player.pos.x, player.pos.y + 1, player.pos.z, stack.id, stack.count,
+    { pickupDelay: 0 });
+}
 const mobs = new Mobs(scene);
 if (save && save.chests) world.loadChests(save.chests);
 
@@ -231,11 +248,13 @@ const hud = new Hud(atlas.canvas, {
   },
   onSensitivity: (v) => { player.sensitivity = v; },
   onToggleMode: () => {
+    hud.closeAllWindows(); // defensively spill/close before switching rules
     player.mode = player.mode === "survival" ? "creative" : "survival";
     if (player.mode === "survival") {
       player.flying = false;
       player.resetFall(); // creative altitude must not become a survival fall
     }
+    hud.refreshHotbarRow();
     return player.mode;
   },
   onRespawn: () => {
@@ -245,25 +264,42 @@ const hud = new Hud(atlas.canvas, {
     hud.hideDeath();
     requestLock();
   },
-  onCraft: (recipe) => { if (craft(recipe, inventory)) sfx.craft(); },
+  onCraft: (recipe, max = false) => {
+    let crafted = false;
+    do {
+      const leftover = craft(recipe, inventory); // -1 = missing inputs
+      if (leftover < 0) break;
+      crafted = true;
+      if (leftover > 0) spillStack({ id: recipe.out[0], count: leftover });
+    } while (max);
+    if (crafted) sfx.craft();
+  },
+  onSpillCursor: (stack) => spillStack(stack),
+  onSlotsChanged: () => sfx.click(),
   inventory,
   playerViewer: new PlayerViewer(document.getElementById("player-view"), 1337),
 });
 hud.setMovementLabel(player.moveMode);
 hud.setSensitivity(player.sensitivity);
 hud.setMode(player.mode);
+if (save && Number.isInteger(save.selected) && save.selected >= 0 && save.selected < 9) {
+  hud.select(save.selected);
+}
+
+// toss a stack out in front of the player (cursor spills, craft overflow)
+function spillStack(stack) {
+  const dir = player.lookDir();
+  drops.spawn(
+    player.pos.x + dir.x * 0.6, player.eyeY - 0.2, player.pos.z + dir.z * 0.6,
+    stack.id, stack.count,
+    { vel: { x: dir.x * 4, y: 2, z: dir.z * 4 }, pickupDelay: 1.2 });
+}
 
 player.onDamage = () => { hud.flashDamage(); sfx.hurt(); };
 player.onDeath = (cause) => {
   hud.showDeath(cause);
   if (document.pointerLockElement) document.exitPointerLock();
 };
-const validSlot = (id) => Number.isInteger(id) && id !== AIR && !!BLOCKS[id];
-if (save && Array.isArray(save.hotbar) && save.hotbar.length === 9 && save.hotbar.every(validSlot)) {
-  hud.slots = save.hotbar;
-  hud.select(0);
-  hud.refreshCounts(); // badges must track the LOADED slots, not the defaults
-}
 
 const interaction = new Interaction(world, player, scene, hud, {
   onEdit: (chunks, info) => {
@@ -279,25 +315,31 @@ const interaction = new Interaction(world, player, scene, hud, {
     }
   },
   onSound: (kind, id) => sfx.block(kind, id),
-  onPick: (id) => hud.setSlot(id),
+  onPick: (id) => hud.pickBlock(id),
   onSwing: () => { swingT = 0; playerModel.swing(); },
+  // placement consumes from the SELECTED HOTBAR SLOT only
   canConsume: (id) => {
-    const ok = inventory.take(id);
-    if (ok) hud.refreshCounts();
+    const s = inventory.get(hud.selected);
+    if (!s || s.id !== id) return false;
+    const ok = inventory.takeFromSlot(hud.selected, 1);
+    if (ok) hud.refreshHotbarRow();
     return ok;
   },
   onSpawnDrop: (x, y, z, id) => drops.spawn(x, y, z, id),
   onOpenChest: (x, y, z) => {
     const key = `${x},${y},${z}`;
     let store = world.chests.get(key);
-    if (!store) { store = new Map(); world.chests.set(key, store); }
-    hud.openChest(store, () => sfx.click());
+    if (!store) { store = new Array(27).fill(null); world.chests.set(key, store); }
+    hud.openChest(store, () => {});
   },
+  onOpenBench: () => hud.openBench(),
   onChestBreak: (x, y, z) => {
     const key = `${x},${y},${z}`;
     const store = world.chests.get(key);
     if (store) {
-      for (const [id, n] of store) drops.spawn(x + 0.5, y + 0.6, z + 0.5, id, n);
+      for (const s of store) {
+        if (s) drops.spawn(x + 0.5, y + 0.6, z + 0.5, s.id, s.count);
+      }
       world.chests.delete(key);
     }
     if (hud.chestOpen) { hud.closeChest(); requestLock(); }
@@ -355,18 +397,17 @@ let heldKey = null;
 let swingT = 1; // 0..1 swing animation progress (1 = at rest)
 
 function refreshHeldMesh() {
-  // emptiness can change without the id changing (placed the last block,
-  // picked one up) — recompute every frame, it's a Map lookup
-  const id = hud.selectedId();
-  const empty = player.mode === "survival" && inventory.count(id) === 0;
-  const key = empty ? "foot" : id;
+  // slots are the truth: empty selected slot = bare foot, in both modes
+  const st = inventory.get(hud.selected);
+  const key = st ? st.id : "foot";
   if (key === heldKey) return;
   heldKey = key;
+  const empty = key === "foot";
   heldFoot.visible = empty;
   heldBlock.visible = !empty;
   if (!empty) {
     if (heldBlock.geometry) heldBlock.geometry.dispose();
-    const geo = buildBlockGeometry(id);
+    const geo = buildBlockGeometry(st.id);
     geo.translate(-0.5, -0.5, -0.5); // rotate around the block center
     heldBlock.geometry = geo;
   }
@@ -455,7 +496,7 @@ const canvas = renderer.domElement;
 let started = false;
 
 function requestLock() {
-  hud.closePicker();
+  hud.closeAllWindows(); // spills any held cursor stack
   if (NO_LOCK) { hud.hidePause(); started = true; return; }
   // the promise rejects during the browser's post-Escape cooldown — swallow
   // it (the pause overlay is still up; the next click retries)
@@ -472,7 +513,7 @@ canvas.addEventListener("click", () => {
 // in nolock mode the pointer-lock state can't encode "playing", so follow the
 // overlay state machine instead — otherwise UI clicks would break blocks
 const inputActive = () => NO_LOCK
-  ? !hud.paused && !hud.pickerOpen && !hud.chestOpen
+  ? !hud.paused && !hud.anyWindowOpen()
   : document.pointerLockElement === canvas;
 
 document.addEventListener("pointerlockchange", () => {
@@ -483,7 +524,7 @@ document.addEventListener("pointerlockchange", () => {
   } else if (!NO_LOCK) {
     player.clearInput();
     interaction.clearInput();
-    if (!hud.pickerOpen && !hud.deathOpen && !hud.chestOpen) hud.showPause(!started);
+    if (!hud.anyWindowOpen() && !hud.deathOpen) hud.showPause(!started);
   }
 });
 
@@ -492,7 +533,7 @@ document.addEventListener("mousemove", (e) => {
 });
 
 document.addEventListener("mousedown", (e) => {
-  if (!inputActive() || hud.pickerOpen) return;
+  if (!inputActive() || hud.anyWindowOpen()) return;
   if (e.button === 1) e.preventDefault();
   interaction.onMouseDown(e.button);
 });
@@ -506,22 +547,25 @@ document.addEventListener("keydown", (e) => {
   if (e.code === "F3") { e.preventDefault(); debugVisible = !debugVisible; return; }
   if (e.code === "F5") { e.preventDefault(); toggleThirdPerson(); return; }
   if (e.code === "KeyE") {
-    if (hud.chestOpen) { hud.closeChest(); requestLock(); }
-    else if (hud.pickerOpen) { hud.closePicker(); requestLock(); }
+    if (hud.anyWindowOpen()) { hud.closeAllWindows(); requestLock(); }
     else if (inputActive()) hud.openPicker();
     return;
   }
-  if (e.code === "Escape" && hud.chestOpen) {
-    hud.closeChest();
+  if (e.code === "Escape" && hud.anyWindowOpen()) {
+    hud.closeAllWindows();
     hud.showPause();
     return;
   }
-  if (e.code === "Escape" && hud.pickerOpen) {
-    hud.closePicker();
-    hud.showPause();
+  // Q tosses one item from the selected slot
+  if (e.code === "KeyQ" && inputActive() && !hud.anyWindowOpen()) {
+    const s = inventory.get(hud.selected);
+    if (s && inventory.takeFromSlot(hud.selected, 1)) {
+      spillStack({ id: s.id, count: 1 });
+      hud.refreshHotbarRow();
+    }
     return;
   }
-  if (inputActive() && !hud.pickerOpen) {
+  if (inputActive() && !hud.anyWindowOpen()) {
     if (e.code.startsWith("Digit")) {
       const n = Number(e.code.slice(5));
       if (n >= 1 && n <= 9) { hud.select(n - 1); sfx.click(); return; }
@@ -587,9 +631,14 @@ function tick(now) {
       accumulator -= FIXED_DT;
     }
     drops.update(frameDt, world, player, (id, qty) => {
-      inventory.add(id, qty);
-      sfx.pickup();
-      hud.refreshCounts();
+      const leftover = inventory.add(id, qty);
+      const accepted = qty - leftover;
+      if (accepted > 0) {
+        sfx.pickup();
+        hud.refreshHotbarRow();
+        if (hud.anyWindowOpen()) hud.slotUI.renderAll();
+      }
+      return accepted; // a full inventory keeps the rest on the ground
     });
     mobs.update(frameDt, { world, player, terrain, night: sky.lightLevel < 0.45 });
     worldSeconds += frameDt;
@@ -704,7 +753,7 @@ requestAnimationFrame(tick);
 // automated-test handle (only in ?nolock mode, which headless tests use)
 if (NO_LOCK) {
   window.voxelcraft = {
-    player, world, hud, sky, terrain, interaction, mobs, drops, saplings,
+    player, world, hud, sky, terrain, interaction, mobs, drops, saplings, inventory,
     growAllSaplings: () => { for (const k of saplings.keys()) saplings.set(k, 0); },
   };
 }

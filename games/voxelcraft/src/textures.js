@@ -39,6 +39,8 @@ export const TILE = {
   CHEST_SIDE: 28,
   CHEST_TOP: 29,
   SAPLING: 30,
+  WORKBENCH_SIDE: 31,
+  WORKBENCH_TOP: 32,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -313,6 +315,38 @@ const painters = {
       const d = (p.rand() * 2 - 1) * 8;
       if (rim) p.px(x, y, 96 + d, 70 + d, 40 + d);
       else p.px(x, y, 150 + d, 110 + d, 62 + d);
+    }
+  },
+  [TILE.WORKBENCH_SIDE](p) {
+    // planks base with a tool rack: a hanging mallet and a chisel silhouette
+    for (let y = 0; y < TILE_PX; y++) for (let x = 0; x < TILE_PX; x++) {
+      const d = (p.rand() * 2 - 1) * 8;
+      const seam = y % 8 === 7 ? -26 : 0;
+      p.px(x, y, 176 + d + seam, 142 + d + seam, 88 + d + seam);
+    }
+    // mallet: head + handle
+    for (let x = 2; x <= 6; x++) p.px(x, 4, 90, 66, 40);
+    for (let x = 2; x <= 6; x++) p.px(x, 5, 90, 66, 40);
+    for (let y = 6; y <= 11; y++) p.px(4, y, 120, 92, 56);
+    // chisel
+    for (let y = 4; y <= 10; y++) p.px(11, y, 168, 168, 176);
+    p.px(11, 11, 210, 210, 216);
+  },
+  [TILE.WORKBENCH_TOP](p) {
+    // scarred worktop: planks with a cutting-grid of knife marks
+    for (let y = 0; y < TILE_PX; y++) for (let x = 0; x < TILE_PX; x++) {
+      const d = (p.rand() * 2 - 1) * 8;
+      p.px(x, y, 166 + d, 132 + d, 80 + d);
+    }
+    for (let i = 0; i < 16; i += 5) {
+      for (let t = 0; t < TILE_PX; t++) {
+        if (p.rand() < 0.7) p.px(t, i, 120, 94, 56);
+        if (p.rand() < 0.7) p.px(i, t, 120, 94, 56);
+      }
+    }
+    // corner brackets
+    for (const [cx, cy] of [[0, 0], [14, 0], [0, 14], [14, 14]]) {
+      p.px(cx, cy, 96, 96, 104); p.px(cx + 1, cy, 96, 96, 104); p.px(cx, cy + 1, 96, 96, 104);
     }
   },
   [TILE.SAPLING](p) {

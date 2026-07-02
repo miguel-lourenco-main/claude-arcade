@@ -28,6 +28,7 @@ export const IRON_ORE = 22;
 export const TORCH = 23;
 export const CHEST = 24;
 export const SAPLING = 25;
+export const WORKBENCH = 26;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -147,6 +148,10 @@ BLOCKS[SAPLING] = def("Oak Sapling", { hardness: 0.05,
   solid: false,
   opaque: false,
   sound: "plant",
+});
+BLOCKS[WORKBENCH] = def("Workbench", { hardness: 1.4,
+  tiles: cube({ top: TILE.WORKBENCH_TOP, side: TILE.WORKBENCH_SIDE, bottom: TILE.PLANKS }),
+  sound: "wood",
 });
 
 // Blocks offered in the hotbar picker (everything but air).

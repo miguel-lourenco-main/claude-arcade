@@ -2,7 +2,7 @@
 // with hold-repeat, pick-block, and break particles.
 
 import * as THREE from "three";
-import { AIR, BEDROCK, CHEST, BLOCKS, isSolid, dropFor } from "./blocks.js";
+import { AIR, BEDROCK, CHEST, WORKBENCH, BLOCKS, isSolid, dropFor } from "./blocks.js";
 import { HEIGHT } from "./world.js";
 import { EYE_HEIGHT } from "./player.js";
 
@@ -52,6 +52,7 @@ export class Interaction {
     this.canConsume = opts.canConsume; // (id) => bool, takes from inventory (survival)
     this.onSpawnDrop = opts.onSpawnDrop; // (x, y, z, id) => item drop entity
     this.onOpenChest = opts.onOpenChest;   // (x, y, z) => open chest UI (survival)
+    this.onOpenBench = opts.onOpenBench;   // () => open workbench UI (survival)
     this.onChestBreak = opts.onChestBreak; // (x, y, z) => spill contents
     this.mobs = opts.mobs;           // Mobs instance (punching)
     this.avgColor = opts.avgColor;   // tile -> [r,g,b]
@@ -263,9 +264,13 @@ export class Interaction {
   _place() {
     const t = this.target;
     if (!t) return;
-    // right-click on a chest opens it (sneak to place against it instead)
+    // right-click on a chest/workbench opens it (sneak to place against it)
     if (t.id === CHEST && this.player.mode === "survival" && !this.player._sneaking && this.onOpenChest) {
       this.onOpenChest(t.x, t.y, t.z);
+      return;
+    }
+    if (t.id === WORKBENCH && this.player.mode === "survival" && !this.player._sneaking && this.onOpenBench) {
+      this.onOpenBench();
       return;
     }
     const id = this.hotbar.selectedId();
