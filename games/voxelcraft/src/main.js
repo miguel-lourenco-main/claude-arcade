@@ -12,6 +12,7 @@ import { SlingStones } from "./projectiles.js";
 import { Mobs } from "./mobs.js";
 import { Boats } from "./boats.js";
 import { Fishing } from "./fishing.js";
+import { SignBoards } from "./signs.js";
 import { craft } from "./craft.js";
 import { makeKiln, tickKilns } from "./kiln.js";
 import { PlayerModel, buildHeldFoot, setHeldSkinLight } from "./player-model.js";
@@ -19,6 +20,7 @@ import { PlayerViewer } from "./player-viewer.js";
 import {
   SAPLING, LOG, LEAVES, LEAVES_COLD, BED, WATER as WATER_ID, dropFor,
   CROP_SPROUT, CROP_RIPE, CROP_STAGES, isCrop, SLING_STONE, BOAT, FISHING_POLE,
+  isSign,
 } from "./blocks.js";
 import { makeGenerator, findSpawn, findBiomeLocation } from "./terrain.js";
 import {
@@ -172,6 +174,9 @@ const boats = new Boats(scene, {
 if (save && save.chests) world.loadChests(save.chests);
 if (save && save.kilns) world.loadKilns(save.kilns); // additive v2 field
 if (save && Array.isArray(save.boats)) boats.load(save.boats); // additive v2 field
+if (save && save.signs) world.loadSigns(save.signs); // additive v2 field
+// the Notice Posts' text boards — synced against world.signs every frame
+const signBoards = new SignBoards(scene, world);
 
 // --- saplings: planted ones grow into real (edit-persisted) trees ----------
 
@@ -491,6 +496,9 @@ const interaction = new Interaction(world, player, scene, hud, {
       if (info.placed === CROP_SPROUT) registerCrop(info.x, info.y, info.z);
       if (isCrop(info.broken)) crops.delete(`${info.x},${info.y},${info.z}`);
       if (isCrop(info.popped)) crops.delete(`${info.x},${info.y + 1},${info.z}`);
+      // breaking a Notice Post takes its writing with it (the board mesh
+      // follows on the next signBoards.sync)
+      if (isSign(info.broken)) world.signs.delete(`${info.x},${info.y},${info.z}`);
       // breaking the slept-in Moss Cot unhooks the respawn anchor
       const sp = player.spawnPoint;
       if (info.broken === BED && sp &&
@@ -522,6 +530,16 @@ const interaction = new Interaction(world, player, scene, hud, {
   },
   onOpenBench: () => hud.openBench(),
   onSleep: (x, y, z) => sleepInCot(x, y, z),
+  // right-click a Notice Post: the write window, primed with what's already
+  // on the board. Commit stores the clamped text (empty = a wiped board);
+  // signBoards.sync repaints on the next frame.
+  onOpenSign: (x, y, z) => {
+    const key = `${x},${y},${z}`;
+    hud.openSign(world.signs.get(key) || "", (text) => {
+      if (text) world.signs.set(key, text);
+      else world.signs.delete(key);
+    });
+  },
   // a sling stone leaves the eye along the look ray (`stones` is a later
   // const, like `kegs` — these callbacks only fire at runtime)
   canThrow: () => stones.canThrow(),
@@ -825,6 +843,7 @@ document.addEventListener("keydown", (e) => {
   if (e.code === "F3") { e.preventDefault(); debugVisible = !debugVisible; return; }
   if (e.code === "F5") { e.preventDefault(); toggleThirdPerson(); return; }
   if (e.code === "KeyE") {
+    if (hud.signOpen) return; // the letter e belongs to the writing
     if (hud.anyWindowOpen()) { hud.closeAllWindows(); requestLock(); }
     else if (inputActive()) hud.openPicker();
     return;
@@ -935,6 +954,8 @@ function tick(now) {
   mobs.setLight(sky.lightLevel, sky.lightTint);
   boats.setLight(sky.lightLevel, sky.lightTint);
   fishing.setLight(sky.lightLevel, sky.lightTint);
+  signBoards.setLight(sky.lightLevel, sky.lightTint);
+  signBoards.sync(); // boards follow chunk load/unload and sign edits
 
   // kilns burn whenever the game is up — including while a window is open
   // (the whole point: watch the smelt arrow fill). Paused = time stops.
@@ -1064,7 +1085,7 @@ requestAnimationFrame(tick);
 if (NO_LOCK) {
   window.voxelcraft = {
     player, world, hud, sky, terrain, interaction, mobs, drops, saplings, crops,
-    inventory, kegs, stones, boats, fishing,
+    inventory, kegs, stones, boats, fishing, signBoards,
     rain: rainFx, sfx,
     growAllSaplings: () => { for (const k of saplings.keys()) saplings.set(k, 0); },
     growAllCrops: () => { for (const k of crops.keys()) crops.set(k, 0); },

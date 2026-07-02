@@ -313,6 +313,20 @@ function gateBoxes(open, c) {
   return boxes.map((b) => ({ x0: b.z0, x1: b.z1, y0: b.y0, y1: b.y1, z0: b.x0, z1: b.x1 }));
 }
 
+// --- the Notice Post ----------------------------------------------------------
+// A slim ground post carrying a wide framed board. The board's thin axis
+// follows the facing (0/2 = board spans x, faces ±z; 1/3 = spans z, faces ±x);
+// the facing itself matters to signs.js, which mounts the text plane on the
+// board's front face. Post top ends INSIDE the board so no coplanar faces
+// fight. Ordered post-then-board for the HUD's painter's-order iso projector.
+const SIGN_POST = { x0: 0.4375, y0: 0, z0: 0.4375, x1: 0.5625, y1: 0.55, z1: 0.5625 };
+function signBoxes(facing) {
+  const board = facing % 2 === 0
+    ? { x0: 0.0625, x1: 0.9375, y0: 0.5, y1: 0.95, z0: 0.45, z1: 0.55 }
+    : { x0: 0.45, x1: 0.55, y0: 0.5, y1: 0.95, z0: 0.0625, z1: 0.9375 };
+  return [SIGN_POST, board];
+}
+
 // neighbor-aware boxes for a shaped block standing in the world
 function shapeBoxesAt(def, get, wx, y, wz) {
   if (def.shape !== "fence" && def.shape !== "gate") return shapeBoxes(def);
@@ -341,6 +355,8 @@ export function shapeBoxes(def) {
     boxes = fenceBoxes([false, true, false, true]);
   } else if (def.shape === "gate") {
     boxes = gateBoxes(def.open, [false, true, false, true]);
+  } else if (def.shape === "sign") {
+    boxes = signBoxes(def.facing);
   } else {
     boxes = [];
   }

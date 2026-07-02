@@ -11,6 +11,19 @@ export function chunkKey(cx, cz) { return (cx + 16384) * 32768 + (cz + 16384); }
 
 export function blockIndex(lx, y, lz) { return lx + CHUNK * (lz + CHUNK * y); }
 
+// a Notice Post board holds 4 lines of 16 characters — the one clamp shared
+// by the write window (hud.js) and the save loader, so no oversized text ever
+// reaches world.signs
+export const SIGN_LINES = 4;
+export const SIGN_COLS = 16;
+export function clampSignText(text) {
+  return String(text)
+    .split("\n").slice(0, SIGN_LINES)
+    .map((line) => line.slice(0, SIGN_COLS))
+    .join("\n")
+    .replace(/\s+$/, ""); // an all-blank board is no notice at all
+}
+
 export class Chunk {
   constructor(cx, cz) {
     this.cx = cx;
@@ -38,6 +51,7 @@ export class World {
     this.edits = new Map();           // chunkKey -> Map(blockIndex -> id)
     this.chests = new Map();          // "x,y,z" -> Array(>=27) of null|{id,count}
     this.kilns = new Map();           // "x,y,z" -> {slots:[in,fuel,out], burnLeft, progress}
+    this.signs = new Map();           // "x,y,z" -> Notice Post text (see signs.js)
     this.generator = null;            // set by terrain.js
     this._lastChunk = null;           // 1-entry lookup cache (meshing/physics locality)
   }
@@ -116,6 +130,23 @@ export class World {
       // an empty, cold kiln carries no state worth keeping
       if (!slots.some((s) => s) && burnLeft <= 0) continue;
       this.kilns.set(pair[0], { slots, burnLeft, progress });
+    }
+  }
+
+  // signs (additive save field): [["x,y,z", text]...] — the sign BLOCKS live
+  // in the edit overlay; this is only the writing on their boards
+  serializeSigns() {
+    return [...this.signs];
+  }
+
+  loadSigns(arr) {
+    if (!Array.isArray(arr)) return;
+    for (const pair of arr) {
+      if (!Array.isArray(pair) || typeof pair[0] !== "string" ||
+          typeof pair[1] !== "string") continue;
+      if (!/^-?\d+,-?\d+,-?\d+$/.test(pair[0])) continue;
+      const text = clampSignText(pair[1]);
+      if (text) this.signs.set(pair[0], text);
     }
   }
 

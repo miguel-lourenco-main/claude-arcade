@@ -97,6 +97,14 @@ export const BOAT = 66;
 export const FISHING_POLE = 67;
 export const SILVERFIN = 68;
 export const SEARED_SILVERFIN = 69;
+// the Notice Post: a writable standing sign — FOUR ids, one per yaw-baked
+// board facing (like stairs), with the north one as the only user-visible/
+// craftable/droppable id. The written text lives in world.signs (world.js);
+// the text boards themselves are runtime meshes (signs.js).
+export const SIGN = 70;      // north — the canonical sign id
+export const SIGN_E = 71;
+export const SIGN_S = 72;
+export const SIGN_W = 73;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -433,6 +441,34 @@ BLOCKS[GATE_OPEN] = def("Wattle Gate (open)", { hardness: 1.2,
 });
 
 export function isGate(id) { return id === GATE || id === GATE_OPEN; }
+
+// --- the Notice Post ----------------------------------------------------------
+// A slim post with a framed board on top, standing on solid ground only.
+// Non-solid (a Wanderling brushes past a notice, never bonks it) and shaped:
+// the mesher builds post + board boxes from the facing. `facing` here is the
+// direction the BOARD FACES (its readable front), yaw-baked at placement so
+// the writing greets the placer. Right-click opens the write window
+// (interact.js routing); the text itself lives in world.signs.
+const SIGN_IDS = [SIGN, SIGN_E, SIGN_S, SIGN_W];
+SIGN_IDS.forEach((id, f) => {
+  BLOCKS[id] = def("Notice Post" + FACING_SUFFIX[f], {
+    tiles: cube(TILE.SIGN_BOARD),
+    shape: "sign",
+    facing: f,
+    facings: SIGN_IDS,
+    base: SIGN,
+    solid: false,
+    opaque: false,
+    hardness: 0.7,
+    sound: "wood",
+    ...(f === 0 ? {} : { hidden: true, placeable: false, drops: SIGN }),
+  });
+});
+
+export function isSign(id) {
+  const b = BLOCKS[id];
+  return b !== undefined && b.shape === "sign";
+}
 
 // --- meal-root farming --------------------------------------------------------
 // The crop-cross template: non-solid cutout plants that pop off broken soil.

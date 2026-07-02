@@ -68,6 +68,7 @@ export const TILE = {
   DIB_POLE: 57,
   SILVERFIN: 58,
   SEARED_SILVERFIN: 59,
+  SIGN_BOARD: 60,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -1006,6 +1007,29 @@ const painters = {
     // a curl of steam — it's still warm
     p.px(6, 3, 226, 222, 214, 150); p.px(7, 2, 226, 222, 214, 120);
     p.px(9, 3, 226, 222, 214, 150);
+  },
+  [TILE.SIGN_BOARD](p) {
+    // the Notice Post's board: pale planed wood scraped smooth for ink, with
+    // a mustard-trim frame (Wanderling field-journal livery) and peg dots —
+    // the writing itself is painted per-sign at runtime (see signs.js)
+    for (let y = 0; y < TILE_PX; y++) {
+      for (let x = 0; x < TILE_PX; x++) {
+        const d = (p.rand() * 2 - 1) * 6;
+        const grain = y % 6 === 4 ? -10 : 0; // faint planed-board seams
+        p.px(x, y, 208 + d + grain, 180 + d + grain, 128 + d + grain);
+      }
+    }
+    // mustard frame all round — trim is how a Wanderling says "official"
+    for (let i = 0; i < TILE_PX; i++) {
+      const d = (p.rand() * 2 - 1) * 8;
+      p.px(i, 0, 190 + d, 152 + d, 60 + d); p.px(i, 15, 168 + d, 134 + d, 52 + d);
+      p.px(0, i, 190 + d, 152 + d, 60 + d); p.px(15, i, 168 + d, 134 + d, 52 + d);
+    }
+    // corner pegs holding the board to its post
+    for (const [cx, cy] of [[2, 2], [13, 2], [2, 13], [13, 13]]) {
+      p.px(cx, cy, 118, 88, 50);
+      p.px(cx, cy + 1, 96, 70, 40); // peg shadow
+    }
   },
   [TILE.SAPLING](p) {
     p.clear();

@@ -2,6 +2,7 @@
 // overlay, pause overlay, underwater tint.
 
 import { BLOCKS, PLACEABLE, AIR } from "./blocks.js";
+import { clampSignText, SIGN_LINES, SIGN_COLS } from "./world.js";
 import { shapeBoxes } from "./mesher.js";
 import { ATLAS_TILES, TILE_PX } from "./textures.js";
 import { RECIPES, BASIC_RECIPES, canCraft } from "./craft.js";
@@ -173,6 +174,8 @@ export class Hud {
     this.benchOpen = false;
     this.kilnOpen = false;
     this._kiln = null; // live kiln state while the window is open
+    this.signOpen = false;
+    this._signCommit = null; // (text) => void while the write window is open
     this.paused = true; // the boot overlay is showing
     this.gameMode = "creative";
     this._lastHealth = -1;
@@ -231,6 +234,56 @@ export class Hud {
     this.deathEl = document.getElementById("death");
     this.flashEl = document.getElementById("damage-flash");
     document.getElementById("respawn").addEventListener("click", () => this.onRespawn());
+
+    // the Notice Post write window: Done commits, Cancel discards, and both
+    // hand the pointer back to the game
+    this.signTextEl = document.getElementById("sign-text");
+    this.signTextEl.addEventListener("input", () => this._clampSignInput());
+    document.getElementById("sign-done").addEventListener("click", () => {
+      this.closeSign(true);
+      this.onResume();
+    });
+    document.getElementById("sign-cancel").addEventListener("click", () => {
+      this.closeSign(false);
+      this.onResume();
+    });
+  }
+
+  // hold the textarea to the board's 4x16: trim overflow as it's typed,
+  // keeping the caret where the writer left it
+  _clampSignInput() {
+    const el = this.signTextEl;
+    const clamped = el.value
+      .split("\n").slice(0, SIGN_LINES)
+      .map((line) => line.slice(0, SIGN_COLS))
+      .join("\n");
+    if (clamped !== el.value) {
+      const caret = Math.min(el.selectionStart, clamped.length);
+      el.value = clamped;
+      el.setSelectionRange(caret, caret);
+    }
+  }
+
+  // the Notice Post window: pause input (anyWindowOpen), edit, Done/Cancel.
+  // onCommit receives the clamped text ("" = wipe the board clean).
+  openSign(text, onCommit) {
+    this.signOpen = true;
+    this._signCommit = onCommit;
+    this.signTextEl.value = text;
+    document.getElementById("sign-ui").classList.remove("hidden");
+    document.exitPointerLock();
+    // defer: the right-click that opened us hasn't finished dispatching, and
+    // its default action would steal the focus right back off the textarea
+    setTimeout(() => { if (this.signOpen) this.signTextEl.focus(); }, 0);
+  }
+
+  closeSign(commit = true) {
+    if (!this.signOpen) return;
+    this.signOpen = false;
+    const done = this._signCommit;
+    this._signCommit = null;
+    document.getElementById("sign-ui").classList.add("hidden");
+    if (commit && done) done(clampSignText(this.signTextEl.value));
   }
 
   _buildStatus() {
@@ -632,13 +685,17 @@ export class Hud {
     document.getElementById("kiln-ember").classList.toggle("lit", k.burnLeft > 0);
   }
 
-  anyWindowOpen() { return this.pickerOpen || this.chestOpen || this.benchOpen || this.kilnOpen; }
+  anyWindowOpen() {
+    return this.pickerOpen || this.chestOpen || this.benchOpen ||
+      this.kilnOpen || this.signOpen;
+  }
 
   closeAllWindows() {
     this.closePicker();
     this.closeChest();
     this.closeBench();
     this.closeKiln();
+    this.closeSign(); // commits — a defensive close never eats the writing
   }
 
   showPause(firstTime = false) {

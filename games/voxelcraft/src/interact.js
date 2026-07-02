@@ -6,7 +6,7 @@ import {
   AIR, BEDROCK, CHEST, WORKBENCH, KILN, BED, LADDER, DOOR, DOOR_TOP, BLAST_KEG,
   GATE, GATE_OPEN, ROOT_SEED, CROP_SPROUT, DIRT, GRASS, SLING_STONE, BOAT, WATER,
   FISHING_POLE,
-  BLOCKS, isSolid, isPlant, isDoor, isDoorLower, isGate, DOOR_TOGGLE,
+  BLOCKS, isSolid, isPlant, isDoor, isDoorLower, isGate, isSign, DOOR_TOGGLE,
   dropFor, yawToFacing,
 } from "./blocks.js";
 import { HEIGHT } from "./world.js";
@@ -92,6 +92,7 @@ export class Interaction {
     this.onOpenBench = opts.onOpenBench;   // () => open workbench UI (survival)
     this.onOpenKiln = opts.onOpenKiln;     // (x, y, z) => open kiln UI (survival)
     this.onSleep = opts.onSleep;           // (x, y, z) => Moss Cot rest (survival)
+    this.onOpenSign = opts.onOpenSign;     // (x, y, z) => Notice Post write window
     this.onPrimeKeg = opts.onPrimeKeg;     // (x, y, z) => light a Blast Keg
     this.onChestBreak = opts.onChestBreak; // (x, y, z) => spill contents
     this.onKilnBreak = opts.onKilnBreak;   // (x, y, z) => spill kiln slots
@@ -220,7 +221,7 @@ export class Interaction {
     const t = this.target;
     return !!t &&
       (t.id === CHEST || t.id === WORKBENCH || t.id === KILN || t.id === BED ||
-       t.id === BLAST_KEG || isDoor(t.id) || isGate(t.id)) &&
+       t.id === BLAST_KEG || isDoor(t.id) || isGate(t.id) || isSign(t.id)) &&
       !this.player._sneaking;
   }
 
@@ -561,6 +562,12 @@ export class Interaction {
       this._toggleGate(t);
       return;
     }
+    // right-click on a Notice Post opens the write window — in BOTH modes,
+    // routed exactly like the door (sneak to place against it instead)
+    if (isSign(t.id) && !this.player._sneaking && this.onOpenSign) {
+      this.onOpenSign(t.x, t.y, t.z);
+      return;
+    }
     // right-click on a Blast Keg primes it — in BOTH modes, like the door
     // (sneak to place against it instead)
     if (t.id === BLAST_KEG && !this.player._sneaking && this.onPrimeKeg) {
@@ -616,6 +623,10 @@ export class Interaction {
       // root pips want WORKED soil — dirt or grass, never stone or sand
       const below = this.world.getBlock(px, py - 1, pz);
       if (below !== DIRT && below !== GRASS) return;
+    } else if (def.shape === "sign") {
+      // a Notice Post stands on solid ground only — nobody trusts a notice
+      // nailed to thin air
+      if (!isSolid(this.world.getBlock(px, py - 1, pz))) return;
     } else if (def.kind === "cross" && !isSolid(this.world.getBlock(px, py - 1, pz))) {
       return; // plants need soil
     }
@@ -636,6 +647,11 @@ export class Interaction {
     let placeId = id;
     if (def.shape === "stairs" && def.facings) {
       placeId = def.facings[yawToFacing(this.player.yaw)];
+    }
+    // a Notice Post bakes the OPPOSITE facing: the board turns its readable
+    // front back toward the placer, like handing someone a written page
+    if (def.shape === "sign" && def.facings) {
+      placeId = def.facings[(yawToFacing(this.player.yaw) + 2) % 4];
     }
     // planted pips go into the ground as a sprout — the seed item never
     // exists as a world block

@@ -7,7 +7,7 @@ import {
   LOG, PLANKS, SAND, COBBLE, STONE, BRICKS, SANDSTONE, COAL_ORE,
   TORCH, CHEST, WORKBENCH, KILN, MOSS_CLUMP, BED, LADDER, DOOR, BLAST_KEG,
   PLANK_SLAB, STONE_SLAB, COBBLE_SLAB, PLANK_STAIRS, STONE_STAIRS, COBBLE_STAIRS,
-  FENCE, GATE, SLING_STONE, BOAT, FISHING_POLE,
+  FENCE, GATE, SLING_STONE, BOAT, FISHING_POLE, SIGN,
 } from "./blocks.js";
 
 // in: [[blockId, count], ...]  out: [blockId, count]
@@ -21,6 +21,9 @@ export const RECIPES = [
   // the Dib-Pole: three planks whittled and lashed into a springy rod —
   // shoreline gear is field gear, so it crafts anywhere
   { in: [[PLANKS, 3]], out: [FISHING_POLE, 1], basic: true },
+  // the Notice Post: a post and a planed board — Wanderlings journal in the
+  // field, so notices are field gear too and craft anywhere
+  { in: [[PLANKS, 3]], out: [SIGN, 2], basic: true },
   { in: [[PLANKS, 8]], out: [CHEST, 1] },
   { in: [[COBBLE, 8]], out: [KILN, 1] },
   { in: [[PLANKS, 3], [MOSS_CLUMP, 2]], out: [BED, 1] },
