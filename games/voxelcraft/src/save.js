@@ -26,6 +26,9 @@ export function writeSave(world, player, sky, hud, inventory, extra = {}) {
       chests: world.serializeChests(),
       kilns: world.serializeKilns(), // additive: absent in older saves
       saplings: extra.saplings || [],
+      // additive: [phase, secondsLeftInPhase, intensity] — absent in older
+      // saves, which simply boot clear with a fresh timer
+      weather: extra.weather || undefined,
       player: {
         x: player.pos.x, y: player.pos.y, z: player.pos.z,
         yaw: player.yaw, pitch: player.pitch, flying: player.flying,

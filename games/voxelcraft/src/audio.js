@@ -10,6 +10,8 @@ export class Sfx {
   constructor() {
     this.ctx = null;
     this.enabled = true;
+    this._rain = null;  // { src, gain } — the looped shower bed, built once
+    this.rainLevel = 0; // last level handed to setRain (test hook)
   }
 
   // must be called from a user gesture the first time
@@ -98,6 +100,42 @@ export class Sfx {
   }
 
   craft() { this._noiseBurst(900, 0.08, 0.1); }
+
+  // the shower itself: a looped, lowpassed noise bed whose gain follows the
+  // sky's rain intensity. level 0..1; pass 0 while under cover/underground —
+  // the gain eases so stepping through a doorway swells rather than clicks.
+  setRain(level) {
+    level = Math.min(1, Math.max(0, level || 0));
+    if (level === this.rainLevel && !(level > 0 && !this._rain)) return;
+    this.rainLevel = level;
+    if (level <= 0 && !this._rain) return; // never built, nothing to quiet
+    if (!this.enabled || !this._ensure()) return;
+    const ctx = this.ctx;
+    if (!this._rain) {
+      // 2s of pre-softened noise, seamlessly looped
+      const frames = Math.floor(ctx.sampleRate * 2);
+      const buffer = ctx.createBuffer(1, frames, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      let last = 0;
+      for (let i = 0; i < frames; i++) {
+        last = last * 0.8 + (Math.random() * 2 - 1) * 0.3;
+        data[i] = last;
+      }
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      src.loop = true;
+      const filter = ctx.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.frequency.value = 900;
+      filter.Q.value = 0.5;
+      const gain = ctx.createGain();
+      gain.gain.value = 0;
+      src.connect(filter).connect(gain).connect(ctx.destination);
+      src.start();
+      this._rain = { src, gain };
+    }
+    this._rain.gain.gain.setTargetAtTime(level * 0.14, ctx.currentTime, 0.4);
+  }
 
   // hinge creak for the Plank Door: two short wooden squeaks — pitch climbs
   // when it swings open, sinks when it thuds shut

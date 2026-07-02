@@ -23,6 +23,7 @@ import { Player } from "./player.js";
 import { Interaction } from "./interact.js";
 import { Hud } from "./hud.js";
 import { Sky } from "./sky.js";
+import { Rain } from "./rain.js";
 import { Sfx } from "./audio.js";
 import { loadSave, writeSave, clearSave, startAutosave } from "./save.js";
 
@@ -161,10 +162,13 @@ if (save && save.kilns) world.loadKilns(save.kilns); // additive v2 field
 // --- saplings: planted ones grow into real (edit-persisted) trees ----------
 
 let worldSeconds = 0;
-const saplings = new Map(); // "x,y,z" -> worldSeconds when it grows
+// the saplings' own clock: it runs alongside worldSeconds but up to 2x while
+// raining (a watered sapling halves its remaining wait, LORE-appropriately)
+let growthSeconds = 0;
+const saplings = new Map(); // "x,y,z" -> growthSeconds when it grows
 
 function registerSapling(x, y, z, delay = 30 + Math.random() * 30) {
-  saplings.set(`${x},${y},${z}`, worldSeconds + delay);
+  saplings.set(`${x},${y},${z}`, growthSeconds + delay);
 }
 
 function growTree(x, y, z) {
@@ -238,7 +242,7 @@ function lightAwareRemesh(chunks, lightTouched) {
 
 function updateSaplings() {
   for (const [key, due] of saplings) {
-    if (worldSeconds < due) continue;
+    if (growthSeconds < due) continue;
     const [x, y, z] = key.split(",").map(Number);
     // the canopy spans 2 blocks into neighbor chunks: growing while any of
     // them is ungenerated would silently drop those leaves forever (setBlock
@@ -261,6 +265,17 @@ if (save && save.edits) world.loadEdits(save.edits);
 
 const sky = new Sky(scene, seed);
 if (save && Number.isFinite(save.time)) sky.time = ((save.time % 1) + 1) % 1;
+// additive v2 field: [phase, secondsLeftInPhase, intensity] — validated, so a
+// hand-edited save can't wedge the weather machine
+if (save && Array.isArray(save.weather)) {
+  const [phase, timer, rain] = save.weather;
+  if ((phase === "clear" || phase === "rainy") && Number.isFinite(timer)) {
+    sky.weatherPhase = phase;
+    sky.weatherTimer = Math.max(1, Math.min(900, timer));
+    if (Number.isFinite(rain)) sky.rain = Math.max(0, Math.min(1, rain));
+  }
+}
+const rainFx = new Rain(scene, world);
 
 const sfx = new Sfx();
 player.onStep = (blockId) => { if (blockId !== AIR) sfx.step(blockId); };
@@ -496,9 +511,14 @@ mobs.onDrop = (x, y, z, id, n) => drops.spawn(x, y, z, id, n);
 const stopAutosave = startAutosave(() => writeSave(world, player, sky, hud, inventory, {
   saplings: [...saplings].map(([key, due]) => {
     const [x, y, z] = key.split(",").map(Number);
-    return [x, y, z, Math.max(1, due - worldSeconds)];
+    return [x, y, z, Math.max(1, due - growthSeconds)];
   }),
   overflowStacks: pendingOverflow.map((s) => [s.id, s.count]),
+  weather: [
+    sky.weatherPhase,
+    Math.round(sky.weatherTimer * 10) / 10,
+    Math.round(sky.rain * 100) / 100,
+  ],
 }));
 
 // --- held item (first-person hand) — its own scene + depth-cleared pass ------
@@ -785,6 +805,7 @@ function tick(now) {
     mobs.update(frameDt, { world, player, terrain, night: sky.lightLevel < 0.45 });
     kegs.update(frameDt, world, player);
     worldSeconds += frameDt;
+    growthSeconds += frameDt * (1 + sky.rain); // rain doubles sapling growth
     if (worldSeconds >= nextSaplingCheck) {
       nextSaplingCheck = worldSeconds + 1;
       updateSaplings();
@@ -870,6 +891,13 @@ function tick(now) {
         Math.floor(camera.position.z)) === WATER_ID
     : player.eyeInWater;
   sky.update(frameDt, camera, viewInWater);
+  rainFx.update(frameDt, camera, sky.rain);
+  // the rain bed is silent under cover, underground, and underwater — gated
+  // on the same open-column test the streaks use, at the player's eye
+  sfx.setRain(
+    sky.rain > 0.001 && !player.eyeInWater &&
+      rainFx.isOpen(player.pos.x, player.eyeY, player.pos.z)
+      ? sky.rain : 0);
   setDayLight(materials, sky.lightLevel, sky.lightTint);
   setHeldSkinLight(sky.lightLevel, sky.lightTint);
   hud.setUnderwater(viewInWater);
@@ -884,7 +912,7 @@ function tick(now) {
       `xyz: ${p.x.toFixed(2)} / ${p.y.toFixed(2)} / ${p.z.toFixed(2)}`,
       `chunk: ${Math.floor(p.x / CHUNK)} ${Math.floor(p.z / CHUNK)}  loaded: ${world.chunks.size}`,
       `biome: ${terrain.biomeAt(bx, bz, h)}  facing: ${facing()}  move: ${player.moveMode}`,
-      `time: ${clock()}  ${player.flying ? "[flying]" : player.onGround ? "[ground]" : "[air]"}${player.inWater ? " [water]" : ""}  mode: ${player.mode}${player.mode === "survival" ? ` hp:${player.health.toFixed(0)} food:${player.hunger.toFixed(1)}` : ""}`,
+      `time: ${clock()}${sky.rain > 0.01 ? ` [rain ${sky.rain.toFixed(2)}]` : ""}  ${player.flying ? "[flying]" : player.onGround ? "[ground]" : "[air]"}${player.inWater ? " [water]" : ""}  mode: ${player.mode}${player.mode === "survival" ? ` hp:${player.health.toFixed(0)} food:${player.hunger.toFixed(1)}` : ""}`,
       `target: ${interaction.target ? BLOCKS[interaction.target.id].name : "none"}`,
     ], true);
   } else {
@@ -906,6 +934,8 @@ requestAnimationFrame(tick);
 if (NO_LOCK) {
   window.voxelcraft = {
     player, world, hud, sky, terrain, interaction, mobs, drops, saplings, inventory, kegs,
+    rain: rainFx, sfx,
     growAllSaplings: () => { for (const k of saplings.keys()) saplings.set(k, 0); },
+    getGrowthSeconds: () => growthSeconds,
   };
 }
