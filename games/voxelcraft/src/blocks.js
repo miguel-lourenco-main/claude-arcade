@@ -44,6 +44,7 @@ export const DOOR = 36;
 export const DOOR_TOP = 37;
 export const DOOR_OPEN = 38;
 export const DOOR_TOP_OPEN = 39;
+export const BLAST_KEG = 40;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -287,6 +288,14 @@ BLOCKS[DOOR_TOP_OPEN] = def("Plank Door (open top)", { hardness: 1.6,
   sound: "wood",
   placeable: false,
   hidden: true,
+});
+
+// the Blast Keg: a squat rope-bound powder barrel — coal-dust and sand-crust
+// packed tight. Right-click a placed one to prime it; explosives.js handles
+// the rest of its short, loud life. Danger is real but polite: it ticks.
+BLOCKS[BLAST_KEG] = def("Blast Keg", { hardness: 0.6,
+  tiles: cube({ top: TILE.KEG_TOP, side: TILE.KEG_SIDE, bottom: TILE.KEG_SIDE }),
+  sound: "wood",
 });
 
 // door-family helpers: which ids are door halves, which half is the lower,

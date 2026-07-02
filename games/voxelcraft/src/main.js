@@ -7,6 +7,7 @@ import { BLOCKS, AIR } from "./blocks.js";
 import { World, CHUNK, HEIGHT } from "./world.js";
 import { Inventory } from "./inventory.js";
 import { ItemDrops } from "./entities.js";
+import { PrimedKegs } from "./explosives.js";
 import { Mobs } from "./mobs.js";
 import { craft } from "./craft.js";
 import { makeKiln, tickKilns } from "./kiln.js";
@@ -209,24 +210,30 @@ function growTree(x, y, z) {
 }
 
 // remesh after a world edit: widen to the full 3x3 ring when the edit adds/
-// removes an emitter or happens near one (occluders change the light BFS)
+// removes an emitter or happens near one (occluders change the light BFS).
+// Handles multi-chunk edit lists (explosions) with each chunk meshed once.
 function lightAwareRemesh(chunks, lightTouched) {
   if (chunks.length === 0) return;
-  const { cx, cz } = chunks[0];
-  if (!lightTouched) {
-    outer: for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
-      const c = world.getChunk(cx + dx, cz + dz);
-      if (c && c.emitters.size > 0) { lightTouched = true; break outer; }
+  const toMesh = new Set();
+  for (const chunk of chunks) {
+    const { cx, cz } = chunk;
+    let wide = lightTouched;
+    if (!wide) {
+      outer: for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+        const c = world.getChunk(cx + dx, cz + dz);
+        if (c && c.emitters.size > 0) { wide = true; break outer; }
+      }
+    }
+    if (wide) {
+      for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+        const c = world.getChunk(cx + dx, cz + dz);
+        if (c) toMesh.add(c);
+      }
+    } else {
+      toMesh.add(chunk);
     }
   }
-  if (lightTouched) {
-    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
-      const c = world.getChunk(cx + dx, cz + dz);
-      if (c) remeshNow(c);
-    }
-  } else {
-    for (const c of chunks) remeshNow(c);
-  }
+  for (const c of toMesh) remeshNow(c);
 }
 
 function updateSaplings() {
@@ -427,6 +434,16 @@ const interaction = new Interaction(world, player, scene, hud, {
   },
   onOpenBench: () => hud.openBench(),
   onSleep: (x, y, z) => sleepInCot(x, y, z),
+  // priming swaps the keg BLOCK for a primed keg ENTITY (see explosives.js);
+  // `kegs` is a later const, but this callback only fires at runtime
+  onPrimeKeg: (x, y, z) => {
+    if (!kegs.canPrime()) return; // sixteen already hissing — the keg declines
+    const affected = world.setBlock(x, y, z, AIR);
+    if (affected.length === 0) return;
+    lightAwareRemesh(affected, false);
+    kegs.prime(x, y, z);
+    sfx.kegTick();
+  },
   onOpenKiln: (x, y, z) => {
     const key = `${x},${y},${z}`;
     let kiln = world.kilns.get(key);
@@ -459,6 +476,19 @@ const interaction = new Interaction(world, player, scene, hud, {
   crackTextures: buildCrackTextures(1337),
   avgColor: atlas.avgColor,
 });
+const kegs = new PrimedKegs(scene, materials, {
+  mobs,
+  onRemesh: lightAwareRemesh, // the torch-aware path — a blast may eat one
+  onSpawnDrop: (x, y, z, id, qty) => drops.spawn(x, y, z, id, qty),
+  onTick: () => sfx.kegTick(),
+  onBoom: (x, y, z) => {
+    sfx.kegBoom();
+    // a big two-tone burst: flying embers under a gray dust plume
+    interaction.particles.burst(x - 0.5, y - 0.5, z - 0.5, [1.0, 0.62, 0.22], 70);
+    interaction.particles.burst(x - 0.5, y - 0.5, z - 0.5, [0.34, 0.32, 0.3], 70);
+  },
+});
+
 mobs.onMobHurt = () => sfx.mobHurt();
 mobs.onSound = (kind) => sfx.creature(kind);
 mobs.onDrop = (x, y, z, id, n) => drops.spawn(x, y, z, id, n);
@@ -753,6 +783,7 @@ function tick(now) {
       return accepted; // a full inventory keeps the rest on the ground
     });
     mobs.update(frameDt, { world, player, terrain, night: sky.lightLevel < 0.45 });
+    kegs.update(frameDt, world, player);
     worldSeconds += frameDt;
     if (worldSeconds >= nextSaplingCheck) {
       nextSaplingCheck = worldSeconds + 1;
@@ -874,7 +905,7 @@ requestAnimationFrame(tick);
 // automated-test handle (only in ?nolock mode, which headless tests use)
 if (NO_LOCK) {
   window.voxelcraft = {
-    player, world, hud, sky, terrain, interaction, mobs, drops, saplings, inventory,
+    player, world, hud, sky, terrain, interaction, mobs, drops, saplings, inventory, kegs,
     growAllSaplings: () => { for (const k of saplings.keys()) saplings.set(k, 0); },
   };
 }

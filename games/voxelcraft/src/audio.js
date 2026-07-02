@@ -106,6 +106,18 @@ export class Sfx {
     setTimeout(() => this._noiseBurst(open ? 560 : 250, 0.13, 0.11), 80);
   }
 
+  // the Blast Keg's fuse: a dry, urgent little tick...
+  kegTick() { this._noiseBurst(2400, 0.03, 0.09); }
+
+  // ...and the deep boom it was building toward: a sharp crack over layered
+  // low bursts, then a rolling after-rumble
+  kegBoom() {
+    this._noiseBurst(900, 0.12, 0.18);  // the crack
+    this._noiseBurst(130, 0.45, 0.4);   // the body
+    this._noiseBurst(55, 0.9, 0.55);    // the ground answering
+    setTimeout(() => this._noiseBurst(80, 0.7, 0.26), 130); // the rumble
+  }
+
   pickup() {
     if (!this.enabled || !this._ensure()) return;
     const ctx = this.ctx;

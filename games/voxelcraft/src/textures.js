@@ -54,6 +54,8 @@ export const TILE = {
   LADDER: 43,
   DOOR_LOWER: 44,
   DOOR_UPPER: 45,
+  KEG_SIDE: 46,
+  KEG_TOP: 47,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -639,6 +641,56 @@ const painters = {
       }
     }
     p.px(7, 7, 238, 248, 250); p.px(8, 6, 238, 248, 250); // glint
+  },
+  [TILE.KEG_SIDE](p) {
+    // the Blast Keg's staves: scorched charcoal-dark wood packed with
+    // coal-dust, cinched by two pale woven rope bands
+    for (let x = 0; x < TILE_PX; x++) {
+      const seam = x % 3 === 2 ? -16 : 0;              // stave joins
+      const bulge = x === 0 || x === 15 ? -14 : 0;     // rounded barrel edge
+      for (let y = 0; y < TILE_PX; y++) {
+        const d = (p.rand() * 2 - 1) * 7;
+        p.px(x, y, 68 + d + seam + bulge, 54 + d + seam + bulge, 40 + d + seam + bulge);
+      }
+    }
+    // rope bands: alternating strand shading reads as a braid
+    for (const ry of [3, 11]) {
+      for (let x = 0; x < TILE_PX; x++) {
+        const strand = (x + ry) % 2 === 0 ? 12 : -10;
+        const d = (p.rand() * 2 - 1) * 6;
+        p.px(x, ry, 172 + d + strand, 148 + d + strand, 104 + d + strand);
+        p.px(x, ry + 1, 148 + d - strand, 126 + d - strand, 88 + d - strand);
+      }
+    }
+    // coal dust leaking between the staves
+    p.speckle(8, [30, 28, 26], 6);
+  },
+  [TILE.KEG_TOP](p) {
+    // keg lid: dark boards, a rope rim, and a bold ember-orange warning
+    // cross — the Wanderling field-sign for "politely, elsewhere"
+    for (let y = 0; y < TILE_PX; y++) {
+      for (let x = 0; x < TILE_PX; x++) {
+        const d = (p.rand() * 2 - 1) * 7;
+        const seam = y % 4 === 1 ? -14 : 0; // lid boards
+        p.px(x, y, 76 + d + seam, 60 + d + seam, 44 + d + seam);
+      }
+    }
+    for (let i = 0; i < TILE_PX; i++) { // rope rim
+      const strand = i % 2 === 0 ? 10 : -8;
+      p.px(i, 0, 164 + strand, 142 + strand, 100 + strand);
+      p.px(i, 15, 164 - strand, 142 - strand, 100 - strand);
+      p.px(0, i, 164 + strand, 142 + strand, 100 + strand);
+      p.px(15, i, 164 - strand, 142 - strand, 100 - strand);
+    }
+    // the ember cross: two thick corner-to-corner strokes, hot in the middle
+    for (let i = 2; i <= 13; i++) {
+      for (const [x, y] of [[i, i], [i, 15 - i]]) {
+        const d = p.rand() * 30;
+        p.px(x, y, 222 + d, 108 + d * 0.6, 24);
+        if (x + 1 <= 13) p.px(x + 1, y, 176 + d, 84 + d * 0.5, 20); // shoulder
+      }
+    }
+    p.px(7, 7, 255, 210, 120); p.px(8, 8, 255, 210, 120);
   },
   [TILE.SAPLING](p) {
     p.clear();

@@ -3,7 +3,7 @@
 
 import * as THREE from "three";
 import {
-  AIR, BEDROCK, CHEST, WORKBENCH, KILN, BED, LADDER, DOOR, DOOR_TOP,
+  AIR, BEDROCK, CHEST, WORKBENCH, KILN, BED, LADDER, DOOR, DOOR_TOP, BLAST_KEG,
   BLOCKS, isSolid, isPlant, isDoor, isDoorLower, DOOR_TOGGLE, dropFor,
 } from "./blocks.js";
 import { HEIGHT } from "./world.js";
@@ -60,6 +60,7 @@ export class Interaction {
     this.onOpenBench = opts.onOpenBench;   // () => open workbench UI (survival)
     this.onOpenKiln = opts.onOpenKiln;     // (x, y, z) => open kiln UI (survival)
     this.onSleep = opts.onSleep;           // (x, y, z) => Moss Cot rest (survival)
+    this.onPrimeKeg = opts.onPrimeKeg;     // (x, y, z) => light a Blast Keg
     this.onChestBreak = opts.onChestBreak; // (x, y, z) => spill contents
     this.onKilnBreak = opts.onKilnBreak;   // (x, y, z) => spill kiln slots
     this.onEat = opts.onEat;               // (kind) => chew/swallow sfx
@@ -174,7 +175,7 @@ export class Interaction {
     const t = this.target;
     const interactive = t &&
       (t.id === CHEST || t.id === WORKBENCH || t.id === KILN || t.id === BED ||
-       isDoor(t.id)) &&
+       t.id === BLAST_KEG || isDoor(t.id)) &&
       !this.player._sneaking;
     const wants = this.buttons.has(2) && def && def.food && !interactive &&
       this.player.hunger < MAX_HUNGER - 1e-9;
@@ -389,6 +390,12 @@ export class Interaction {
     // right-click on a door toggles it — in BOTH modes (sneak to place against)
     if (isDoor(t.id) && !this.player._sneaking) {
       this._toggleDoor(t);
+      return;
+    }
+    // right-click on a Blast Keg primes it — in BOTH modes, like the door
+    // (sneak to place against it instead)
+    if (t.id === BLAST_KEG && !this.player._sneaking && this.onPrimeKeg) {
+      this.onPrimeKeg(t.x, t.y, t.z);
       return;
     }
     // right-click on a chest/workbench opens it (sneak to place against it)
