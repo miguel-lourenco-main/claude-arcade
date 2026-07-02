@@ -87,6 +87,16 @@ export class Sfx {
 
   mobHurt() { this._noiseBurst(700, 0.12, 0.16); }
 
+  // eating: soft mushy chew ticks while holding, a low gulp on the swallow
+  eat(kind) {
+    if (kind === "swallow") {
+      this._noiseBurst(240, 0.16, 0.16);
+      setTimeout(() => this._noiseBurst(160, 0.1, 0.1), 90);
+    } else {
+      this._noiseBurst(420 + Math.random() * 160, 0.06, 0.1);
+    }
+  }
+
   craft() { this._noiseBurst(900, 0.08, 0.1); }
 
   pickup() {

@@ -79,12 +79,21 @@ function pixelIcon(rows, colorFor) {
 
 const HEART_ROWS = [".XX.XX.", "XXXXXXX", "XXXXXXX", ".XXXXX.", "..XXX..", "...X..."];
 const BUBBLE_ROWS = [".XXX.", "XXXXX", "XoXXX", "XXXXX", ".XXX."];
+// hunger: a Wanderling field bowl with a morsel (m) peeking over the rim —
+// rust-orange crockery, mustard morsel (the tunic colors, see LORE.md)
+const BOWL_ROWS = ["..mm...", ".mmmm..", "XXXXXXX", "XXXXXXX", ".XXXXX.", "..XXX.."];
+const BOWL_COLORS = { X: "#c56a2b", m: "#d9a441" };
 
 const ICONS = {
   heartFull: pixelIcon(HEART_ROWS, (ch) => (ch === "X" ? "#d4342a" : null)),
   heartHalf: pixelIcon(HEART_ROWS, (ch, x) => (ch === "X" ? (x <= 3 ? "#d4342a" : "#3a3a44") : null)),
   heartEmpty: pixelIcon(HEART_ROWS, (ch) => (ch === "X" ? "#3a3a44" : null)),
   bubble: pixelIcon(BUBBLE_ROWS, (ch) => (ch === "X" ? "#7fb4ff" : ch === "o" ? "#e8f4ff" : null)),
+  bowlFull: pixelIcon(BOWL_ROWS, (ch) => BOWL_COLORS[ch] || null),
+  // the row is mirrored (fills right-to-left), so the half bowl keeps its
+  // colored half toward the full end: the RIGHT side of the icon
+  bowlHalf: pixelIcon(BOWL_ROWS, (ch, x) => (BOWL_COLORS[ch] ? (x >= 3 ? BOWL_COLORS[ch] : "#3a3a44") : null)),
+  bowlEmpty: pixelIcon(BOWL_ROWS, (ch) => (BOWL_COLORS[ch] ? "#3a3a44" : null)),
 };
 
 export class Hud {
@@ -110,6 +119,7 @@ export class Hud {
     this.gameMode = "creative";
     this._lastHealth = -1;
     this._lastBubbles = -1;
+    this._lastHunger = -1;
 
     // one cursor-stack engine powers the inventory/chest/workbench windows
     this.slotUI = new SlotUI({
@@ -163,8 +173,10 @@ export class Hud {
     this.statusEl = document.getElementById("status");
     const hearts = document.getElementById("hearts");
     const bubbles = document.getElementById("bubbles");
+    const hunger = document.getElementById("hunger");
     this.heartEls = [];
     this.bubbleEls = [];
+    this.hungerEls = [];
     for (let i = 0; i < 10; i++) {
       const h = document.createElement("div");
       h.className = "icon";
@@ -175,6 +187,10 @@ export class Hud {
       b.style.backgroundImage = `url(${ICONS.bubble})`;
       bubbles.appendChild(b);
       this.bubbleEls.push(b);
+      const f = document.createElement("div");
+      f.className = "icon";
+      hunger.appendChild(f);
+      this.hungerEls.push(f);
     }
   }
 
@@ -184,6 +200,7 @@ export class Hud {
     this.statusEl.classList.toggle("hidden", mode !== "survival");
     this._lastHealth = -1;
     this._lastBubbles = -1;
+    this._lastHunger = -1;
     this.refreshCounts();
   }
 
@@ -195,6 +212,17 @@ export class Hud {
     for (let i = 0; i < 10; i++) {
       const state = half >= (i + 1) * 2 ? "Full" : half === i * 2 + 1 ? "Half" : "Empty";
       this.heartEls[i].style.backgroundImage = `url(${ICONS["heart" + state]})`;
+    }
+  }
+
+  setHunger(hunger) {
+    // ceil, like hearts: any nonzero hunger shows at least half a bowl
+    const half = Math.ceil(hunger - 1e-9);
+    if (half === this._lastHunger) return;
+    this._lastHunger = half;
+    for (let i = 0; i < 10; i++) {
+      const state = half >= (i + 1) * 2 ? "Full" : half === i * 2 + 1 ? "Half" : "Empty";
+      this.hungerEls[i].style.backgroundImage = `url(${ICONS["bowl" + state]})`;
     }
   }
 

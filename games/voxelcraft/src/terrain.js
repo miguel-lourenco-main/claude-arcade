@@ -6,7 +6,7 @@
 import {
   GRASS, DIRT, STONE, SAND, GRAVEL, LOG, LEAVES, LEAVES_COLD, WATER, BEDROCK,
   SNOWY_GRASS, TALLGRASS, POPPY, DANDELION, CACTUS, SANDSTONE, COAL_ORE,
-  IRON_ORE, AIR,
+  IRON_ORE, BERRY_BUSH, AIR,
 } from "./blocks.js";
 import { CHUNK, HEIGHT, SEA_LEVEL } from "./world.js";
 import { Perlin, hash2 } from "./noise.js";
@@ -194,6 +194,12 @@ export function makeGenerator(seed) {
         }
 
         if ((biome === "plains" || biome === "forest") && h > SEA_LEVEL + 1 && h + 1 < HEIGHT) {
+          // bog brambles: ~0.8% of grass columns carry a berry shrub
+          const rb = hash2(x, z, seed ^ 0xbe221);
+          if (rb < 0.008 && chunk.get(lx, h, lz) === GRASS && chunk.get(lx, h + 1, lz) === AIR) {
+            chunk.set(lx, h + 1, lz, BERRY_BUSH);
+            continue;
+          }
           const r = hash2(x, z, seed ^ 0xf10a);
           if (r < 0.076 && chunk.get(lx, h, lz) === GRASS && chunk.get(lx, h + 1, lz) === AIR) {
             if (r < 0.06) chunk.set(lx, h + 1, lz, TALLGRASS);

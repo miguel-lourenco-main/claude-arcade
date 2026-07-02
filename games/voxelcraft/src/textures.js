@@ -41,6 +41,10 @@ export const TILE = {
   SAPLING: 30,
   WORKBENCH_SIDE: 31,
   WORKBENCH_TOP: 32,
+  BERRIES: 33,
+  SNUFFET_LOIN: 34,
+  ROAST_LOIN: 35,
+  BERRY_BUSH: 36,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -347,6 +351,86 @@ const painters = {
     // corner brackets
     for (const [cx, cy] of [[0, 0], [14, 0], [0, 14], [14, 14]]) {
       p.px(cx, cy, 96, 96, 104); p.px(cx + 1, cy, 96, 96, 104); p.px(cx, cy + 1, 96, 96, 104);
+    }
+  },
+  [TILE.BERRIES](p) {
+    // a Wanderling handful of bog berries: three plump deep-red orbs with a
+    // marsh-green sprig, stamped like a field-journal specimen
+    p.clear();
+    const orbs = [[5, 9], [10, 9], [7, 12]];
+    for (const [cx, cy] of orbs) {
+      for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+        if (dx * dx + dy * dy > 5) continue;
+        const d = (p.rand() * 2 - 1) * 12;
+        p.px(cx + dx, cy + dy, 148 + d, 30 + d * 0.4, 52 + d * 0.5);
+      }
+      p.px(cx - 1, cy - 1, 214, 108, 128); // wet glint
+    }
+    // sprig
+    p.px(7, 6, 74, 112, 62); p.px(8, 5, 74, 112, 62); p.px(9, 4, 88, 128, 70);
+    p.px(8, 6, 60, 96, 52);
+  },
+  [TILE.SNUFFET_LOIN](p) {
+    // raw snuffet loin: rosy slab, pale fat marbling along the grain
+    p.clear();
+    for (let y = 4; y <= 12; y++) {
+      const w = y <= 5 || y >= 11 ? 1 : 0; // rounded ends
+      for (let x = 2 + w; x <= 13 - w; x++) {
+        const d = (p.rand() * 2 - 1) * 10;
+        const edge = y === 4 || y === 12 || x === 2 + w || x === 13 - w;
+        if (edge) p.px(x, y, 142 + d, 52 + d * 0.5, 58 + d * 0.5);
+        else p.px(x, y, 196 + d, 84 + d * 0.6, 92 + d * 0.6);
+      }
+    }
+    // marbling streaks
+    for (let x = 4; x <= 11; x += 3) {
+      for (let y = 6; y <= 10; y++) {
+        if (p.rand() < 0.7) p.px(x + ((y % 2) | 0), y, 236, 210, 200);
+      }
+    }
+  },
+  [TILE.ROAST_LOIN](p) {
+    // roast loin: the same slab, seared amber-brown with a dark crust
+    p.clear();
+    for (let y = 4; y <= 12; y++) {
+      const w = y <= 5 || y >= 11 ? 1 : 0;
+      for (let x = 2 + w; x <= 13 - w; x++) {
+        const d = (p.rand() * 2 - 1) * 10;
+        const edge = y === 4 || y === 12 || x === 2 + w || x === 13 - w;
+        if (edge) p.px(x, y, 88 + d * 0.5, 52 + d * 0.4, 26 + d * 0.3);
+        else p.px(x, y, 158 + d, 100 + d * 0.7, 46 + d * 0.5);
+      }
+    }
+    // sear lines across the grain
+    for (let x = 4; x <= 11; x += 3) {
+      for (let y = 6; y <= 10; y++) {
+        if (p.rand() < 0.75) p.px(x, y, 96, 58, 28);
+      }
+    }
+    // a curl of steam — it's still warm
+    p.px(6, 2, 226, 222, 214, 150); p.px(7, 1, 226, 222, 214, 120);
+    p.px(10, 2, 226, 222, 214, 150);
+  },
+  [TILE.BERRY_BUSH](p) {
+    // bog bramble: a squat dark marsh shrub speckled with ripe red berries
+    p.clear();
+    // woody stems
+    for (let i = 0; i < 5; i++) p.px(7 + (i > 2 ? 1 : 0), 15 - i, 82, 62, 40);
+    p.px(5, 12, 82, 62, 40); p.px(10, 12, 82, 62, 40);
+    // dense dark foliage blob
+    for (let y = 3; y <= 12; y++) {
+      const half = y <= 5 ? y - 1 : y >= 11 ? 13 - y : 5;
+      for (let x = 8 - half; x <= 8 + half - 1; x++) {
+        if (p.rand() < 0.14) continue; // ragged silhouette
+        const d = (p.rand() * 2 - 1) * 12;
+        p.px(x, y, 34 + d * 0.5, 74 + d, 44 + d * 0.5);
+      }
+    }
+    // ripe berries dotted through the dark leaves
+    const dots = [[5, 6], [9, 4], [11, 8], [6, 10], [8, 8], [12, 5], [4, 9]];
+    for (const [x, y] of dots) {
+      p.px(x, y, 176, 36, 58);
+      if (p.rand() < 0.5) p.px(x + 1, y, 140, 26, 46);
     }
   },
   [TILE.SAPLING](p) {

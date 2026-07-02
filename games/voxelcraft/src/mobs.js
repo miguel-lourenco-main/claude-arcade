@@ -4,7 +4,7 @@
 // and a rare shoreline bruiser. One shared physics/AI core.
 
 import * as THREE from "three";
-import { GRASS, SAND, WATER, COAL_ORE, TORCH, AIR, isSolid } from "./blocks.js";
+import { GRASS, SAND, WATER, COAL_ORE, TORCH, SNUFFET_LOIN, AIR, isSolid } from "./blocks.js";
 import { mulberry32 } from "./noise.js";
 
 const SPAWN_INTERVAL = 4;   // seconds between spawn attempts
@@ -22,6 +22,7 @@ export const SPECIES = {
   snuffet: {
     name: "Snuffet", hp: 3, speed: 1.4, behavior: "passive", habitat: "meadow",
     cap: 4, halfW: 0.35, height: 0.85, sound: "snuffle",
+    drops: [[SNUFFET_LOIN, 1]],
   },
   murkling: {
     name: "Murkling", hp: 6, speed: 2.6, behavior: "hostile", habitat: "night",

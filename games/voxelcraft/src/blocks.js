@@ -29,6 +29,10 @@ export const TORCH = 23;
 export const CHEST = 24;
 export const SAPLING = 25;
 export const WORKBENCH = 26;
+export const BERRIES = 27;
+export const SNUFFET_LOIN = 28;
+export const ROAST_LOIN = 29;
+export const BERRY_BUSH = 30;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -47,6 +51,8 @@ const def = (name, opts) => ({
   hardness: 1,       // survival mining time in seconds (Infinity = unbreakable)
   drops: undefined,  // survival drop: undefined = itself, null = nothing, id = that block
   tiles: null,       // {top, side, bottom}
+  placeable: true,   // false = an item that can never be placed in the world
+  food: null,        // {restore: N} — edible; N hunger points on eating
   ...opts,
 });
 
@@ -152,6 +158,47 @@ BLOCKS[SAPLING] = def("Oak Sapling", { hardness: 0.05,
 BLOCKS[WORKBENCH] = def("Workbench", { hardness: 1.4,
   tiles: cube({ top: TILE.WORKBENCH_TOP, side: TILE.WORKBENCH_SIDE, bottom: TILE.PLANKS }),
   sound: "wood",
+});
+// --- food items: carried and eaten, never placed ---
+BLOCKS[BERRIES] = def("Bog Berries", { hardness: 0.05,
+  tiles: cube(TILE.BERRIES),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  sound: "plant",
+  placeable: false,
+  food: { restore: 2 },
+});
+BLOCKS[SNUFFET_LOIN] = def("Snuffet Loin", { hardness: 0.05,
+  tiles: cube(TILE.SNUFFET_LOIN),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  sound: "plant",
+  placeable: false,
+  food: { restore: 3 },
+});
+BLOCKS[ROAST_LOIN] = def("Roast Loin", { hardness: 0.05,
+  tiles: cube(TILE.ROAST_LOIN),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  sound: "plant",
+  placeable: false,
+  food: { restore: 8 },
+});
+// the bramble never drops itself — it hands over its berries instead
+BLOCKS[BERRY_BUSH] = def("Bog Bramble", { hardness: 0.15, drops: BERRIES,
+  randomDrop: { id: BERRIES, chance: 0.5 }, // 1-2 berries per bush
+  tiles: cube(TILE.BERRY_BUSH),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  sound: "plant",
 });
 
 // Blocks offered in the hotbar picker (everything but air).

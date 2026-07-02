@@ -54,9 +54,13 @@ body {
   position: absolute; left: 50%; bottom: 66px;
   transform: translateX(-50%);
   width: 452px;
-  display: flex; justify-content: space-between; align-items: center;
+  display: flex; justify-content: space-between; align-items: flex-end;
 }
-#hearts, #bubbles { display: flex; gap: 2px; }
+#hearts, #bubbles, #hunger { display: flex; gap: 2px; }
+/* hunger sits on the hotbar row; bubbles stack one row up when visible */
+#status-right { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+/* mirrored: hunger depletes from the left, toward the screen center */
+#hunger { flex-direction: row-reverse; }
 #bubbles { transition: opacity 0.4s; }
 #status .icon {
   width: 18px; height: 16px;

@@ -4,11 +4,13 @@
 import * as THREE from "three";
 import { AIR, BEDROCK, CHEST, WORKBENCH, BLOCKS, isSolid, dropFor } from "./blocks.js";
 import { HEIGHT } from "./world.js";
-import { EYE_HEIGHT } from "./player.js";
+import { EYE_HEIGHT, MAX_HUNGER } from "./player.js";
 
 const REACH_CREATIVE = 5;
 const REACH_SURVIVAL = 4.5;
 const ACTION_REPEAT_MS = 240;
+const EAT_SECONDS = 1.2;      // hold right-click this long to finish a bite
+const CHEW_INTERVAL = 0.28;   // chewing sound cadence while eating
 
 // Amanatides & Woo voxel traversal.
 export function raycast(world, origin, dir, maxDist = REACH_CREATIVE) {
@@ -54,6 +56,7 @@ export class Interaction {
     this.onOpenChest = opts.onOpenChest;   // (x, y, z) => open chest UI (survival)
     this.onOpenBench = opts.onOpenBench;   // () => open workbench UI (survival)
     this.onChestBreak = opts.onChestBreak; // (x, y, z) => spill contents
+    this.onEat = opts.onEat;               // (kind) => chew/swallow sfx
     this.mobs = opts.mobs;           // Mobs instance (punching)
     this.avgColor = opts.avgColor;   // tile -> [r,g,b]
 
@@ -66,6 +69,11 @@ export class Interaction {
     this._mineKey = null;
     this._mineProgress = 0;
     this._hitSoundTimer = 0;
+
+    // eating state (hold right-click on a food item)
+    this.eating = false;
+    this._eatProgress = 0;
+    this._chewTimer = 0;
     this.crack = new THREE.Mesh(
       new THREE.BoxGeometry(1.004, 1.004, 1.004),
       new THREE.MeshBasicMaterial({
@@ -124,13 +132,16 @@ export class Interaction {
     const now = performance.now();
     if (survival) {
       this._updateMining(dt);
-      // place repeat still applies in survival
-      if (this.buttons.has(2) && now >= this._nextAction) {
+      this._updateEating(dt);
+      // place repeat still applies in survival (eating owns the button)
+      if (!this.eating && this.buttons.has(2) && now >= this._nextAction) {
         this._place();
         this._nextAction = now + ACTION_REPEAT_MS;
       }
     } else {
       this.crack.visible = false;
+      this.eating = false;
+      this._eatProgress = 0;
       // creative: hold-to-repeat + sweep-breaking
       if (this.buttons.size > 0 && now >= this._nextAction) {
         for (const b of this.buttons) this._act(b);
@@ -145,6 +156,44 @@ export class Interaction {
     }
 
     this.particles.update(dt);
+  }
+
+  // survival: hold RMB with a food item selected to eat it — a real per-frame
+  // progress timer, not the coarse place-repeat cadence
+  _updateEating(dt) {
+    const id = this.hotbar.selectedId();
+    const def = BLOCKS[id];
+    // right-click on a chest/workbench still opens it, food in hand or not
+    const t = this.target;
+    const interactive = t && (t.id === CHEST || t.id === WORKBENCH) && !this.player._sneaking;
+    const wants = this.buttons.has(2) && def && def.food && !interactive &&
+      this.player.hunger < MAX_HUNGER - 1e-9;
+    if (!wants) {
+      this.eating = false;
+      this._eatProgress = 0;
+      return;
+    }
+    if (!this.eating) {
+      this.eating = true;
+      this._eatProgress = 0;
+      this._chewTimer = 0;
+    }
+    this._eatProgress += dt;
+    this._chewTimer -= dt;
+    if (this._chewTimer <= 0) {
+      this._chewTimer = CHEW_INTERVAL;
+      if (this.onEat) this.onEat("chew");
+      if (this.onSwing) this.onSwing();
+    }
+    if (this._eatProgress >= EAT_SECONDS) {
+      this._eatProgress = 0;
+      // consume LAST: a failed take (stale slot) must not feed the player
+      if (this.canConsume(id) && this.player.eat(def.food.restore)) {
+        if (this.onEat) this.onEat("swallow");
+      } else {
+        this.eating = false;
+      }
+    }
   }
 
   // survival: hold LMB on a block until its hardness timer completes
@@ -276,6 +325,8 @@ export class Interaction {
     const id = this.hotbar.selectedId();
     if (id === AIR) return;
     const def = BLOCKS[id];
+    // items (food etc.) can never be placed — not even in creative
+    if (def.placeable === false) return;
 
     let px = t.x, py = t.y, pz = t.z;
     const targetDef = BLOCKS[t.id];

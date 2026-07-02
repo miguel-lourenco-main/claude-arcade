@@ -89,6 +89,10 @@ if (save && Number.isFinite(save.health)) {
 if (save && Number.isFinite(save.air)) {
   player.air = Math.min(player.maxAir, Math.max(0, save.air));
 }
+// hunger is an additive v2 field: saves from before it default to well-fed
+if (save && Number.isFinite(save.hunger)) {
+  player.hunger = Math.min(20, Math.max(0, save.hunger));
+}
 
 const inventory = new Inventory();
 let migrationOverflow = [];
@@ -315,6 +319,7 @@ const interaction = new Interaction(world, player, scene, hud, {
     }
   },
   onSound: (kind, id) => sfx.block(kind, id),
+  onEat: (kind) => sfx.eat(kind),
   onPick: (id) => hud.pickBlock(id),
   onSwing: () => { swingT = 0; playerModel.swing(); },
   // placement consumes from the SELECTED HOTBAR SLOT only
@@ -651,6 +656,7 @@ function tick(now) {
 
   if (player.mode === "survival") {
     hud.setHealth(player.health);
+    hud.setHunger(player.hunger);
     hud.setAir(player.air, player.maxAir, player.eyeInWater);
   }
 
@@ -732,7 +738,7 @@ function tick(now) {
       `xyz: ${p.x.toFixed(2)} / ${p.y.toFixed(2)} / ${p.z.toFixed(2)}`,
       `chunk: ${Math.floor(p.x / CHUNK)} ${Math.floor(p.z / CHUNK)}  loaded: ${world.chunks.size}`,
       `biome: ${terrain.biomeAt(bx, bz, h)}  facing: ${facing()}  move: ${player.moveMode}`,
-      `time: ${clock()}  ${player.flying ? "[flying]" : player.onGround ? "[ground]" : "[air]"}${player.inWater ? " [water]" : ""}  mode: ${player.mode}${player.mode === "survival" ? ` hp:${player.health.toFixed(0)}` : ""}`,
+      `time: ${clock()}  ${player.flying ? "[flying]" : player.onGround ? "[ground]" : "[air]"}${player.inWater ? " [water]" : ""}  mode: ${player.mode}${player.mode === "survival" ? ` hp:${player.health.toFixed(0)} food:${player.hunger.toFixed(1)}` : ""}`,
       `target: ${interaction.target ? BLOCKS[interaction.target.id].name : "none"}`,
     ], true);
   } else {

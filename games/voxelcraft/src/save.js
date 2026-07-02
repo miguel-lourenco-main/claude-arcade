@@ -35,6 +35,7 @@ export function writeSave(world, player, sky, hud, inventory, extra = {}) {
       sensitivity: player.sensitivity,
       gameMode: player.mode,
       health: player.health,
+      hunger: player.hunger,
       air: player.air,
       inventory: inventory ? inventory.serialize() : [],
       selected: hud.selected,

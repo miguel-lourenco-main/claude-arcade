@@ -24,10 +24,17 @@ const STEP_DISTANCE = 2.2;        // blocks walked between footstep sounds
 
 // survival ("normal") limitations
 export const MAX_HEALTH = 20;     // 10 hearts
+export const MAX_HUNGER = 20;     // 10 bowls
 const AIR_SECONDS = 15;           // breath underwater before drowning
 const FALL_SAFE = 3;              // blocks of fall that deal no damage (MC rule)
 const REGEN_DELAY = 5;            // seconds after damage before regen starts
-const REGEN_RATE = 0.5;           // HP per second (no hunger system, peaceful-style)
+const REGEN_RATE = 0.5;           // HP per second, gated on a well-fed satchel
+const REGEN_MIN_HUNGER = 18;      // regen only while this fed or better
+const REGEN_HUNGER_COST = 0.4;    // hunger spent per HP healed
+const HUNGER_PASSIVE = 0.02;      // hunger per second while doing anything
+const HUNGER_SPRINT = 0.06;       // extra hunger per second while sprinting
+const HUNGER_JUMP = 0.12;         // hunger per jump
+const STARVE_INTERVAL = 2.5;      // seconds between starvation ticks at 0 hunger
 
 // horizontal acceleration (blocks/s²): crisp starts, crisper stops on ground,
 // deliberately weaker steering in the air — replaces the old exponential
@@ -67,6 +74,7 @@ export class Player {
     // survival state ("creative" ignores all of it)
     this.mode = "creative";     // "creative" | "survival"
     this.health = MAX_HEALTH;
+    this.hunger = MAX_HUNGER;
     this.air = AIR_SECONDS;
     this.dead = false;
     this.onDamage = null;       // (amount, cause) => void
@@ -76,6 +84,7 @@ export class Player {
     this._drownTimer = 0;
     this._cactusTimer = 0;
     this._voidTimer = 0;
+    this._starveTimer = 0;
   }
 
   get maxAir() { return AIR_SECONDS; }
@@ -97,6 +106,7 @@ export class Player {
     Object.assign(this.pos, spawnPoint);
     this.vel.x = this.vel.y = this.vel.z = 0;
     this.health = MAX_HEALTH;
+    this.hunger = MAX_HUNGER;
     this.air = AIR_SECONDS;
     this.dead = false;
     this.flying = false;
@@ -296,6 +306,9 @@ export class Player {
       if (jumping && this.onGround) {
         this.vel.y = JUMP_SPEED;
         this.onGround = false;
+        if (this.mode === "survival") {
+          this.hunger = Math.max(0, this.hunger - HUNGER_JUMP);
+        }
       }
     }
 
@@ -375,10 +388,40 @@ export class Player {
       this._voidTimer = 0;
     }
 
-    // passive regen (no hunger system — peaceful-style)
-    if (!this.dead && this.health < MAX_HEALTH && this._sinceDamage > REGEN_DELAY) {
-      this.health = Math.min(MAX_HEALTH, this.health + REGEN_RATE * dt);
+    // hunger drain: nothing while standing perfectly still, a slow burn
+    // while doing anything, extra while sprinting (jumps charge separately)
+    const idle = Math.hypot(this.vel.x, this.vel.z) < 0.05 && Math.abs(this.vel.y) < 0.05;
+    if (!idle) {
+      let drain = HUNGER_PASSIVE;
+      if (this.sprintActive) drain += HUNGER_SPRINT;
+      this.hunger = Math.max(0, this.hunger - drain * dt);
     }
+
+    // starvation: an empty satchel gnaws down to (never below) half a heart
+    if (this.hunger <= 0) {
+      this._starveTimer += dt;
+      if (this._starveTimer >= STARVE_INTERVAL) {
+        this._starveTimer -= STARVE_INTERVAL;
+        if (this.health > 1) this.damage(Math.min(1, this.health - 1), "starvation");
+      }
+    } else {
+      this._starveTimer = 0;
+    }
+
+    // passive regen: requires a well-fed Wanderling, and healing costs food
+    if (!this.dead && this.health < MAX_HEALTH && this._sinceDamage > REGEN_DELAY &&
+        this.hunger >= REGEN_MIN_HUNGER) {
+      const heal = Math.min(REGEN_RATE * dt, MAX_HEALTH - this.health);
+      this.health += heal;
+      this.hunger = Math.max(0, this.hunger - heal * REGEN_HUNGER_COST);
+    }
+  }
+
+  // eat a food item: restore hunger (clamped). Returns false at full hunger.
+  eat(restore) {
+    if (this.hunger >= MAX_HUNGER - 1e-9) return false;
+    this.hunger = Math.min(MAX_HUNGER, this.hunger + restore);
+    return true;
   }
 
   _touchesCactus() {
