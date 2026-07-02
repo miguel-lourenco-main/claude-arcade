@@ -9,6 +9,7 @@ import { Inventory } from "./inventory.js";
 import { ItemDrops } from "./entities.js";
 import { Mobs } from "./mobs.js";
 import { craft } from "./craft.js";
+import { makeKiln, tickKilns } from "./kiln.js";
 import { PlayerModel, buildHeldFoot, setHeldSkinLight } from "./player-model.js";
 import { PlayerViewer } from "./player-viewer.js";
 import { SAPLING, LOG, LEAVES, LEAVES_COLD, WATER as WATER_ID, dropFor } from "./blocks.js";
@@ -116,6 +117,7 @@ for (const stack of migrationOverflow) {
 }
 const mobs = new Mobs(scene);
 if (save && save.chests) world.loadChests(save.chests);
+if (save && save.kilns) world.loadKilns(save.kilns); // additive v2 field
 
 // --- saplings: planted ones grow into real (edit-persisted) trees ----------
 
@@ -338,6 +340,23 @@ const interaction = new Interaction(world, player, scene, hud, {
     hud.openChest(store, () => {});
   },
   onOpenBench: () => hud.openBench(),
+  onOpenKiln: (x, y, z) => {
+    const key = `${x},${y},${z}`;
+    let kiln = world.kilns.get(key);
+    if (!kiln) { kiln = makeKiln(); world.kilns.set(key, kiln); }
+    hud.openKiln(kiln);
+  },
+  onKilnBreak: (x, y, z) => {
+    const key = `${x},${y},${z}`;
+    const kiln = world.kilns.get(key);
+    if (kiln) {
+      for (const s of kiln.slots) {
+        if (s) drops.spawn(x + 0.5, y + 0.6, z + 0.5, s.id, s.count);
+      }
+      world.kilns.delete(key);
+    }
+    if (hud.kilnOpen) { hud.closeKiln(); requestLock(); }
+  },
   onChestBreak: (x, y, z) => {
     const key = `${x},${y},${z}`;
     const store = world.chests.get(key);
@@ -653,6 +672,13 @@ function tick(now) {
     }
   }
   mobs.setLight(sky.lightLevel, sky.lightTint);
+
+  // kilns burn whenever the game is up — including while a window is open
+  // (the whole point: watch the smelt arrow fill). Paused = time stops.
+  if (!hud.paused) {
+    if (tickKilns(world.kilns, frameDt) && hud.kilnOpen) hud.slotUI.renderAll();
+    hud.updateKilnView();
+  }
 
   if (player.mode === "survival") {
     hud.setHealth(player.health);

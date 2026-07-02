@@ -1,10 +1,11 @@
 // Survival crafting: flat recipe list (no crafting-table grid — no tools or
 // intermediate items exist, so shapes would add ceremony without depth).
-// Smelting-style conversions are folded in as recipes for the same reason.
+// Heat conversions (sand -> glass, cobblestone -> stone, ores, cooking) are
+// NOT recipes — they belong to the Kiln (see kiln.js).
 
 import {
-  LOG, PLANKS, SAND, GLASS, COBBLE, STONE, BRICKS, SANDSTONE, COAL_ORE,
-  TORCH, CHEST, WORKBENCH,
+  LOG, PLANKS, SAND, COBBLE, STONE, BRICKS, SANDSTONE, COAL_ORE,
+  TORCH, CHEST, WORKBENCH, KILN,
 } from "./blocks.js";
 
 // in: [[blockId, count], ...]  out: [blockId, count]
@@ -14,9 +15,8 @@ export const RECIPES = [
   { in: [[PLANKS, 4]], out: [WORKBENCH, 1], basic: true }, // the bootstrap path
   { in: [[COAL_ORE, 1], [PLANKS, 1]], out: [TORCH, 4], basic: true },
   { in: [[PLANKS, 8]], out: [CHEST, 1] },
-  { in: [[SAND, 1]], out: [GLASS, 1] },
+  { in: [[COBBLE, 8]], out: [KILN, 1] },
   { in: [[SAND, 4]], out: [SANDSTONE, 1] },
-  { in: [[COBBLE, 1]], out: [STONE, 1] },
   { in: [[STONE, 4]], out: [BRICKS, 4] },
 ];
 

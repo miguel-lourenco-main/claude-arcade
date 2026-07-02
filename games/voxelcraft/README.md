@@ -53,19 +53,28 @@ canvas atlas at boot, and every sound is synthesized with WebAudio.
   collectible items (MC rules: stone → cobblestone, grass → dirt, leaves and
   glass → nothing) that magnetize into a counted inventory; placing consumes
   them and the picker becomes your inventory. No flying, shorter reach.
-  Simplifications: no hunger (no food exists) and no tools (hand-mining times
-  are scaled to stay fun). Toggle Creative/Survival any time in the pause
-  menu; pre-survival saves stay creative.
+  Simplification: no tools (hand-mining times are scaled to stay fun).
+  Toggle Creative/Survival any time in the pause menu; pre-survival saves
+  stay creative.
 - **Getting around** — new worlds spawn in a forest; the pause menu has
   teleport buttons (spawn, forest, plains, desert, snow, mountain, ocean) that
   search the world outward from where you stand.
 - **First-person hand** — the selected block bobs in your hand and swings on
   every break/place.
-- **Crafting** — a flat recipe list in the survival inventory (E): log → 4
-  planks, 8 planks → chest, coal ore + planks → 4 torches, sand → glass,
-  4 sand → sandstone, cobblestone → stone, 4 stone → 4 bricks. Smelting is
-  folded into recipes (no furnace) and there's no crafting grid — with no
-  tools or intermediate items, shapes would be ceremony without depth.
+- **Crafting** — a flat recipe list (field recipes in the inventory, the full
+  cookbook at a workbench): log → 4 planks, 4 planks → workbench, coal ore +
+  planks → 4 torches, 8 planks → chest, 8 cobblestone → kiln, 4 sand →
+  sandstone, 4 stone → 4 bricks. There's no crafting grid — with no tools or
+  intermediate items, shapes would be ceremony without depth.
+- **The Kiln — smelting** — craft one from 8 cobblestone and right-click it:
+  three slots (input over fuel, take-only output) with a live smelt-progress
+  arrow and an ember that lights while the fire burns. Smelts: sand → glass,
+  cobblestone → stone, iron ore → iron block, snuffet loin → roast loin
+  (10 s each). Fuel: coal ore (80 s), log (15 s), planks (8 s) — once lit, the
+  fire keeps burning even with nothing on it. Kilns keep working while the
+  window is open, persist their contents (and remaining burn) in the save,
+  and spill everything when broken. Shift-click routes smeltables to the
+  input and fuel to the fire.
 - **Chests** — craft and place them, right-click to open (sneak-place to
   build against them), click stacks to move them between chest and
   inventory. Contents persist in the save and spill out as drops when the
@@ -75,12 +84,12 @@ canvas atlas at boot, and every sound is synthesized with WebAudio.
   edits, so they persist like anything you build.
 - **Mobs** — blocky pigs wander the grass around you: idle/walk AI, real
   collision with 1-block hops, occasional oinks, day/night shading. Punch
-  them (3 HP) and they knock back; no drops — there's nothing to cook them
-  on yet.
+  them (3 HP) and they knock back; grazers drop a snuffet loin you can roast
+  in the kiln.
 - **Persistence** — seed, player state, hotbar, movement mode, game mode,
-  health/air, inventory, chest contents, growing saplings, time of day, and
-  every block edit autosaved to localStorage (validated on load). Reset from
-  the pause menu.
+  health/air/hunger, inventory, chest contents, kiln contents + burn state,
+  growing saplings, time of day, and every block edit autosaved to
+  localStorage (validated on load). Reset from the pause menu.
 
 ## Controls
 
@@ -109,6 +118,7 @@ src/terrain.js    heightmap/biomes/caves/trees — pure fn of (x,z,seed)
 src/mesher.js     culled faces + vertex AO -> 3 geometry buckets
 src/player.js     pointer-lock look + AABB physics
 src/interact.js   voxel raycast, break/place/pick, particles
+src/kiln.js       smelting: per-kiln slots + burn/progress timers
 src/hud.js        hotbar, picker, debug, overlays (DOM)
 src/sky.js        day/night lights, stars, clouds, fog
 src/audio.js      WebAudio noise-burst SFX

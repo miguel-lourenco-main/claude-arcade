@@ -45,6 +45,9 @@ export const TILE = {
   SNUFFET_LOIN: 34,
   ROAST_LOIN: 35,
   BERRY_BUSH: 36,
+  KILN_SIDE: 37,
+  KILN_TOP: 38,
+  IRON_BLOCK: 39,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -431,6 +434,76 @@ const painters = {
     for (const [x, y] of dots) {
       p.px(x, y, 176, 36, 58);
       if (p.rand() < 0.5) p.px(x + 1, y, 140, 26, 46);
+    }
+  },
+  [TILE.KILN_SIDE](p) {
+    // the Kiln's stone belly: rounded field stones packed in dark grout, with
+    // a warm ember mouth glowing low on every face
+    p.noiseFill([96, 92, 90], 8);
+    const stones = [[2, 2, 3], [8, 1, 3], [14, 2, 3], [1, 7, 3], [14, 8, 3], [2, 13, 3], [13, 13, 3]];
+    for (const [sx, sy, r] of stones) {
+      for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) {
+        if (x * x + y * y > r * r) continue;
+        const tx = sx + x, ty = sy + y;
+        if (tx < 0 || ty < 0 || tx >= TILE_PX || ty >= TILE_PX) continue;
+        const edge = x * x + y * y > (r - 1) * (r - 1);
+        const base = edge ? 78 : 118 + p.rand() * 14;
+        p.px(tx, ty, base + 6, base + 2, base);
+      }
+    }
+    // the mouth: an arched opening, sooty at the top
+    for (let y = 7; y <= 13; y++) {
+      const half = y === 7 ? 2 : y === 8 ? 3 : 4;
+      for (let x = 8 - half; x <= 7 + half; x++) {
+        const soot = (p.rand() * 2 - 1) * 6;
+        p.px(x, y, 24 + soot, 18 + soot, 16 + soot);
+      }
+    }
+    // banked embers along the mouth floor, breathing heat up the arch
+    for (let x = 4; x <= 11; x++) {
+      if (p.rand() < 0.8) p.px(x, 13, 216 + p.rand() * 39, 90 + p.rand() * 40, 22);
+      if (p.rand() < 0.45) p.px(x, 12, 255, 150 + p.rand() * 50, 44);
+    }
+    p.px(7, 11, 255, 196, 84); p.px(8, 12, 255, 214, 110);
+    // warm rim light where firelight licks the stones around the opening
+    for (const [x, y] of [[5, 6], [6, 6], [7, 6], [8, 6], [9, 6], [10, 6], [3, 9], [12, 9], [3, 11], [12, 11]]) {
+      p.px(x, y, 150 + p.rand() * 20, 108 + p.rand() * 14, 78);
+    }
+  },
+  [TILE.KILN_TOP](p) {
+    // stone cap with a round draft-hole venting a faint glow
+    p.noiseFill([112, 108, 105], 8);
+    p.speckle(14, [92, 90, 88], 8);
+    for (let i = 0; i < TILE_PX; i++) {
+      const d = (p.rand() * 2 - 1) * 6;
+      p.px(i, 0, 84 + d, 80 + d, 78 + d); p.px(i, 15, 84 + d, 80 + d, 78 + d);
+      p.px(0, i, 84 + d, 80 + d, 78 + d); p.px(15, i, 84 + d, 80 + d, 78 + d);
+    }
+    for (let y = 6; y <= 9; y++) for (let x = 6; x <= 9; x++) {
+      const corner = (x === 6 || x === 9) && (y === 6 || y === 9);
+      if (corner) continue;
+      p.px(x, y, 26, 20, 18);
+    }
+    p.px(7, 8, 208, 96, 30); p.px(8, 8, 174, 74, 26); // embers deep below
+  },
+  [TILE.IRON_BLOCK](p) {
+    // dense riveted plate: brushed pale iron, seamed edges, corner rivets
+    for (let y = 0; y < TILE_PX; y++) {
+      for (let x = 0; x < TILE_PX; x++) {
+        const d = (p.rand() * 2 - 1) * 4;
+        const brush = y % 3 === 1 ? 6 : 0; // faint horizontal brushing
+        p.px(x, y, 186 + d + brush, 190 + d + brush, 198 + d + brush);
+      }
+    }
+    // seam frame one texel in from the edge
+    for (let i = 1; i < 15; i++) {
+      p.px(i, 1, 142, 146, 156); p.px(i, 14, 128, 132, 142);
+      p.px(1, i, 142, 146, 156); p.px(14, i, 128, 132, 142);
+    }
+    // rivets: a bright cap pixel with a shadow below
+    for (const [rx, ry] of [[3, 3], [12, 3], [3, 12], [12, 12], [7, 7], [8, 8]]) {
+      p.px(rx, ry, 226, 230, 238);
+      p.px(rx, ry + 1, 120, 124, 134);
     }
   },
   [TILE.SAPLING](p) {

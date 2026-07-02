@@ -133,9 +133,9 @@ body {
   background: #16191f; border: 1px solid #2a2f38; border-radius: 8px;
   padding: 20px; min-width: 520px; max-height: 70vh; overflow-y: auto;
 }
-#chest-panel h2, #bench-panel h2 { color: #e8eaed; font-size: 16px; margin-bottom: 14px; }
-#chest-panel .hint, #bench-panel .hint { color: #7c8592; font-size: 12px; font-weight: normal; }
-#chest-panel h3, #bench-panel h3 {
+#chest-panel h2, #bench-panel h2, #kiln-panel h2 { color: #e8eaed; font-size: 16px; margin-bottom: 14px; }
+#chest-panel .hint, #bench-panel .hint, #kiln-panel .hint { color: #7c8592; font-size: 12px; font-weight: normal; }
+#chest-panel h3, #bench-panel h3, #kiln-panel h3 {
   color: #9aa3af; font-size: 12px; text-transform: uppercase;
   letter-spacing: 1px; margin-bottom: 8px;
 }
@@ -151,6 +151,47 @@ body {
 }
 #bench-cols { display: grid; grid-template-columns: 280px auto; gap: 24px; }
 #bench-book { max-height: 60vh; overflow-y: auto; }
+
+/* ---- kiln UI ---- */
+
+#kiln-ui {
+  position: fixed; inset: 0; z-index: 12;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(8, 10, 14, 0.72);
+}
+#kiln-panel {
+  background: #16191f; border: 1px solid #2a2f38; border-radius: 8px;
+  padding: 20px; min-width: 520px; max-height: 84vh; overflow-y: auto;
+}
+#kiln-machine {
+  display: flex; align-items: center; gap: 20px;
+  margin-bottom: 18px; padding: 8px 4px;
+}
+#kiln-stack { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.slot-grid.one { grid-template-columns: 46px; margin-bottom: 0; }
+/* the fire between the input and fuel slots: cold slate, lit ember */
+#kiln-ember {
+  width: 14px; height: 14px;
+  border-radius: 50% 50% 3px 3px;
+  background: #3a3a44;
+  transition: background 0.3s, box-shadow 0.3s;
+}
+#kiln-ember.lit {
+  background: radial-gradient(circle at 50% 70%, #ffd27a 0%, #ff9a3c 55%, #c5501f 100%);
+  box-shadow: 0 0 12px 2px rgba(255, 150, 60, 0.55);
+}
+/* smelt-progress arrow: fills left-to-right over the 10s smelt */
+#kiln-arrow {
+  width: 120px; height: 10px;
+  border: 1px solid #2a2f38; border-radius: 5px;
+  background: rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+#kiln-progress {
+  height: 100%; width: 0;
+  background: linear-gradient(90deg, #c56a2b, #ffb45c);
+  transition: width 0.15s linear;
+}
 
 #block-name {
   position: absolute; left: 50%; bottom: 76px;

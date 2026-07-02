@@ -6,7 +6,7 @@
 
 import { MAX_STACK } from "./inventory.js";
 
-// region: { name, size, get(i), set(i, stack|null), readonly? }
+// region: { name, size, get(i), set(i, stack|null), palette?, takeOnly? }
 export function invRegion(name, inventory, offset, length) {
   return {
     name,
@@ -22,6 +22,18 @@ export function arrayRegion(name, slots) {
     size: slots.length,
     get: (i) => slots[i] || null,
     set: (i, s) => { slots[i] = s ? { id: s.id, count: Math.min(MAX_STACK, s.count) } : null; },
+  };
+}
+
+// a 1-slot window onto slots[index] (kiln input/fuel/output). opts can add
+// takeOnly: clicks may only ever REMOVE items (see _clickTakeOnly)
+export function slotRegion(name, slots, index, opts = {}) {
+  return {
+    name,
+    size: 1,
+    ...opts,
+    get: () => slots[index] || null,
+    set: (_, s) => { slots[index] = s ? { id: s.id, count: Math.min(MAX_STACK, s.count) } : null; },
   };
 }
 
@@ -139,10 +151,28 @@ export class SlotUI {
   click(region, i, button, shift) {
     if (region.palette) this._clickPalette(region, i);
     else if (shift) this._quickMoveFrom(region, i);
+    else if (region.takeOnly) this._clickTakeOnly(region, i, button);
     else if (button === 2) this._rightClick(region, i);
     else this._leftClick(region, i);
     this.renderAll();
     this.onChange();
+  }
+
+  // take-only slot (kiln output): clicks only ever remove items. Placing is a
+  // handled no-op here — NOT an ignoring set() — because the normal click
+  // paths null the cursor after set(), which would destroy the held stack.
+  _clickTakeOnly(region, i, button) {
+    const s = region.get(i);
+    if (!s) return;
+    if (!this.cursor) {
+      const take = button === 2 ? Math.ceil(s.count / 2) : s.count;
+      this.cursor = { id: s.id, count: take };
+      region.set(i, s.count - take > 0 ? { id: s.id, count: s.count - take } : null);
+    } else if (this.cursor.id === s.id && this.cursor.count < MAX_STACK) {
+      const move = Math.min(MAX_STACK - this.cursor.count, s.count);
+      this.cursor.count += move;
+      region.set(i, s.count - move > 0 ? { id: s.id, count: s.count - move } : null);
+    }
   }
 
   _clickPalette(region, i) {
@@ -195,7 +225,10 @@ export class SlotUI {
   _quickMoveFrom(region, i) {
     const s = region.get(i);
     if (!s) return;
-    const targets = this._quickMove[region.name] || [];
+    // a quickMove entry may be a function of the stack — the kiln routes
+    // smeltables to its input and fuels to its fuel slot by id
+    let targets = this._quickMove[region.name] || [];
+    if (typeof targets === "function") targets = targets(s) || [];
     let left = s.count;
     // merge pass, then empty-fill pass, across targets in order
     for (const pass of ["merge", "fill"]) {

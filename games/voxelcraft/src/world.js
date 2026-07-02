@@ -37,6 +37,7 @@ export class World {
     this.chunks = new Map();          // chunkKey -> Chunk
     this.edits = new Map();           // chunkKey -> Map(blockIndex -> id)
     this.chests = new Map();          // "x,y,z" -> Array(>=27) of null|{id,count}
+    this.kilns = new Map();           // "x,y,z" -> {slots:[in,fuel,out], burnLeft, progress}
     this.generator = null;            // set by terrain.js
     this._lastChunk = null;           // 1-entry lookup cache (meshing/physics locality)
   }
@@ -84,6 +85,37 @@ export class World {
       if (!slots) continue;
       while (slots.length < 27) slots.push(null);
       if (slots.some((s) => s)) this.chests.set(pair[0], slots);
+    }
+  }
+
+  // kilns (additive save field): {slots: [in, fuel, out] as [id,count]|0,
+  // burn: seconds of heat left, prog: smelt progress seconds}
+  serializeKilns() {
+    return [...this.kilns].map(([key, k]) => [key, {
+      slots: k.slots.map((s) => (s ? [s.id, s.count] : 0)),
+      burn: Math.max(0, k.burnLeft),
+      prog: Math.max(0, k.progress),
+    }]);
+  }
+
+  loadKilns(arr) {
+    if (!Array.isArray(arr)) return;
+    for (const pair of arr) {
+      if (!Array.isArray(pair) || typeof pair[0] !== "string") continue;
+      const payload = pair[1];
+      if (!payload || !Array.isArray(payload.slots)) continue;
+      const slots = payload.slots.slice(0, 3).map((e) => {
+        if (!Array.isArray(e)) return null;
+        const [id, n] = e;
+        if (!Number.isInteger(id) || !BLOCKS[id] || !Number.isInteger(n) || n <= 0) return null;
+        return { id, count: Math.min(64, n) };
+      });
+      while (slots.length < 3) slots.push(null);
+      const burnLeft = Number.isFinite(payload.burn) ? Math.max(0, payload.burn) : 0;
+      const progress = Number.isFinite(payload.prog) ? Math.max(0, payload.prog) : 0;
+      // an empty, cold kiln carries no state worth keeping
+      if (!slots.some((s) => s) && burnLeft <= 0) continue;
+      this.kilns.set(pair[0], { slots, burnLeft, progress });
     }
   }
 

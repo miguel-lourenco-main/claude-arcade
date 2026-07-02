@@ -2,7 +2,7 @@
 // with hold-repeat, pick-block, and break particles.
 
 import * as THREE from "three";
-import { AIR, BEDROCK, CHEST, WORKBENCH, BLOCKS, isSolid, dropFor } from "./blocks.js";
+import { AIR, BEDROCK, CHEST, WORKBENCH, KILN, BLOCKS, isSolid, dropFor } from "./blocks.js";
 import { HEIGHT } from "./world.js";
 import { EYE_HEIGHT, MAX_HUNGER } from "./player.js";
 
@@ -55,7 +55,9 @@ export class Interaction {
     this.onSpawnDrop = opts.onSpawnDrop; // (x, y, z, id) => item drop entity
     this.onOpenChest = opts.onOpenChest;   // (x, y, z) => open chest UI (survival)
     this.onOpenBench = opts.onOpenBench;   // () => open workbench UI (survival)
+    this.onOpenKiln = opts.onOpenKiln;     // (x, y, z) => open kiln UI (survival)
     this.onChestBreak = opts.onChestBreak; // (x, y, z) => spill contents
+    this.onKilnBreak = opts.onKilnBreak;   // (x, y, z) => spill kiln slots
     this.onEat = opts.onEat;               // (kind) => chew/swallow sfx
     this.mobs = opts.mobs;           // Mobs instance (punching)
     this.avgColor = opts.avgColor;   // tile -> [r,g,b]
@@ -163,9 +165,10 @@ export class Interaction {
   _updateEating(dt) {
     const id = this.hotbar.selectedId();
     const def = BLOCKS[id];
-    // right-click on a chest/workbench still opens it, food in hand or not
+    // right-click on a chest/workbench/kiln still opens it, food in hand or not
     const t = this.target;
-    const interactive = t && (t.id === CHEST || t.id === WORKBENCH) && !this.player._sneaking;
+    const interactive = t && (t.id === CHEST || t.id === WORKBENCH || t.id === KILN) &&
+      !this.player._sneaking;
     const wants = this.buttons.has(2) && def && def.food && !interactive &&
       this.player.hunger < MAX_HUNGER - 1e-9;
     if (!wants) {
@@ -249,6 +252,7 @@ export class Interaction {
   // survival break: remove the block, spawn its drop (and the popped plant's)
   _completeBreak(t) {
     if (t.id === CHEST && this.onChestBreak) this.onChestBreak(t.x, t.y, t.z);
+    if (t.id === KILN && this.onKilnBreak) this.onKilnBreak(t.x, t.y, t.z);
     const affected = this.world.setBlock(t.x, t.y, t.z, AIR);
     const above = this.world.getBlock(t.x, t.y + 1, t.z);
     let popped = null;
@@ -295,6 +299,7 @@ export class Interaction {
     if (!t) return;
     if (t.id === BEDROCK) return; // the world floor is indestructible
     if (t.id === CHEST && this.onChestBreak) this.onChestBreak(t.x, t.y, t.z);
+    if (t.id === KILN && this.onKilnBreak) this.onKilnBreak(t.x, t.y, t.z);
     this._lastBreakKey = `${t.x},${t.y},${t.z}`;
     const def = BLOCKS[t.id];
     const affected = this.world.setBlock(t.x, t.y, t.z, AIR);
@@ -320,6 +325,10 @@ export class Interaction {
     }
     if (t.id === WORKBENCH && this.player.mode === "survival" && !this.player._sneaking && this.onOpenBench) {
       this.onOpenBench();
+      return;
+    }
+    if (t.id === KILN && this.player.mode === "survival" && !this.player._sneaking && this.onOpenKiln) {
+      this.onOpenKiln(t.x, t.y, t.z);
       return;
     }
     const id = this.hotbar.selectedId();

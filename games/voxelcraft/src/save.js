@@ -24,6 +24,7 @@ export function writeSave(world, player, sky, hud, inventory, extra = {}) {
       seed: world.seed,
       time: sky.time,
       chests: world.serializeChests(),
+      kilns: world.serializeKilns(), // additive: absent in older saves
       saplings: extra.saplings || [],
       player: {
         x: player.pos.x, y: player.pos.y, z: player.pos.z,

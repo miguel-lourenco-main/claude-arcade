@@ -4,7 +4,8 @@
 import { BLOCKS, PLACEABLE, AIR } from "./blocks.js";
 import { ATLAS_TILES, TILE_PX } from "./textures.js";
 import { RECIPES, BASIC_RECIPES, canCraft } from "./craft.js";
-import { SlotUI, invRegion, arrayRegion, paletteRegion } from "./slotui.js";
+import { SMELTS, FUEL_SECONDS, SMELT_SECONDS } from "./kiln.js";
+import { SlotUI, invRegion, arrayRegion, paletteRegion, slotRegion } from "./slotui.js";
 
 const ICON = 40;
 
@@ -115,6 +116,8 @@ export class Hud {
     this.pickerOpen = false;
     this.chestOpen = false;
     this.benchOpen = false;
+    this.kilnOpen = false;
+    this._kiln = null; // live kiln state while the window is open
     this.paused = true; // the boot overlay is showing
     this.gameMode = "creative";
     this._lastHealth = -1;
@@ -525,12 +528,65 @@ export class Hud {
     document.getElementById("bench-ui").classList.add("hidden");
   }
 
-  anyWindowOpen() { return this.pickerOpen || this.chestOpen || this.benchOpen; }
+  // kiln window: input over fuel, smelt-progress arrow, take-only output,
+  // plus the usual satchel + belt. `kiln` is the live per-block state object
+  // (world.kilns entry) — the tick in main.js mutates it while we're open.
+  openKiln(kiln) {
+    this.kilnOpen = true;
+    this._kiln = kiln;
+    const input = slotRegion("input", kiln.slots, 0);
+    const fuel = slotRegion("fuel", kiln.slots, 1);
+    const output = slotRegion("output", kiln.slots, 2, { takeOnly: true });
+    const { hotbar, main } = this._invRegions();
+    // shift-click routing: kiln slots drain to the inventory; inventory
+    // stacks route by id — smeltables to the input, fuels to the fire,
+    // anything else hops between satchel and belt
+    const routeById = (fallback) => (s) =>
+      SMELTS[s.id] !== undefined ? [input]
+        : FUEL_SECONDS[s.id] ? [fuel]
+        : [fallback];
+    this.slotUI.open([
+      { region: input, gridEl: document.getElementById("kiln-in-grid") },
+      { region: fuel, gridEl: document.getElementById("kiln-fuel-grid") },
+      { region: output, gridEl: document.getElementById("kiln-out-grid") },
+      { region: main, gridEl: document.getElementById("kiln-main-grid") },
+      { region: hotbar, gridEl: document.getElementById("kiln-hotbar-grid") },
+    ], {
+      input: [main, hotbar],
+      fuel: [main, hotbar],
+      output: [main, hotbar],
+      main: routeById(hotbar),
+      hotbar: routeById(main),
+    });
+    this.updateKilnView();
+    document.getElementById("kiln-ui").classList.remove("hidden");
+    document.exitPointerLock();
+  }
+
+  closeKiln() {
+    if (!this.kilnOpen) return;
+    this.kilnOpen = false;
+    this._kiln = null;
+    this.slotUI.close();
+    document.getElementById("kiln-ui").classList.add("hidden");
+  }
+
+  // driven every frame from the game loop while the window is open
+  updateKilnView() {
+    if (!this.kilnOpen) return;
+    const k = this._kiln;
+    document.getElementById("kiln-progress").style.width =
+      `${Math.min(100, (k.progress / SMELT_SECONDS) * 100)}%`;
+    document.getElementById("kiln-ember").classList.toggle("lit", k.burnLeft > 0);
+  }
+
+  anyWindowOpen() { return this.pickerOpen || this.chestOpen || this.benchOpen || this.kilnOpen; }
 
   closeAllWindows() {
     this.closePicker();
     this.closeChest();
     this.closeBench();
+    this.closeKiln();
   }
 
   showPause(firstTime = false) {

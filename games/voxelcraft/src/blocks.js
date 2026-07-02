@@ -33,6 +33,8 @@ export const BERRIES = 27;
 export const SNUFFET_LOIN = 28;
 export const ROAST_LOIN = 29;
 export const BERRY_BUSH = 30;
+export const KILN = 31;
+export const IRON_BLOCK = 32;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -200,6 +202,13 @@ BLOCKS[BERRY_BUSH] = def("Bog Bramble", { hardness: 0.15, drops: BERRIES,
   opaque: false,
   sound: "plant",
 });
+
+// the Kiln: a stone-bellied smelter — right-click a placed one to feed it
+// (see kiln.js for the smelting model)
+BLOCKS[KILN] = def("Kiln", { hardness: 2.0,
+  tiles: cube({ top: TILE.KILN_TOP, side: TILE.KILN_SIDE, bottom: TILE.STONE }),
+});
+BLOCKS[IRON_BLOCK] = def("Iron Block", { hardness: 3.0, tiles: cube(TILE.IRON_BLOCK) });
 
 // Blocks offered in the hotbar picker (everything but air).
 export const PLACEABLE = BLOCKS.map((b, id) => id).filter((id) => id !== AIR);
