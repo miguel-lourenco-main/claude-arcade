@@ -23,6 +23,9 @@ export function writeSave(world, player, sky, hud, inventory, extra = {}) {
       v: 2, // slot-based inventory + slot-array chests
       seed: world.seed,
       time: sky.time,
+      // additive: whole days lived (the Peddler's offer rotation) — absent
+      // in older saves, which simply restart the calendar at day 0
+      day: sky.day,
       chests: world.serializeChests(),
       kilns: world.serializeKilns(), // additive: absent in older saves
       // additive: Notice Post text [["x,y,z", text]...] — absent in older

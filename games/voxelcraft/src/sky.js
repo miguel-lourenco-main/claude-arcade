@@ -19,6 +19,10 @@ export class Sky {
   constructor(scene, seed) {
     this.scene = scene;
     this.time = 0.3; // fraction of a day; 0.25 = noon-ish start
+    // whole days lived in this world: bumps when time wraps past midnight
+    // (and when a Moss Cot nap skips it — main.js). The Peddler's offer
+    // board rotates on it.
+    this.day = 0;
 
     // world lighting is driven through the voxel-shader uniforms, not scene
     // lights: main.js reads lightLevel/lightTint each frame
@@ -132,7 +136,11 @@ export class Sky {
   }
 
   update(dt, camera, eyeInWater) {
+    const prevTime = this.time;
     this.time = (this.time + dt / DAY_LENGTH) % 1;
+    // a real midnight wrap lands near a full -1 delta; tiny negative jitter
+    // (a rAF timestamp preceding the boot clock) must not gain a day
+    if (this.time < prevTime - 0.5) this.day++;
     const angle = this.time * Math.PI * 2; // 0.25 => noon
     const elev = Math.sin(angle);
     const sunDir = new THREE.Vector3(Math.cos(angle) * 0.9, elev, 0.35).normalize();

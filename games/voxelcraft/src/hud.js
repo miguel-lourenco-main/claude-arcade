@@ -6,6 +6,7 @@ import { clampSignText, SIGN_LINES, SIGN_COLS } from "./world.js";
 import { shapeBoxes } from "./mesher.js";
 import { ATLAS_TILES, TILE_PX } from "./textures.js";
 import { RECIPES, BASIC_RECIPES, canCraft } from "./craft.js";
+import { canAfford } from "./trade.js";
 import { SMELTS, FUEL_SECONDS, SMELT_SECONDS } from "./kiln.js";
 import { SlotUI, invRegion, arrayRegion, paletteRegion, slotRegion } from "./slotui.js";
 
@@ -176,6 +177,9 @@ export class Hud {
     this._kiln = null; // live kiln state while the window is open
     this.signOpen = false;
     this._signCommit = null; // (text) => void while the write window is open
+    this.tradeOpen = false;
+    this._tradeOffers = null; // the day's offers while the window is open
+    this._onTrade = null;     // (offer) => bool: executed?
     this.paused = true; // the boot overlay is showing
     this.gameMode = "creative";
     this._lastHealth = -1;
@@ -193,6 +197,8 @@ export class Hud {
         if (this.benchOpen) {
           this._renderCraftList(document.getElementById("craft-list"), this._benchOrder);
         }
+        // affordability is slot-count-based too (cursor stacks don't count)
+        if (this.tradeOpen) this._renderTradeList();
         if (this.onSlotsChanged) this.onSlotsChanged();
         if (this._chestChanged) this._chestChanged();
       },
@@ -633,6 +639,70 @@ export class Hud {
     document.getElementById("bench-ui").classList.add("hidden");
   }
 
+  // the Peddler's trade window: the day's three offers as clickable rows
+  // (craft-row idiom) over the usual satchel + belt. `onTrade(offer)` does
+  // the inventory work in main.js and returns whether the barter landed.
+  openTrade(offers, onTrade) {
+    this.tradeOpen = true;
+    this._tradeOffers = offers;
+    this._onTrade = onTrade;
+    const { hotbar, main } = this._invRegions();
+    this.slotUI.open([
+      { region: main, gridEl: document.getElementById("trade-main-grid") },
+      { region: hotbar, gridEl: document.getElementById("trade-hotbar-grid") },
+    ], { main: [hotbar], hotbar: [main] });
+    this._renderTradeList();
+    document.getElementById("trade-ui").classList.remove("hidden");
+    document.exitPointerLock();
+  }
+
+  closeTrade() {
+    if (!this.tradeOpen) return;
+    this.tradeOpen = false;
+    this._tradeOffers = null;
+    this._onTrade = null;
+    this.slotUI.close();
+    document.getElementById("trade-ui").classList.add("hidden");
+  }
+
+  // offer rows: what you get, bold, over what he wants for it. Unaffordable
+  // rows grey out (uncraftable idiom) and don't bite on click. The day's
+  // order is fixed — offers never re-sort under the cursor.
+  _renderTradeList() {
+    const list = document.getElementById("trade-list");
+    list.innerHTML = "";
+    for (const offer of this._tradeOffers) {
+      const ok = canAfford(offer, this.inventory);
+      const row = document.createElement("div");
+      row.className = "craft-row" + (ok ? "" : " uncraftable");
+
+      const outIcon = document.createElement("canvas");
+      outIcon.width = ICON; outIcon.height = ICON;
+      drawBlockIcon(outIcon.getContext("2d"), this.atlas, offer.get[0]);
+      row.appendChild(outIcon);
+
+      const label = document.createElement("span");
+      const wants = offer.give
+        .map(([id, n]) => `${n}× ${BLOCKS[id].name}`)
+        .join(" + ");
+      label.innerHTML =
+        `<b>${offer.get[1]}× ${BLOCKS[offer.get[0]].name}</b><small>for ${wants}</small>`;
+      row.appendChild(label);
+
+      if (ok) {
+        row.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          if (this._onTrade && this._onTrade(offer)) {
+            this._renderTradeList();
+            this.slotUI.renderAll();
+            this.refreshHotbarRow();
+          }
+        });
+      }
+      list.appendChild(row);
+    }
+  }
+
   // kiln window: input over fuel, smelt-progress arrow, take-only output,
   // plus the usual satchel + belt. `kiln` is the live per-block state object
   // (world.kilns entry) — the tick in main.js mutates it while we're open.
@@ -687,7 +757,7 @@ export class Hud {
 
   anyWindowOpen() {
     return this.pickerOpen || this.chestOpen || this.benchOpen ||
-      this.kilnOpen || this.signOpen;
+      this.kilnOpen || this.signOpen || this.tradeOpen;
   }
 
   closeAllWindows() {
@@ -695,6 +765,7 @@ export class Hud {
     this.closeChest();
     this.closeBench();
     this.closeKiln();
+    this.closeTrade();
     this.closeSign(); // commits — a defensive close never eats the writing
   }
 

@@ -14,6 +14,7 @@ import { Boats } from "./boats.js";
 import { Fishing } from "./fishing.js";
 import { SignBoards } from "./signs.js";
 import { craft } from "./craft.js";
+import { dailyOffers, executeTrade } from "./trade.js";
 import { makeKiln, tickKilns } from "./kiln.js";
 import { PlayerModel, buildHeldFoot, setHeldSkinLight } from "./player-model.js";
 import { PlayerViewer } from "./player-viewer.js";
@@ -323,6 +324,9 @@ if (save && save.edits) world.loadEdits(save.edits);
 
 const sky = new Sky(scene, seed);
 if (save && Number.isFinite(save.time)) sky.time = ((save.time % 1) + 1) % 1;
+// additive v2 field: whole days lived (the Peddler's offer rotation) — older
+// saves restart the calendar, which only re-deals the offer board
+if (save && Number.isInteger(save.day) && save.day >= 0) sky.day = save.day;
 // additive v2 field: [phase, secondsLeftInPhase, intensity] — validated, so a
 // hand-edited save can't wedge the weather machine
 if (save && Array.isArray(save.weather)) {
@@ -459,6 +463,7 @@ function sleepInCot(x, y, z) {
   sleepFadeEl.style.opacity = "1";
   setTimeout(() => {
     sky.time = DAWN_TIME; // no healing — just the morning
+    sky.day++; // the nap always jumps the calendar past midnight
     sleepFadeEl.style.opacity = "0";
     hud.announce("You wake, well-tucked.", 2600);
     setTimeout(() => { sleeping = false; }, 1000); // let the fade-in finish
@@ -591,6 +596,21 @@ const interaction = new Interaction(world, player, scene, hud, {
   mobs,
   boats,
   fishing,
+  // right-click the Peddler: the trade window with the day's three offers —
+  // unless he's still nursing the grudge from the last kick
+  onTradeMob: (m) => {
+    if (m.grudgeT > 0) {
+      hud.announce("The Peddler pointedly rearranges his pack.", 2600);
+      return;
+    }
+    hud.openTrade(dailyOffers(world.seed, sky.day), (offer) => {
+      const leftover = executeTrade(offer, inventory); // -1 = can't pay
+      if (leftover < 0) return false;
+      if (leftover > 0) spillStack({ id: offer.get[0], count: leftover });
+      sfx.peddlerHm(); // satisfied
+      return true;
+    });
+  },
   // seat the Wanderling: player physics suspends itself while riding (see
   // player.update) and boats.update carries the seat from here on
   onBoardBoat: (b) => {
@@ -909,7 +929,9 @@ function clock() {
 
 function tick(now) {
   requestAnimationFrame(tick);
-  const frameDt = Math.min(0.1, (now - last) / 1000);
+  // clamped at 0: the first rAF timestamp can PRECEDE the boot-time clock
+  // read that seeded `last`, and a negative dt must never run time backwards
+  const frameDt = Math.max(0, Math.min(0.1, (now - last) / 1000));
   last = now;
   fps = fps * 0.95 + (1 / Math.max(frameDt, 1e-4)) * 0.05;
   frames++;
@@ -1090,5 +1112,6 @@ if (NO_LOCK) {
     growAllSaplings: () => { for (const k of saplings.keys()) saplings.set(k, 0); },
     growAllCrops: () => { for (const k of crops.keys()) crops.set(k, 0); },
     getGrowthSeconds: () => growthSeconds,
+    dailyOffers, // (seed, day) — lets tests diff the Peddler's rotation
   };
 }

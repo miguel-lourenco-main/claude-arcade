@@ -45,6 +45,15 @@ export const SPECIES = {
     knockResist: 0.85, drops: [[COAL_ORE, 3], [TORCH, 4]], rareChance: 0.15,
     sound: "bellow",
   },
+  // the Peddler: a wandering trader Wanderling, hunched under an enormous
+  // patchwork backpack. Day-only (gone by dusk, the way the Murkling is gone
+  // by dawn), rare, passive — and it keeps a 60-second grudge if kicked
+  // (trades: right-click routing in interact.js; grudgeT gates the window).
+  peddler: {
+    name: "Peddler", hp: 8, speed: 1.0, behavior: "passive", habitat: "day",
+    cap: 1, halfW: 0.4, height: 1.55, rareChance: 0.12, sound: "bell",
+    trades: true, grudge: 60, drops: null,
+  },
 };
 
 // --- procedural skins ---------------------------------------------------------
@@ -127,6 +136,31 @@ export class Mobs {
       ctx.fillStyle = "#b8c9a0";
       ctx.fillRect(4, 7, 2, 1); ctx.fillRect(10, 7, 2, 1);
     }));
+    // Peddler: bog-mint skin like any Wanderling, but a road-dun coat instead
+    // of the rust tunic, and a backpack sewn from every cloth he's ever owned
+    const peSkin = this._mat(paint(0xf61, [126, 200, 178], 9));
+    const peFace = this._mat(paint(0xf62, [126, 200, 178], 9, (ctx) => {
+      ctx.fillStyle = "#22262e";
+      ctx.fillRect(4, 7, 2, 2); ctx.fillRect(10, 7, 2, 2); // road-squinted eyes
+      ctx.fillStyle = "#3f6f60";
+      ctx.fillRect(6, 12, 4, 1); // a mouth for haggling
+    }));
+    const peCoat = this._mat(paint(0xf63, [116, 100, 72], 9));
+    const pePack = this._mat(paint(0xf64, [122, 84, 58], 8, (ctx, rand) => {
+      // the patchwork: mismatched squares in old tunic colors, rough-stitched
+      const cloth = ["#bc5c30", "#d6b04a", "#4a7a80", "#6a5080", "#5d7a3c"];
+      for (let i = 0; i < 9; i++) {
+        const w = 3 + ((rand() * 4) | 0), h = 3 + ((rand() * 4) | 0);
+        const x = (rand() * (16 - w)) | 0, y = (rand() * (16 - h)) | 0;
+        ctx.fillStyle = cloth[(rand() * cloth.length) | 0];
+        ctx.fillRect(x, y, w, h);
+        ctx.fillStyle = "rgba(40,30,20,0.55)"; // the stitching
+        ctx.fillRect(x, y, w, 1); ctx.fillRect(x, y, 1, h);
+      }
+    }));
+    const peStick = this._mat(paint(0xf65, [148, 126, 90], 10));
+    // the dangling trinkets: little bright oddments on strings
+    const peTrinket = this._mat(paint(0xf66, [200, 168, 84], 20));
 
     return {
       snuffet: () => {
@@ -232,6 +266,65 @@ export class Mobs {
         }
         return { group: g, legs };
       },
+      // the Peddler: Wanderling proportions, but hunched forward under the
+      // pack, one arm out on a walking stick, trinkets swinging behind
+      peddler: () => {
+        const g = new THREE.Group();
+        // torso pitched forward — the hunch is the whole silhouette
+        const torso = box(0.46, 0.62, 0.26, peCoat);
+        torso.position.set(0, 0.98, 0.06);
+        torso.rotation.x = 0.42;
+        g.add(torso);
+        // head carried low and ahead of the shoulders
+        const headMats = [peSkin, peSkin, peSkin, peSkin, peFace, peSkin];
+        const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), headMats);
+        head.position.set(0, 1.22, 0.3);
+        g.add(head);
+        // a wide-brimmed road hat over it
+        const brim = box(0.56, 0.05, 0.56, peCoat);
+        brim.position.set(0, 1.44, 0.3);
+        g.add(brim);
+        const crown = box(0.3, 0.16, 0.3, peCoat);
+        crown.position.set(0, 1.53, 0.3);
+        g.add(crown);
+        // the enormous patchwork backpack, taller than its owner
+        const pack = box(0.6, 0.78, 0.42, pePack);
+        pack.position.set(0, 1.16, -0.28);
+        pack.rotation.x = 0.18;
+        g.add(pack);
+        const bedroll = box(0.5, 0.18, 0.3, pePack);
+        bedroll.position.set(0, 1.62, -0.36);
+        bedroll.rotation.x = 0.18;
+        g.add(bedroll);
+        // dangling trinkets on strings off the pack's flanks
+        for (const [tx, ty, tz] of [[-0.34, 0.72, -0.3], [0.34, 0.62, -0.24], [0.3, 0.86, -0.42]]) {
+          const string = box(0.02, 0.14, 0.02, peStick);
+          string.position.set(tx, ty + 0.1, tz);
+          g.add(string);
+          const trinket = box(0.09, 0.09, 0.09, peTrinket);
+          trinket.position.set(tx, ty, tz);
+          g.add(trinket);
+        }
+        // walking-stick arm: held stiffly forward, planted on a tall staff
+        const stickArm = box(0.14, 0.44, 0.14, peCoat);
+        stickArm.position.set(0.3, 1.02, 0.24);
+        stickArm.rotation.x = -0.7;
+        g.add(stickArm);
+        const staff = box(0.06, 1.15, 0.06, peStick);
+        staff.position.set(0.3, 0.58, 0.42);
+        g.add(staff);
+        // the off arm swings with the walk; so do the legs
+        const legs = [];
+        const arm = box(0.14, 0.5, 0.14, peCoat);
+        arm.position.set(-0.3, 0.92, 0.06);
+        g.add(arm); legs.push(arm);
+        for (const side of [-1, 1]) {
+          const leg = box(0.16, 0.44, 0.16, peCoat);
+          leg.position.set(side * 0.12, 0.22, 0.06);
+          g.add(leg); legs.push(leg);
+        }
+        return { group: g, legs };
+      },
     };
   }
 
@@ -266,6 +359,7 @@ export class Mobs {
       attackCd: 0,
       contactCd: 0,
       angryT: 0,           // neutral retaliation window
+      grudgeT: 0,          // peddler: seconds left refusing to trade
       callT: 4 + Math.random() * 10,
       onGround: false,
       hitWall: false,
@@ -313,7 +407,10 @@ export class Mobs {
     const biome = terrain.biomeAt(x, z, surfaceY);
     const candidates = [];
 
-    if (!night && topId === GRASS) candidates.push("snuffet");
+    if (!night && topId === GRASS) {
+      candidates.push("snuffet");
+      candidates.push("peddler"); // rare: rareChance thins this out below
+    }
     if (night && isSolid(topId)) candidates.push("murkling");
     if (biome === "desert" && topId === SAND) candidates.push("prickleback");
     if (topId === SAND || topId === GRASS) {
@@ -381,13 +478,16 @@ export class Mobs {
         this._remove(i);
         continue;
       }
-      // creatures of the old sky are gone by dawn, as if embarrassed
+      // creatures of the old sky are gone by dawn, as if embarrassed —
+      // and the Peddler is gone by dusk, as if he knows something
       if (!night && spec.habitat === "night") { this._remove(i); continue; }
+      if (night && spec.habitat === "day") { this._remove(i); continue; }
       if (!world.isGenerated(Math.floor(m.x) >> 4, Math.floor(m.z) >> 4)) continue;
       m.hurtT = Math.max(0, m.hurtT - dt);
       m.attackCd = Math.max(0, m.attackCd - dt);
       m.contactCd = Math.max(0, m.contactCd - dt);
       m.angryT = Math.max(0, m.angryT - dt);
+      m.grudgeT = Math.max(0, m.grudgeT - dt);
 
       // --- behavior selection ---
       const aggro = spec.aggro || 0;
@@ -596,6 +696,8 @@ export class Mobs {
     // reactions: passives flee, neutrals get angry, ambushers wake up,
     // hostiles hold a grudge (a stone from beyond aggro range still counts)
     if (m.spec.behavior === "passive") { m.state = "flee"; m.stateT = 3.5; m.yaw = Math.atan2(m.x - fromPos.x, m.z - fromPos.z); }
+    // the Peddler adds insult to the injury ledger: no trade for a while
+    if (m.spec.grudge) m.grudgeT = m.spec.grudge;
     if (m.spec.behavior === "neutral" || m.spec.behavior === "hostile") m.angryT = 8;
     if (m.spec.behavior === "ambush") m.state = "hunt";
     this.onMobHurt?.();

@@ -101,6 +101,7 @@ export class Interaction {
     this.onThrow = opts.onThrow;           // () => launch a sling stone
     this.canThrowStone = opts.canThrow;    // () => bool (projectile cap)
     this.mobs = opts.mobs;           // Mobs instance (punching)
+    this.onTradeMob = opts.onTradeMob; // (mob) => open the Peddler's trade window
     this.boats = opts.boats;         // Boats instance (board/deploy/kick)
     this.fishing = opts.fishing;     // Fishing instance (cast/reel)
     this.onBoardBoat = opts.onBoardBoat;   // (boat) => seat the player
@@ -533,6 +534,19 @@ export class Interaction {
       const lim = t ? Math.min(t.dist, reach) : reach;
       const b = this.boats.rayHit(eye, dir, lim);
       if (b) { this.onBoardBoat(b); return; }
+    }
+    // right-click the Peddler to trade — the mob ray runs before any block
+    // routing, exactly like boarding a skiff (sneak to override). Survival
+    // only: the trade window is a satchel window, and creative wants for
+    // nothing anyway.
+    if (this.mobs && this.onTradeMob && this.player.mode === "survival" &&
+        !this.player._sneaking) {
+      const eye = { x: this.player.pos.x, y: this.player.eyeY, z: this.player.pos.z };
+      const dir = this.player.lookDir();
+      const reach = REACH_SURVIVAL;
+      const lim = t ? Math.min(t.dist, reach) : reach;
+      const m = this.mobs.rayHit(eye, dir, lim);
+      if (m && m.spec.trades) { this.onTradeMob(m); return; }
     }
     // a sling stone throws instead of placing — unless an interactive block
     // is targeted (sneak-throw at a chest works, like sneak-place does)

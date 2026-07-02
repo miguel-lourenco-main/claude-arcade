@@ -84,7 +84,55 @@ export class Sfx {
       case "bellow": // Mirewalker: the shoreline disagrees
         this._noiseBurst(110, 0.45, 0.28);
         break;
+      case "bell": // Peddler: the little brass bell on his pack
+        this._bellTone(1320, 0.5, 0.05);
+        setTimeout(() => this._bellTone(1188, 0.4, 0.035), 210);
+        break;
     }
+  }
+
+  // a small struck bell: a sine with a faint detuned partial, long decay
+  _bellTone(freq, dur, gain) {
+    if (!this.enabled || !this._ensure()) return;
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(gain, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + dur);
+    g.connect(ctx.destination);
+    for (const [mult, amt] of [[1, 1], [2.76, 0.35]]) {
+      const osc = ctx.createOscillator();
+      const og = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq * mult;
+      og.gain.value = amt;
+      osc.connect(og).connect(g);
+      osc.start(now);
+      osc.stop(now + dur);
+    }
+  }
+
+  // the Peddler's satisfied hm-hm on a completed trade: two short, low,
+  // closed-mouth hums, the second a shade higher (pleased, not surprised)
+  peddlerHm() {
+    if (!this.enabled || !this._ensure()) return;
+    const ctx = this.ctx;
+    const hum = (freq, at, dur) => {
+      const now = ctx.currentTime + at;
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(freq, now);
+      osc.frequency.exponentialRampToValueAtTime(freq * 0.92, now + dur);
+      g.gain.setValueAtTime(0.001, now);
+      g.gain.exponentialRampToValueAtTime(0.09, now + 0.03);
+      g.gain.exponentialRampToValueAtTime(0.001, now + dur);
+      osc.connect(g).connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + dur + 0.02);
+    };
+    hum(196, 0, 0.13);
+    hum(247, 0.16, 0.18);
   }
 
   mobHurt() { this._noiseBurst(700, 0.12, 0.16); }

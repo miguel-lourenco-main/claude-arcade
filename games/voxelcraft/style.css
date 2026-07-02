@@ -202,6 +202,28 @@ body {
   transition: width 0.15s linear;
 }
 
+/* ---- the Peddler's trade window ---- */
+
+#trade-ui {
+  position: fixed; inset: 0; z-index: 12;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(8, 10, 14, 0.72);
+}
+#trade-panel {
+  background: #16191f; border: 1px solid #2a2f38; border-radius: 8px;
+  padding: 20px; min-width: 520px; max-height: 84vh; overflow-y: auto;
+}
+#trade-panel h2 { color: #e8eaed; font-size: 16px; margin-bottom: 14px; }
+#trade-panel .hint { color: #7c8592; font-size: 12px; font-weight: normal; }
+#trade-panel h3 {
+  color: #9aa3af; font-size: 12px; text-transform: uppercase;
+  letter-spacing: 1px; margin-bottom: 8px;
+}
+#trade-list { margin-bottom: 18px; }
+/* the peddler's rows barter in mustard, not craft-green */
+#trade-list .craft-row:hover { background: rgba(214, 176, 74, 0.08); }
+#trade-list .craft-row.uncraftable:hover { background: none; }
+
 /* ---- Notice Post write window ---- */
 
 #sign-ui {
