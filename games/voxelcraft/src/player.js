@@ -1,7 +1,7 @@
 // First-person player: pointer-lock look, AABB voxel collision, walking /
 // sprinting / sneaking / jumping / swimming / creative flight.
 
-import { isSolid, WATER, CACTUS } from "./blocks.js";
+import { isSolid, WATER, CACTUS, LADDER } from "./blocks.js";
 
 const HALF_W = 0.3;
 const PLAYER_HEIGHT = 1.8;
@@ -19,6 +19,9 @@ const SWIM_SPEED = 2.2;
 const SWIM_SPRINT_SPEED = 3.9;
 const SWIM_UP_MAX = 3.5;
 const WATER_EXIT_BOOST = 6;       // upward kick when swimming into a bank
+const LADDER_CLIMB = 2.3;         // blocks/s up (forward/jump) or down (sneak)
+const LADDER_SLIDE = 0.8;         // idle drift down the rungs
+const LADDER_SIDE_SPEED = 2.0;    // damped horizontal shuffle while gripping
 const MAX_STEP_DISP = 0.4;        // max movement per collision substep (anti-tunneling)
 const STEP_DISTANCE = 2.2;        // blocks walked between footstep sounds
 
@@ -59,6 +62,7 @@ export class Player {
     this.sprinting = false;
     this.inWater = false;
     this.eyeInWater = false;
+    this.onLadder = false;
     // "camera": classic FPS movement, WASD relative to where you look.
     // "static": WASD along fixed world axes (W=north/-z), camera independent.
     this.moveMode = "camera";
@@ -258,6 +262,22 @@ export class Player {
         const s = Math.min(1, accel / d);
         this.vel.x += dvx * s; this.vel.y += dvy * s; this.vel.z += dvz * s;
       }
+    } else if (this.onLadder) {
+      // ladder grip (Wanderling hand-feet were made for this): gravity is
+      // suspended; forward/jump climbs, sneak descends, idle drifts down a
+      // slow slide; horizontal movement is damped to a shuffle
+      const accel = (hasInput ? ACCEL_GROUND : FRICTION_GROUND) * 0.5 * dt;
+      const side = Math.min(speed, LADDER_SIDE_SPEED);
+      const dvx = dirX * side - this.vel.x;
+      const dvz = dirZ * side - this.vel.z;
+      const d = Math.hypot(dvx, dvz);
+      if (d > 1e-9) {
+        const s = Math.min(1, accel / d);
+        this.vel.x += dvx * s; this.vel.z += dvz * s;
+      }
+      if (forward > 0 || jumping) this.vel.y = LADDER_CLIMB;
+      else if (sneaking) this.vel.y = -LADDER_CLIMB;
+      else this.vel.y = Math.max(-LADDER_SLIDE, this.vel.y - GRAVITY * dt);
     } else if (this.inWater) {
       // swimming follows the camera: look down + forward dives, look up
       // surfaces — Space/Shift still push straight up/down
@@ -350,8 +370,9 @@ export class Player {
   _updateSurvival(dt, wasAirborne) {
     this._sinceDamage += dt;
 
-    // fall damage: MC rule, damage = blocks fallen minus 3
-    if (this.flying || this.inWater) {
+    // fall damage: MC rule, damage = blocks fallen minus 3 (a gripped ladder
+    // is as safe as water — no fall accumulates through it)
+    if (this.flying || this.inWater || this.onLadder) {
       this._peakY = this.pos.y;
     } else if (!this.onGround) {
       this._peakY = Math.max(this._peakY, this.pos.y);
@@ -446,6 +467,8 @@ export class Player {
     const torso = w.getBlock(Math.floor(x), Math.floor(y + 0.9), Math.floor(z));
     this.inWater = feet === WATER || torso === WATER;
     this.eyeInWater = w.getBlock(Math.floor(x), Math.floor(this.eyeY), Math.floor(z)) === WATER;
+    // ladder grip is sampled exactly like water: feet or torso in a rung cell
+    this.onLadder = feet === LADDER || torso === LADDER;
   }
 
   _moveWithCollisions(dt) {

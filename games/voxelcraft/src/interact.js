@@ -2,7 +2,10 @@
 // with hold-repeat, pick-block, and break particles.
 
 import * as THREE from "three";
-import { AIR, BEDROCK, CHEST, WORKBENCH, KILN, BED, BLOCKS, isSolid, dropFor } from "./blocks.js";
+import {
+  AIR, BEDROCK, CHEST, WORKBENCH, KILN, BED, LADDER, DOOR, DOOR_TOP,
+  BLOCKS, isSolid, isPlant, isDoor, isDoorLower, DOOR_TOGGLE, dropFor,
+} from "./blocks.js";
 import { HEIGHT } from "./world.js";
 import { EYE_HEIGHT, MAX_HUNGER } from "./player.js";
 
@@ -60,6 +63,7 @@ export class Interaction {
     this.onChestBreak = opts.onChestBreak; // (x, y, z) => spill contents
     this.onKilnBreak = opts.onKilnBreak;   // (x, y, z) => spill kiln slots
     this.onEat = opts.onEat;               // (kind) => chew/swallow sfx
+    this.onDoor = opts.onDoor;             // (opened) => hinge-creak sfx
     this.mobs = opts.mobs;           // Mobs instance (punching)
     this.avgColor = opts.avgColor;   // tile -> [r,g,b]
 
@@ -169,7 +173,8 @@ export class Interaction {
     // right-click on a chest/workbench/kiln/cot still routes, food in hand or not
     const t = this.target;
     const interactive = t &&
-      (t.id === CHEST || t.id === WORKBENCH || t.id === KILN || t.id === BED) &&
+      (t.id === CHEST || t.id === WORKBENCH || t.id === KILN || t.id === BED ||
+       isDoor(t.id)) &&
       !this.player._sneaking;
     const wants = this.buttons.has(2) && def && def.food && !interactive &&
       this.player.hunger < MAX_HUNGER - 1e-9;
@@ -253,12 +258,13 @@ export class Interaction {
 
   // survival break: remove the block, spawn its drop (and the popped plant's)
   _completeBreak(t) {
+    if (isDoor(t.id)) { this._breakDoor(t); return; }
     if (t.id === CHEST && this.onChestBreak) this.onChestBreak(t.x, t.y, t.z);
     if (t.id === KILN && this.onKilnBreak) this.onKilnBreak(t.x, t.y, t.z);
     const affected = this.world.setBlock(t.x, t.y, t.z, AIR);
     const above = this.world.getBlock(t.x, t.y + 1, t.z);
     let popped = null;
-    if (above !== AIR && BLOCKS[above].kind === "cross") {
+    if (isPlant(above)) {
       popped = above;
       this.world.setBlock(t.x, t.y + 1, t.z, AIR);
     }
@@ -292,7 +298,10 @@ export class Interaction {
     }
     // survival LMB is handled by the mining loop, not instant breaking
     if (button === 0 && this.player.mode !== "survival") this._break();
-    else if (button === 1 && this.target) this.onPick(this.target.id);
+    else if (button === 1 && this.target) {
+      // any door half picks as the one user-visible door item
+      this.onPick(isDoor(this.target.id) ? DOOR : this.target.id);
+    }
     else if (button === 2) this._place();
   }
 
@@ -300,15 +309,16 @@ export class Interaction {
     const t = this.target;
     if (!t) return;
     if (t.id === BEDROCK) return; // the world floor is indestructible
+    this._lastBreakKey = `${t.x},${t.y},${t.z}`;
+    if (isDoor(t.id)) { this._breakDoor(t); return; }
     if (t.id === CHEST && this.onChestBreak) this.onChestBreak(t.x, t.y, t.z);
     if (t.id === KILN && this.onKilnBreak) this.onKilnBreak(t.x, t.y, t.z);
-    this._lastBreakKey = `${t.x},${t.y},${t.z}`;
     const def = BLOCKS[t.id];
     const affected = this.world.setBlock(t.x, t.y, t.z, AIR);
     // breaking the support under a plant pops the plant too
     const above = this.world.getBlock(t.x, t.y + 1, t.z);
     let popped = null;
-    if (above !== AIR && BLOCKS[above].kind === "cross") {
+    if (isPlant(above)) {
       popped = above;
       this.world.setBlock(t.x, t.y + 1, t.z, AIR);
     }
@@ -317,9 +327,70 @@ export class Interaction {
     this.particles.burst(t.x, t.y, t.z, this.avgColor[def.tiles.side] || [0.5, 0.5, 0.5]);
   }
 
+  // breaking either door half removes both; survival drops ONE door item.
+  // A plant standing on the (solid, closed) top half pops with it.
+  _breakDoor(t) {
+    const lowerY = isDoorLower(t.id) ? t.y : t.y - 1;
+    const affected = new Set();
+    const lower = this.world.getBlock(t.x, lowerY, t.z);
+    const upper = this.world.getBlock(t.x, lowerY + 1, t.z);
+    if (isDoor(lower)) for (const c of this.world.setBlock(t.x, lowerY, t.z, AIR)) affected.add(c);
+    if (isDoor(upper)) for (const c of this.world.setBlock(t.x, lowerY + 1, t.z, AIR)) affected.add(c);
+    if (affected.size === 0) return;
+    const above = this.world.getBlock(t.x, lowerY + 2, t.z);
+    let popped = null;
+    if (isPlant(above)) {
+      popped = above;
+      for (const c of this.world.setBlock(t.x, lowerY + 2, t.z, AIR)) affected.add(c);
+    }
+    // popped is reported at the UPPER half's cell so main.js's sapling
+    // bookkeeping (info.y + 1) stays true when the top half was the target
+    this.onEdit([...affected], {
+      ids: [t.id, popped], x: t.x, y: lowerY + 1, z: t.z, broken: t.id, popped,
+    });
+    this.onSound("break", t.id);
+    this.particles.burst(t.x, t.y, t.z, this.avgColor[BLOCKS[t.id].tiles.side] || [0.5, 0.5, 0.5]);
+    if (this.player.mode === "survival") {
+      this.onSpawnDrop(t.x + 0.5, lowerY + 0.4, t.z + 0.5, DOOR);
+      if (popped !== null) {
+        const plantDrop = dropFor(popped);
+        if (plantDrop !== null) this.onSpawnDrop(t.x + 0.5, lowerY + 2.3, t.z + 0.5, plantDrop);
+      }
+    }
+  }
+
+  // right-click on any door half: swap BOTH halves between open and closed.
+  // Closing checks the player isn't standing in the doorway first.
+  _toggleDoor(t) {
+    const lowerY = isDoorLower(t.id) ? t.y : t.y - 1;
+    const lower = this.world.getBlock(t.x, lowerY, t.z);
+    const upper = this.world.getBlock(t.x, lowerY + 1, t.z);
+    if (!isDoorLower(lower)) return; // orphaned half — nothing sane to toggle
+    const opening = lower === DOOR; // closed now -> about to swing open
+    if (!opening &&
+        (this._overlapsPlayer(t.x, lowerY, t.z) || this._overlapsPlayer(t.x, lowerY + 1, t.z))) {
+      return; // never slam the door shut on the Wanderling inside it
+    }
+    const affected = new Set();
+    for (const c of this.world.setBlock(t.x, lowerY, t.z, DOOR_TOGGLE[lower])) affected.add(c);
+    if (isDoor(upper) && !isDoorLower(upper)) {
+      for (const c of this.world.setBlock(t.x, lowerY + 1, t.z, DOOR_TOGGLE[upper])) affected.add(c);
+    }
+    if (affected.size === 0) return;
+    this.onEdit([...affected], {
+      ids: [DOOR_TOGGLE[lower]], x: t.x, y: lowerY, z: t.z,
+    });
+    if (this.onDoor) this.onDoor(opening);
+  }
+
   _place() {
     const t = this.target;
     if (!t) return;
+    // right-click on a door toggles it — in BOTH modes (sneak to place against)
+    if (isDoor(t.id) && !this.player._sneaking) {
+      this._toggleDoor(t);
+      return;
+    }
     // right-click on a chest/workbench opens it (sneak to place against it)
     if (t.id === CHEST && this.player.mode === "survival" && !this.player._sneaking && this.onOpenChest) {
       this.onOpenChest(t.x, t.y, t.z);
@@ -344,18 +415,30 @@ export class Interaction {
     if (def.placeable === false) return;
 
     let px = t.x, py = t.y, pz = t.z;
-    const targetDef = BLOCKS[t.id];
     // plants are replaceable in place; otherwise place against the hit face
-    if (targetDef.kind !== "cross") {
+    // (sturdy crosses — ladders, open door halves — are never built over)
+    if (!isPlant(t.id)) {
       px += t.normal[0]; py += t.normal[1]; pz += t.normal[2];
     }
+    // a cell is buildable if it's air, a plant, or water
+    const canReplace = (bid) => bid === AIR || isPlant(bid) || BLOCKS[bid].bucket === "water";
     const existing = this.world.getBlock(px, py, pz);
-    if (existing !== AIR && BLOCKS[existing].kind !== "cross" && BLOCKS[existing].bucket !== "water") return;
+    if (!canReplace(existing)) return;
+
+    // the door occupies TWO cells — hand it off to its own path
+    if (id === DOOR) { this._placeDoor(px, py, pz, existing); return; }
 
     // don't place a solid block overlapping the player
     if (def.solid && this._overlapsPlayer(px, py, pz)) return;
-    // plants need soil
-    if (def.kind === "cross" && !isSolid(this.world.getBlock(px, py - 1, pz))) return;
+    if (id === LADDER) {
+      // ladders mount on walls: at least one solid horizontal neighbor
+      if (!isSolid(this.world.getBlock(px + 1, py, pz)) &&
+          !isSolid(this.world.getBlock(px - 1, py, pz)) &&
+          !isSolid(this.world.getBlock(px, py, pz + 1)) &&
+          !isSolid(this.world.getBlock(px, py, pz - 1))) return;
+    } else if (def.kind === "cross" && !isSolid(this.world.getBlock(px, py - 1, pz))) {
+      return; // plants need soil
+    }
     // setBlock silently fails outside the world or in an ungenerated chunk —
     // rule those out BEFORE consuming inventory
     if (py < 0 || py >= HEIGHT) return;
@@ -366,16 +449,44 @@ export class Interaction {
     if (this.player.mode === "survival" && !this.canConsume(id)) return;
     // overwriting a plant/torch in survival pops its drop instead of
     // silently destroying it
-    if (this.player.mode === "survival" && existing !== AIR && BLOCKS[existing].kind === "cross") {
-      const plantDrop = dropFor(existing);
-      if (plantDrop !== null) this.onSpawnDrop(px + 0.5, py + 0.3, pz + 0.5, plantDrop);
-    }
+    this._popReplacedPlant(existing, px, py, pz);
 
     const affected = this.world.setBlock(px, py, pz, id);
     if (affected.length === 0) return;
     // include the replaced block: overwriting a torch must clear its light
     this.onEdit(affected, { ids: [id, existing], x: px, y: py, z: pz, placed: id });
     this.onSound("place", id);
+  }
+
+  _popReplacedPlant(existing, px, py, pz) {
+    if (this.player.mode !== "survival" || !isPlant(existing)) return;
+    const plantDrop = dropFor(existing);
+    if (plantDrop !== null) this.onSpawnDrop(px + 0.5, py + 0.3, pz + 0.5, plantDrop);
+  }
+
+  // the Plank Door: needs its cell AND the one above free, plus a solid
+  // floor; consumes ONE item and writes both halves
+  _placeDoor(px, py, pz, existing) {
+    if (py < 1 || py + 1 >= HEIGHT) return;
+    const canReplace = (bid) => bid === AIR || isPlant(bid) || BLOCKS[bid].bucket === "water";
+    const upperEx = this.world.getBlock(px, py + 1, pz);
+    if (!canReplace(upperEx)) return;
+    if (!isSolid(this.world.getBlock(px, py - 1, pz))) return; // solid floor
+    if (this._overlapsPlayer(px, py, pz) || this._overlapsPlayer(px, py + 1, pz)) return;
+    const targetChunk = this.world.getChunk(px >> 4, pz >> 4);
+    if (!targetChunk || !targetChunk.generated) return;
+    if (this.player.mode === "survival" && !this.canConsume(DOOR)) return;
+    this._popReplacedPlant(existing, px, py, pz);
+    this._popReplacedPlant(upperEx, px, py + 1, pz);
+
+    const affected = new Set();
+    for (const c of this.world.setBlock(px, py, pz, DOOR)) affected.add(c);
+    for (const c of this.world.setBlock(px, py + 1, pz, DOOR_TOP)) affected.add(c);
+    if (affected.size === 0) return;
+    this.onEdit([...affected], {
+      ids: [DOOR, existing, upperEx], x: px, y: py, z: pz, placed: DOOR,
+    });
+    this.onSound("place", DOOR);
   }
 
   _overlapsPlayer(bx, by, bz) {

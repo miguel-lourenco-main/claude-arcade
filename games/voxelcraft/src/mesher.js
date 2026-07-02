@@ -365,8 +365,9 @@ export function meshChunk(world, chunk, materials, scene) {
 
 function addCross(bucket, def, lx, y, lz, wx, wz, light = 1, blockLight = 0) {
   // deterministic little offset so plants don't sit on a perfect grid
-  // (torches stay centered so they read as attached to the block below)
-  const jitter = def.lightEmit > 0 ? 0 : 1;
+  // (torches stay centered so they read as attached to the block below, and
+  // sturdy fixtures — ladders, open door leaves — stay squarely in their cell)
+  const jitter = def.lightEmit > 0 || def.sturdy ? 0 : 1;
   const ox = (hash2(wx, wz, 0x9e37) - 0.5) * 0.3 * jitter;
   const oz = (hash2(wz, wx, 0x79b9) - 0.5) * 0.3 * jitter;
   const l = 0.15 + ox, h = 0.85 + ox;

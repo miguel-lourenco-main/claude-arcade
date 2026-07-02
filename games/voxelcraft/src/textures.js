@@ -51,6 +51,9 @@ export const TILE = {
   MOSS_CLUMP: 40,
   COT_TOP: 41,
   COT_SIDE: 42,
+  LADDER: 43,
+  DOOR_LOWER: 44,
+  DOOR_UPPER: 45,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -570,6 +573,72 @@ const painters = {
       p.px((p.rand() * TILE_PX) | 0, (p.rand() * 4) | 0,
         140, 178 + p.rand() * 20, 104);
     }
+  },
+  [TILE.LADDER](p) {
+    // a Wanderling rung-ladder: two lashed rails and stout rungs — built for
+    // four-fingered hand-feet, so the rungs are thick and closely spaced
+    p.clear();
+    for (let y = 0; y < TILE_PX; y++) {
+      for (const x of [2, 3, 12, 13]) {
+        const d = (p.rand() * 2 - 1) * 8;
+        const inner = x === 3 || x === 12 ? -14 : 0; // shaded inner edge
+        p.px(x, y, 138 + d + inner, 104 + d + inner, 62 + d + inner);
+      }
+    }
+    for (let y = 2; y <= 14; y += 4) {
+      for (let x = 3; x <= 12; x++) {
+        const d = (p.rand() * 2 - 1) * 8;
+        p.px(x, y, 160 + d, 124 + d, 74 + d);
+        p.px(x, y + 1, 118 + d, 88 + d, 52 + d); // underside shadow
+      }
+      // lashing knots where the rung meets each rail
+      p.px(2, y, 96, 70, 40); p.px(13, y, 96, 70, 40);
+    }
+  },
+  [TILE.DOOR_LOWER](p) {
+    // plank door, lower leaf: upright boards in a darker jamb, with a worn
+    // brass thumb-latch on the closing side
+    for (let y = 0; y < TILE_PX; y++) {
+      for (let x = 0; x < TILE_PX; x++) {
+        const d = (p.rand() * 2 - 1) * 7;
+        const seam = x % 4 === 3 ? -24 : 0; // upright board joins
+        p.px(x, y, 170 + d + seam, 136 + d + seam, 84 + d + seam);
+      }
+    }
+    for (let i = 0; i < TILE_PX; i++) { // jamb: left/right rails + bottom sill
+      const d = (p.rand() * 2 - 1) * 6;
+      p.px(0, i, 116 + d, 86 + d, 50 + d); p.px(15, i, 116 + d, 86 + d, 50 + d);
+      p.px(i, 15, 104 + d, 78 + d, 46 + d); p.px(i, 14, 122 + d, 92 + d, 54 + d);
+    }
+    // the latch
+    p.px(12, 7, 210, 190, 120); p.px(13, 7, 228, 208, 134);
+    p.px(12, 8, 176, 156, 96); p.px(13, 8, 210, 190, 120);
+  },
+  [TILE.DOOR_UPPER](p) {
+    // plank door, upper leaf: same boards, a top rail, and a small pale
+    // window pane so a Wanderling can check who's knocking
+    for (let y = 0; y < TILE_PX; y++) {
+      for (let x = 0; x < TILE_PX; x++) {
+        const d = (p.rand() * 2 - 1) * 7;
+        const seam = x % 4 === 3 ? -24 : 0;
+        p.px(x, y, 170 + d + seam, 136 + d + seam, 84 + d + seam);
+      }
+    }
+    for (let i = 0; i < TILE_PX; i++) { // jamb: left/right rails + top rail
+      const d = (p.rand() * 2 - 1) * 6;
+      p.px(0, i, 116 + d, 86 + d, 50 + d); p.px(15, i, 116 + d, 86 + d, 50 + d);
+      p.px(i, 0, 104 + d, 78 + d, 46 + d); p.px(i, 1, 122 + d, 92 + d, 54 + d);
+    }
+    // the pane: dark sash frame around pale marsh-light glass
+    for (let y = 5; y <= 10; y++) {
+      for (let x = 5; x <= 10; x++) {
+        const rim = y === 5 || y === 10 || x === 5 || x === 10;
+        if (rim) { p.px(x, y, 98, 72, 42); continue; }
+        const d = (p.rand() * 2 - 1) * 8;
+        p.px(x, y, 212 + d, 230 + d, 234 + d);
+      }
+    }
+    p.px(7, 7, 238, 248, 250); p.px(8, 6, 238, 248, 250); // glint
   },
   [TILE.SAPLING](p) {
     p.clear();

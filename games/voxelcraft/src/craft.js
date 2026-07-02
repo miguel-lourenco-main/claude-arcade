@@ -5,7 +5,7 @@
 
 import {
   LOG, PLANKS, SAND, COBBLE, STONE, BRICKS, SANDSTONE, COAL_ORE,
-  TORCH, CHEST, WORKBENCH, KILN, MOSS_CLUMP, BED,
+  TORCH, CHEST, WORKBENCH, KILN, MOSS_CLUMP, BED, LADDER, DOOR,
 } from "./blocks.js";
 
 // in: [[blockId, count], ...]  out: [blockId, count]
@@ -17,6 +17,8 @@ export const RECIPES = [
   { in: [[PLANKS, 8]], out: [CHEST, 1] },
   { in: [[COBBLE, 8]], out: [KILN, 1] },
   { in: [[PLANKS, 3], [MOSS_CLUMP, 2]], out: [BED, 1] },
+  { in: [[PLANKS, 2]], out: [LADDER, 3] },
+  { in: [[PLANKS, 6]], out: [DOOR, 1] },
   { in: [[SAND, 4]], out: [SANDSTONE, 1] },
   { in: [[STONE, 4]], out: [BRICKS, 4] },
 ];

@@ -37,6 +37,13 @@ export const KILN = 31;
 export const IRON_BLOCK = 32;
 export const MOSS_CLUMP = 33;
 export const BED = 34;
+export const LADDER = 35;
+// the door is FOUR block ids: LOWER/UPPER × CLOSED/OPEN. DOOR (lower closed)
+// is the user-visible item; the other three are internal world states.
+export const DOOR = 36;
+export const DOOR_TOP = 37;
+export const DOOR_OPEN = 38;
+export const DOOR_TOP_OPEN = 39;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -57,6 +64,9 @@ const def = (name, opts) => ({
   tiles: null,       // {top, side, bottom}
   placeable: true,   // false = an item that can never be placed in the world
   food: null,        // {restore: N} — edible; N hunger points on eating
+  sturdy: false,     // cross-kind that is NOT a plant: never replaced in place,
+                     // never popped when the block under it breaks (ladder, door)
+  hidden: false,     // internal id: kept out of the creative palette
   ...opts,
 });
 
@@ -223,8 +233,83 @@ BLOCKS[BED] = def("Moss Cot", { hardness: 0.8,
   sound: "plant",
 });
 
-// Blocks offered in the hotbar picker (everything but air).
-export const PLACEABLE = BLOCKS.map((b, id) => id).filter((id) => id !== AIR);
+// the Rung Ladder: cross-kind and non-solid, but wall-mounted — placement
+// wants a solid horizontal neighbor, and player.js suspends gravity on it
+BLOCKS[LADDER] = def("Rung Ladder", { hardness: 0.4,
+  tiles: cube(TILE.LADDER),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  sturdy: true,
+  sound: "wood",
+});
+
+// the Plank Door: two blocks tall. Closed halves are solid cutout cubes;
+// open halves are cross-kind sprites (the leaf folded aside). All routing
+// (paired place/break/toggle) lives in interact.js.
+BLOCKS[DOOR] = def("Plank Door", { hardness: 1.6,
+  tiles: cube(TILE.DOOR_LOWER),
+  bucket: "cutout",
+  opaque: false,
+  drops: null, // the paired-break handler drops the one door item
+  sound: "wood",
+});
+BLOCKS[DOOR_TOP] = def("Plank Door (top)", { hardness: 1.6,
+  tiles: cube(TILE.DOOR_UPPER),
+  bucket: "cutout",
+  opaque: false,
+  drops: null,
+  sound: "wood",
+  placeable: false,
+  hidden: true,
+});
+BLOCKS[DOOR_OPEN] = def("Plank Door (open)", { hardness: 1.6,
+  tiles: cube(TILE.DOOR_LOWER),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  sturdy: true,
+  drops: null,
+  sound: "wood",
+  placeable: false,
+  hidden: true,
+});
+BLOCKS[DOOR_TOP_OPEN] = def("Plank Door (open top)", { hardness: 1.6,
+  tiles: cube(TILE.DOOR_UPPER),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  sturdy: true,
+  drops: null,
+  sound: "wood",
+  placeable: false,
+  hidden: true,
+});
+
+// door-family helpers: which ids are door halves, which half is the lower,
+// and the open/closed swap for each half
+const DOOR_IDS = new Set([DOOR, DOOR_TOP, DOOR_OPEN, DOOR_TOP_OPEN]);
+export function isDoor(id) { return DOOR_IDS.has(id); }
+export function isDoorLower(id) { return id === DOOR || id === DOOR_OPEN; }
+export const DOOR_TOGGLE = {
+  [DOOR]: DOOR_OPEN, [DOOR_OPEN]: DOOR,
+  [DOOR_TOP]: DOOR_TOP_OPEN, [DOOR_TOP_OPEN]: DOOR_TOP,
+};
+
+// a cross block that pops off / is replaced in place when built over (plants;
+// NOT ladders or open door halves)
+export function isPlant(id) {
+  const b = BLOCKS[id];
+  return b !== undefined && b.kind === "cross" && !b.sturdy;
+}
+
+// Blocks offered in the hotbar picker (everything but air and the internal
+// door-half states).
+export const PLACEABLE = BLOCKS.map((b, id) => id)
+  .filter((id) => id !== AIR && !BLOCKS[id].hidden);
 
 export const DEFAULT_HOTBAR = [GRASS, DIRT, STONE, COBBLE, PLANKS, LOG, LEAVES, GLASS, TORCH];
 

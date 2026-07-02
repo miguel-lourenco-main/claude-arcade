@@ -99,6 +99,13 @@ export class Sfx {
 
   craft() { this._noiseBurst(900, 0.08, 0.1); }
 
+  // hinge creak for the Plank Door: two short wooden squeaks — pitch climbs
+  // when it swings open, sinks when it thuds shut
+  door(open) {
+    this._noiseBurst(open ? 340 : 430, 0.09, 0.12);
+    setTimeout(() => this._noiseBurst(open ? 560 : 250, 0.13, 0.11), 80);
+  }
+
   pickup() {
     if (!this.enabled || !this._ensure()) return;
     const ctx = this.ctx;

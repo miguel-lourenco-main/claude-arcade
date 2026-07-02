@@ -407,6 +407,7 @@ const interaction = new Interaction(world, player, scene, hud, {
   },
   onSound: (kind, id) => sfx.block(kind, id),
   onEat: (kind) => sfx.eat(kind),
+  onDoor: (opened) => sfx.door(opened),
   onPick: (id) => hud.pickBlock(id),
   onSwing: () => { swingT = 0; playerModel.swing(); },
   // placement consumes from the SELECTED HOTBAR SLOT only
