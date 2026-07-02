@@ -32,7 +32,7 @@ canvas atlas at boot, and every sound is synthesized with WebAudio.
 - **Interaction** — 5-block voxel raycast, block highlight, instant break with
   hold-repeat plus sweep-breaking (drag the crosshair to mow through blocks),
   placement with player-overlap rejection, middle-click pick block, break
-  particles, procedural dig/place/footstep sounds. Bedrock is indestructible.
+  particles, procedural dig/place/footstep sounds. The World's Back (the world floor) is indestructible.
 - **World feel** — 10-minute day/night cycle: moving sun and moon, stars,
   scrolling blocky clouds, dusk tint, genuinely dark blue-ish nights, fog
   matched to sky and view distance, underwater fog.
@@ -50,7 +50,7 @@ canvas atlas at boot, and every sound is synthesized with WebAudio.
   damage (blocks fallen − 3), drowning with an air-bubble meter, cactus and
   void damage, slow passive regen, death screen with respawn. Blocks take
   real time to mine (per-block hardness with a crack overlay) and drop
-  collectible items (MC rules: stone → cobblestone, grass → dirt, leaves and
+  collectible items (MC rules: stone → river rubble, grass → dirt, leaves and
   glass → nothing) that magnetize into a counted inventory; placing consumes
   them and the picker becomes your inventory. No flying, shorter reach.
   Simplification: no tools (hand-mining times are scaled to stay fun).
@@ -63,13 +63,13 @@ canvas atlas at boot, and every sound is synthesized with WebAudio.
   every break/place.
 - **Crafting** — a flat recipe list (field recipes in the inventory, the full
   cookbook at a workbench): log → 4 planks, 4 planks → workbench, coal ore +
-  planks → 4 torches, 8 planks → chest, 8 cobblestone → kiln, 4 sand →
+  planks → 4 torches, 8 planks → chest, 8 river rubble → kiln, 4 sand →
   sandstone, 4 stone → 4 bricks. There's no crafting grid — with no tools or
   intermediate items, shapes would be ceremony without depth.
-- **The Kiln — smelting** — craft one from 8 cobblestone and right-click it:
+- **The Kiln — smelting** — craft one from 8 river rubble and right-click it:
   three slots (input over fuel, take-only output) with a live smelt-progress
   arrow and an ember that lights while the fire burns. Smelts: sand → glass,
-  cobblestone → stone, iron ore → iron block, snuffet loin → roast loin
+  river rubble → stone, sky-iron ore → sky-iron block, snuffet loin → roast loin
   (10 s each). Fuel: coal ore (80 s), log (15 s), planks (8 s) — once lit, the
   fire keeps burning even with nothing on it. Kilns keep working while the
   window is open, persist their contents (and remaining burn) in the save,

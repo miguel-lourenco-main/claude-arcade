@@ -173,25 +173,25 @@ const cube = (t) => (typeof t === "number" ? { top: t, side: t, bottom: t } : t)
 
 export const BLOCKS = [];
 BLOCKS[AIR] = def("Air", { solid: false, opaque: false, bucket: null });
-BLOCKS[GRASS] = def("Grass Block", { hardness: 0.6, drops: DIRT, toolKind: "shovel",
+BLOCKS[GRASS] = def("Turf", { hardness: 0.6, drops: DIRT, toolKind: "shovel",
   tiles: cube({ top: TILE.GRASS_TOP, side: TILE.GRASS_SIDE, bottom: TILE.DIRT }),
   sound: "dirt",
 });
 BLOCKS[DIRT] = def("Dirt", { hardness: 0.5, tiles: cube(TILE.DIRT), sound: "dirt", toolKind: "shovel" });
 BLOCKS[STONE] = def("Stone", { hardness: 1.9, drops: COBBLE, tiles: cube(TILE.STONE),
   toolKind: "pick", needsPick: 1 });
-BLOCKS[COBBLE] = def("Cobblestone", { hardness: 2.0, tiles: cube(TILE.COBBLE),
+BLOCKS[COBBLE] = def("River Rubble", { hardness: 2.0, tiles: cube(TILE.COBBLE),
   toolKind: "pick", needsPick: 1 });
 BLOCKS[SAND] = def("Sand", { hardness: 0.5, tiles: cube(TILE.SAND), sound: "sand", toolKind: "shovel" });
 BLOCKS[GRAVEL] = def("Gravel", { hardness: 0.6, tiles: cube(TILE.GRAVEL), sound: "sand", toolKind: "shovel" });
-BLOCKS[LOG] = def("Oak Log", { hardness: 1.4, toolKind: "axe",
+BLOCKS[LOG] = def("Knotwood Log", { hardness: 1.4, toolKind: "axe",
   tiles: cube({ top: TILE.LOG_TOP, side: TILE.LOG_SIDE, bottom: TILE.LOG_TOP }),
   sound: "wood",
 });
-BLOCKS[LEAVES] = def("Oak Leaves", { hardness: 0.3, drops: null,
+BLOCKS[LEAVES] = def("Knotwood Leaves", { hardness: 0.3, drops: null,
   randomDrop: { id: SAPLING, chance: 0.1 },
   tiles: cube(TILE.LEAVES), sound: "plant" });
-BLOCKS[PLANKS] = def("Oak Planks", { hardness: 1.4, tiles: cube(TILE.PLANKS), sound: "wood", toolKind: "axe" });
+BLOCKS[PLANKS] = def("Knotwood Planks", { hardness: 1.4, tiles: cube(TILE.PLANKS), sound: "wood", toolKind: "axe" });
 BLOCKS[GLASS] = def("Glass", { hardness: 0.4, drops: null,
   tiles: cube(TILE.GLASS),
   opaque: false,
@@ -207,8 +207,8 @@ BLOCKS[WATER] = def("Water", {
   cullSame: true,
   sound: "plant",
 });
-BLOCKS[BEDROCK] = def("Bedrock", { hardness: Infinity, drops: null, tiles: cube(TILE.BEDROCK) });
-BLOCKS[SNOWY_GRASS] = def("Snowy Grass", { hardness: 0.6, drops: DIRT, toolKind: "shovel",
+BLOCKS[BEDROCK] = def("World's Back", { hardness: Infinity, drops: null, tiles: cube(TILE.BEDROCK) });
+BLOCKS[SNOWY_GRASS] = def("Snowy Turf", { hardness: 0.6, drops: DIRT, toolKind: "shovel",
   tiles: cube({ top: TILE.SNOW_TOP, side: TILE.SNOW_SIDE, bottom: TILE.DIRT }),
   sound: "dirt",
 });
@@ -221,7 +221,7 @@ BLOCKS[TALLGRASS] = def("Tall Grass", { hardness: 0.05, drops: null,
   opaque: false,
   sound: "plant",
 });
-BLOCKS[POPPY] = def("Poppy", { hardness: 0.05,
+BLOCKS[POPPY] = def("Emberbell", { hardness: 0.05,
   tiles: cube(TILE.FLOWER_RED),
   kind: "cross",
   bucket: "cutout",
@@ -229,7 +229,7 @@ BLOCKS[POPPY] = def("Poppy", { hardness: 0.05,
   opaque: false,
   sound: "plant",
 });
-BLOCKS[DANDELION] = def("Dandelion", { hardness: 0.05,
+BLOCKS[DANDELION] = def("Sunwisp", { hardness: 0.05,
   tiles: cube(TILE.FLOWER_YELLOW),
   kind: "cross",
   bucket: "cutout",
@@ -246,12 +246,12 @@ BLOCKS[BRICKS] = def("Bricks", { hardness: 2.0, tiles: cube(TILE.BRICKS),
 BLOCKS[SANDSTONE] = def("Sandstone", { hardness: 1.2, toolKind: "pick", needsPick: 1,
   tiles: cube({ top: TILE.SANDSTONE_TOP, side: TILE.SANDSTONE_SIDE, bottom: TILE.SANDSTONE_TOP }),
 });
-BLOCKS[LEAVES_COLD] = def("Spruce Leaves", { hardness: 0.3, drops: null,
+BLOCKS[LEAVES_COLD] = def("Rimewood Leaves", { hardness: 0.3, drops: null,
   randomDrop: { id: SAPLING, chance: 0.1 },
   tiles: cube(TILE.LEAVES_COLD), sound: "plant" });
 BLOCKS[COAL_ORE] = def("Coal Ore", { hardness: 2.8, tiles: cube(TILE.COAL_ORE),
   toolKind: "pick", needsPick: 1 });
-BLOCKS[IRON_ORE] = def("Iron Ore", { hardness: 3.2, tiles: cube(TILE.IRON_ORE),
+BLOCKS[IRON_ORE] = def("Sky-Iron Ore", { hardness: 3.2, tiles: cube(TILE.IRON_ORE),
   toolKind: "pick", needsPick: 2 }); // sky-iron asks for a stone pick at least
 BLOCKS[TORCH] = def("Torch", { hardness: 0.05,
   tiles: cube(TILE.TORCH),
@@ -266,7 +266,7 @@ BLOCKS[CHEST] = def("Chest", { hardness: 1.2, toolKind: "axe",
   tiles: cube({ top: TILE.CHEST_TOP, side: TILE.CHEST_SIDE, bottom: TILE.CHEST_TOP }),
   sound: "wood",
 });
-BLOCKS[SAPLING] = def("Oak Sapling", { hardness: 0.05,
+BLOCKS[SAPLING] = def("Knotwood Sapling", { hardness: 0.05,
   tiles: cube(TILE.SAPLING),
   kind: "cross",
   bucket: "cutout",
@@ -325,7 +325,7 @@ BLOCKS[BERRY_BUSH] = def("Bog Bramble", { hardness: 0.15, drops: BERRIES,
 BLOCKS[KILN] = def("Kiln", { hardness: 2.0, toolKind: "pick", needsPick: 1,
   tiles: cube({ top: TILE.KILN_TOP, side: TILE.KILN_SIDE, bottom: TILE.STONE }),
 });
-BLOCKS[IRON_BLOCK] = def("Iron Block", { hardness: 3.0, tiles: cube(TILE.IRON_BLOCK),
+BLOCKS[IRON_BLOCK] = def("Sky-Iron Block", { hardness: 3.0, tiles: cube(TILE.IRON_BLOCK),
   toolKind: "pick", needsPick: 2 });
 
 // snuffet back-moss: a soft deco block, and the stuffing of the Moss Cot
@@ -438,13 +438,13 @@ const defStairs = (ids, name, tiles, opts) => {
 
 defSlab(PLANK_SLAB, "Plank Slab", TILE.PLANKS, { hardness: 1.4, sound: "wood", toolKind: "axe" });
 defSlab(STONE_SLAB, "Stone Slab", TILE.STONE, { hardness: 1.9, toolKind: "pick", needsPick: 1 });
-defSlab(COBBLE_SLAB, "Cobblestone Slab", TILE.COBBLE, { hardness: 2.0, toolKind: "pick", needsPick: 1 });
+defSlab(COBBLE_SLAB, "Rubble Slab", TILE.COBBLE, { hardness: 2.0, toolKind: "pick", needsPick: 1 });
 defStairs([PLANK_STAIRS, PLANK_STAIRS_E, PLANK_STAIRS_S, PLANK_STAIRS_W],
   "Plank Stairs", TILE.PLANKS, { hardness: 1.4, sound: "wood", toolKind: "axe" });
 defStairs([STONE_STAIRS, STONE_STAIRS_E, STONE_STAIRS_S, STONE_STAIRS_W],
   "Stone Stairs", TILE.STONE, { hardness: 1.9, toolKind: "pick", needsPick: 1 });
 defStairs([COBBLE_STAIRS, COBBLE_STAIRS_E, COBBLE_STAIRS_S, COBBLE_STAIRS_W],
-  "Cobblestone Stairs", TILE.COBBLE, { hardness: 2.0, toolKind: "pick", needsPick: 1 });
+  "Rubble Stairs", TILE.COBBLE, { hardness: 2.0, toolKind: "pick", needsPick: 1 });
 
 // --- wattle fence + gate ------------------------------------------------------
 // Both are shaped blocks whose mesh depends on their neighbors (the mesher
@@ -700,7 +700,7 @@ defTool(STONE_BLADE, "Shiv", "blade", TOOL_TIERS[1], TILE.BLADE_STONE);
 defTool(IRON_BLADE, "Shiv", "blade", TOOL_TIERS[2], TILE.BLADE_IRON);
 
 // the Sky-Iron Ingot: a carried bar, never placed (the kiln makes it from
-// iron ore; four fold back into an Iron Block at the workbench)
+// sky-iron ore; four fold back into a Sky-Iron Block at the workbench)
 BLOCKS[IRON_INGOT] = def("Sky-Iron Ingot", {
   tiles: cube(TILE.IRON_INGOT),
   kind: "cross",

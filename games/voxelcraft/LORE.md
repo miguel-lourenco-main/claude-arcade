@@ -57,3 +57,33 @@ generations of standing upside-down in marsh light. They carry everything in a
 Cozy, dry-witted, a little melancholy at night. Danger is real but polite —
 it announces itself. Torchlight means safety in a very literal sense: the
 things of the old sky won't come near it.
+
+## Field glossary
+
+The Wanderlings' folk names for the stuff of the Upturn. Display names only —
+code identifiers, TILE keys, and save data keep their old ids. Future waves:
+name new flora/geology in this register, and never reuse another game's
+specific item vocabulary.
+
+- **Turf / Snowy Turf** — the living topsoil (grass block). The ground the
+  world grew back after the flip.
+- **Knotwood** — the common tree of the Upturn; the forests "knotted
+  themselves back together" after the flip. Gives Knotwood Log / Leaves /
+  Planks / Sapling.
+- **Rimewood** — the cold-country cousin of knotwood; its needles hold frost.
+  (Rimewood Leaves.)
+- **River Rubble** — broken stone, tumbled-looking as riverbed cobbles
+  (mined from stone; kilns fuse it back). Also Rubble Slab / Rubble Stairs.
+- **World's Back** — the indestructible floor of the world. When everything
+  turned over, something had to be underneath; miners knock on it for luck.
+- **Emberbell** — the red meadow flower; said to be sparks of falling
+  meteor-stones that took root.
+- **Sunwisp** — the yellow meadow flower; a scrap of daylight the flip left
+  behind in the grass.
+- **Sky-Iron** — all iron of the Upturn (ore, ingot, block, tools); it fell
+  from the old seabed-sky as meteor-stone, which is why it's found in the
+  deep old-sky caves.
+
+Generic category words (Dirt, Sand, Stone, Gravel, Water, Glass, Torch,
+Chest, Workbench, Bricks, Sandstone, Coal Ore, Tall Grass, Cactus) stay
+plain — Wanderlings are practical about the basics.

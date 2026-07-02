@@ -1,5 +1,5 @@
 // Survival crafting: flat recipe list (no crafting-table grid — shapes would
-// add ceremony without depth). Heat conversions (sand -> glass, cobblestone
+// add ceremony without depth). Heat conversions (sand -> glass, river rubble
 // -> stone, ores, cooking) are NOT recipes — they belong to the Kiln
 // (see kiln.js).
 
