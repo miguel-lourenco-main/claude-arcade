@@ -38,10 +38,26 @@
   </div>
 
   <div id="picker" class="hidden">
-    <div id="picker-panel">
-      <h2>Blocks <span class="hint">(click to put in selected slot — E to close)</span></h2>
-      <div id="picker-grid"></div>
-      <div id="craft-list"></div>
+    <div id="inv-panel">
+      <div id="inv-head">
+        <h2>Satchel <span class="hint">(click a card to bind it to the glowing slot — E to close)</span></h2>
+        <div id="inv-ribbon"></div>
+      </div>
+      <div id="inv-cols">
+        <div id="inv-you">
+          <h3>You</h3>
+          <canvas id="player-view"></canvas>
+          <p class="lore-blurb">A Wanderling of the Upturn. Hands like feet, feet like hands. It works out fine. Drag to spin.</p>
+        </div>
+        <div id="inv-satchel">
+          <h3>Carried</h3>
+          <div id="picker-grid"></div>
+        </div>
+        <div id="inv-workbench">
+          <h3>Workbench</h3>
+          <div id="craft-list"></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -58,7 +74,7 @@
   <div id="overlay">
     <div id="overlay-panel">
       <h1 id="overlay-title">VOXELCRAFT</h1>
-      <p class="sub">a from-scratch Minecraft-style sandbox</p>
+      <p class="sub">a voxel sandbox in the Upturn</p>
       <button id="resume">Click to play</button>
       <div id="controls">
         <div><b>WASD</b> move · <b>Space</b> jump · <b>2×Space</b> fly · <b>2×W</b> sprint · <b>Shift</b> sneak/descend</div>

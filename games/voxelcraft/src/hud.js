@@ -98,6 +98,8 @@ export class Hud {
     this.onRespawn = opts.onRespawn;               // () => void
     this.onCraft = opts.onCraft;                   // (recipe) => void
     this.inventory = opts.inventory;               // survival Inventory
+    this.playerViewer = opts.playerViewer;         // spinnable Wanderling
+    this.bindTarget = 0;                           // ribbon slot cards bind to
     this.slots = [...DEFAULT_HOTBAR];
     this.selected = 0;
     this.pickerOpen = false;
@@ -210,14 +212,14 @@ export class Hud {
   hideDeath() { this.deathEl.classList.add("hidden"); }
   get deathOpen() { return !this.deathEl.classList.contains("hidden"); }
 
-  // hotbar count badges (survival only)
+  // hotbar count badges (survival only); empty slots hide their icon entirely
   refreshCounts() {
     const survival = this.gameMode === "survival";
     for (let i = 0; i < 9; i++) {
       const { slot, count } = this.slotEls[i];
       const n = survival ? this.inventory.count(this.slots[i]) : 0;
       count.textContent = survival && n > 0 ? String(n) : "";
-      slot.classList.toggle("depleted", survival && n === 0);
+      slot.classList.toggle("empty", survival && n === 0);
     }
   }
 
@@ -257,13 +259,15 @@ export class Hud {
   select(i) {
     this.selected = ((i % 9) + 9) % 9;
     this._refreshHotbar();
-    this._announce(BLOCKS[this.selectedId()].name);
+    const id = this.selectedId();
+    const empty = this.gameMode === "survival" && this.inventory.count(id) === 0;
+    this._announce(empty ? "Bare foot" : BLOCKS[id].name);
   }
 
   scroll(delta) { this.select(this.selected + (delta > 0 ? 1 : -1)); }
 
-  setSlot(blockId) {
-    this.slots[this.selected] = blockId;
+  setSlot(blockId, i = this.selected) {
+    this.slots[i] = blockId;
     this._refreshHotbar();
     this.refreshCounts();
     this._announce(BLOCKS[blockId].name);
@@ -308,6 +312,38 @@ export class Hud {
 
   _buildPicker() {
     this.pickerEl = document.getElementById("picker");
+    // hotbar ribbon: 9 mini slots; the armed one receives card clicks
+    const ribbon = document.getElementById("inv-ribbon");
+    this.ribbonEls = [];
+    for (let i = 0; i < 9; i++) {
+      const slot = document.createElement("div");
+      slot.className = "ribbon-slot";
+      const canvas = document.createElement("canvas");
+      canvas.width = ICON; canvas.height = ICON;
+      slot.appendChild(canvas);
+      const n = document.createElement("span");
+      n.className = "n";
+      slot.appendChild(n);
+      slot.addEventListener("click", () => {
+        this.bindTarget = i;
+        this._renderRibbon();
+      });
+      ribbon.appendChild(slot);
+      this.ribbonEls.push({ slot, canvas, n });
+    }
+  }
+
+  _renderRibbon() {
+    const survival = this.gameMode === "survival";
+    for (let i = 0; i < 9; i++) {
+      const { slot, canvas, n } = this.ribbonEls[i];
+      slot.classList.toggle("armed", i === this.bindTarget);
+      const count = survival ? this.inventory.count(this.slots[i]) : 0;
+      const show = !survival || count > 0;
+      canvas.style.visibility = show ? "visible" : "hidden";
+      if (show) drawBlockIcon(canvas.getContext("2d"), this.atlas, this.slots[i]);
+      n.textContent = survival && count > 0 ? String(count) : "";
+    }
   }
 
   // creative: every block; survival: only what the inventory holds, with counts
@@ -337,24 +373,32 @@ export class Hud {
       drawBlockIcon(canvas.getContext("2d"), this.atlas, id);
       cell.appendChild(canvas);
       const label = document.createElement("span");
-      label.textContent = survival
-        ? `${BLOCKS[id].name} ×${this.inventory.count(id)}`
-        : BLOCKS[id].name;
+      label.textContent = BLOCKS[id].name;
       cell.appendChild(label);
+      if (survival) {
+        const stamp = document.createElement("span");
+        stamp.className = "stamp";
+        stamp.textContent = `×${this.inventory.count(id)}`;
+        cell.appendChild(stamp);
+      }
+      // bind to the armed ribbon slot, then auto-advance so the whole hotbar
+      // can be outfitted in one visit; the window stays open
       cell.addEventListener("click", () => {
-        this.setSlot(id);
-        this.closePicker();
-        this.onResume();
+        this.setSlot(id, this.bindTarget);
+        this.bindTarget = (this.bindTarget + 1) % 9;
+        this._renderRibbon();
       });
       grid.appendChild(cell);
     }
   }
 
-  // craft list: one row per recipe, clickable when the inputs are owned
+  // craft list: one row per recipe, craftable rows first
   _renderCrafting() {
     const list = document.getElementById("craft-list");
     list.innerHTML = "";
-    for (const recipe of RECIPES) {
+    const sorted = [...RECIPES].sort(
+      (a, b) => Number(canCraft(b, this.inventory)) - Number(canCraft(a, this.inventory)));
+    for (const recipe of sorted) {
       const ok = canCraft(recipe, this.inventory);
       const row = document.createElement("div");
       row.className = "craft-row" + (ok ? "" : " uncraftable");
@@ -376,6 +420,7 @@ export class Hud {
         row.addEventListener("click", () => {
           this.onCraft(recipe);
           this._renderPicker(); // counts changed everywhere
+          this._renderRibbon();
           this.refreshCounts();
         });
       }
@@ -384,15 +429,19 @@ export class Hud {
   }
 
   openPicker() {
+    this.bindTarget = this.selected;
     this._renderPicker();
+    this._renderRibbon();
     this.pickerOpen = true;
     this.pickerEl.classList.remove("hidden");
+    if (this.playerViewer) this.playerViewer.start();
     document.exitPointerLock();
   }
 
   closePicker() {
     this.pickerOpen = false;
     this.pickerEl.classList.add("hidden");
+    if (this.playerViewer) this.playerViewer.stop();
   }
 
   // ---- chest UI: two panels, click a stack to move it wholesale ----
