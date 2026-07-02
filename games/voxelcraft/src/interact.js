@@ -5,7 +5,7 @@ import * as THREE from "three";
 import {
   AIR, BEDROCK, CHEST, WORKBENCH, KILN, BED, LADDER, DOOR, DOOR_TOP, BLAST_KEG,
   GATE, GATE_OPEN, ROOT_SEED, CROP_SPROUT, DIRT, GRASS, SLING_STONE, BOAT, WATER,
-  FISHING_POLE,
+  FISHING_POLE, SNOW_LAYER,
   BLOCKS, isSolid, isPlant, isDoor, isDoorLower, isGate, isSign, DOOR_TOGGLE,
   dropFor, yawToFacing,
 } from "./blocks.js";
@@ -347,7 +347,8 @@ export class Interaction {
     const affected = this.world.setBlock(t.x, t.y, t.z, AIR);
     const above = this.world.getBlock(t.x, t.y + 1, t.z);
     let popped = null;
-    if (isPlant(above)) {
+    // a plant (or a Snowdrift — which keeps nothing) pops off its support
+    if (isPlant(above) || above === SNOW_LAYER) {
       popped = above;
       this.world.setBlock(t.x, t.y + 1, t.z, AIR);
     }
@@ -427,10 +428,10 @@ export class Interaction {
     if (t.id === KILN && this.onKilnBreak) this.onKilnBreak(t.x, t.y, t.z);
     const def = BLOCKS[t.id];
     const affected = this.world.setBlock(t.x, t.y, t.z, AIR);
-    // breaking the support under a plant pops the plant too
+    // breaking the support under a plant (or a Snowdrift) pops it too
     const above = this.world.getBlock(t.x, t.y + 1, t.z);
     let popped = null;
-    if (isPlant(above)) {
+    if (isPlant(above) || above === SNOW_LAYER) {
       popped = above;
       this.world.setBlock(t.x, t.y + 1, t.z, AIR);
     }
@@ -657,13 +658,15 @@ export class Interaction {
     if (def.placeable === false) return;
 
     let px = t.x, py = t.y, pz = t.z;
-    // plants are replaceable in place; otherwise place against the hit face
-    // (sturdy crosses — ladders, open door halves — are never built over)
-    if (!isPlant(t.id)) {
+    // plants and Snowdrifts are replaceable in place; otherwise place against
+    // the hit face (sturdy crosses — ladders, open door halves — are never
+    // built over)
+    if (!isPlant(t.id) && t.id !== SNOW_LAYER) {
       px += t.normal[0]; py += t.normal[1]; pz += t.normal[2];
     }
-    // a cell is buildable if it's air, a plant, or water
-    const canReplace = (bid) => bid === AIR || isPlant(bid) || BLOCKS[bid].bucket === "water";
+    // a cell is buildable if it's air, a plant, a Snowdrift, or water
+    const canReplace = (bid) => bid === AIR || isPlant(bid) || bid === SNOW_LAYER ||
+      BLOCKS[bid].bucket === "water";
     const existing = this.world.getBlock(px, py, pz);
     if (!canReplace(existing)) return;
 
@@ -686,6 +689,11 @@ export class Interaction {
       // a Notice Post stands on solid ground only — nobody trusts a notice
       // nailed to thin air
       if (!isSolid(this.world.getBlock(px, py - 1, pz))) return;
+    } else if (id === SNOW_LAYER) {
+      // a Snowdrift settles on flat full-block tops only (never mid-air,
+      // never on a slab's half rise or a fence's shoulders)
+      const below = BLOCKS[this.world.getBlock(px, py - 1, pz)];
+      if (!below.solid || below.shape || below.colHeight !== 1) return;
     } else if (def.kind === "cross" && !isSolid(this.world.getBlock(px, py - 1, pz))) {
       return; // plants need soil
     }
@@ -731,7 +739,8 @@ export class Interaction {
   // floor; consumes ONE item and writes both halves
   _placeDoor(px, py, pz, existing) {
     if (py < 1 || py + 1 >= HEIGHT) return;
-    const canReplace = (bid) => bid === AIR || isPlant(bid) || BLOCKS[bid].bucket === "water";
+    const canReplace = (bid) => bid === AIR || isPlant(bid) || bid === SNOW_LAYER ||
+      BLOCKS[bid].bucket === "water";
     const upperEx = this.world.getBlock(px, py + 1, pz);
     if (!canReplace(upperEx)) return;
     if (!isSolid(this.world.getBlock(px, py - 1, pz))) return; // solid floor

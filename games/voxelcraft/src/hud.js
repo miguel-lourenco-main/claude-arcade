@@ -134,6 +134,9 @@ function drawDurabilityBar(ctx, def, stack) {
 }
 
 const TELEPORTS = ["spawn", "forest", "plains", "desert", "snow", "mountain", "ocean"];
+// folk names on the buttons where one exists (the biome KEY stays stable —
+// saves, terrain.js, and the search itself all speak "snow")
+const TELEPORT_LABELS = { snow: "Rimelands" };
 
 // tiny pixel-art status icons, drawn once and reused as data URLs
 function pixelIcon(rows, colorFor) {
@@ -463,7 +466,8 @@ export class Hud {
     for (const kind of TELEPORTS) {
       const btn = document.createElement("button");
       btn.className = "tp-btn";
-      btn.textContent = kind[0].toUpperCase() + kind.slice(1);
+      btn.dataset.kind = kind;
+      btn.textContent = TELEPORT_LABELS[kind] || kind[0].toUpperCase() + kind.slice(1);
       btn.addEventListener("click", () => {
         status.textContent = `Searching for ${kind}…`;
         btn.disabled = true;

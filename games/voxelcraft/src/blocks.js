@@ -151,6 +151,14 @@ export const IRON_TREADS = 97;
 export const STARSTONE = 98;
 export const STARGLASS = 99;
 export const STAR_BLADE = 100;
+// the Rimelands' weather-made blocks (see LORE.md): SNOW_LAYER is a Snowdrift,
+// a thin settled fall of snow that stands on flat block tops (shape "layer",
+// walkable, breaks in a kick, keeps nothing). ICE is River Glass, the frozen
+// lid the cold country pulls over its water — glass-family mesh rules,
+// slippery underfoot (player.js), and it breaks to nothing but the water it
+// was hiding.
+export const SNOW_LAYER = 101;
+export const ICE = 102;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -831,6 +839,36 @@ BLOCKS[STAR_BLADE] = def("Star-Edge Shiv", {
   sound: "wood",
   maxStack: 1,
   tool: { kind: "blade", tier: 4, speed: 6, damage: 7, maxDur: 512 },
+});
+
+// --- the Rimelands' weather-made blocks ---------------------------------------
+// the Snowdrift: a thin fresh fall, shape "layer" (a 0.12-high box — see
+// shapeBoxes in mesher.js). Solid so a Wanderling stands ON it (colHeight),
+// but a kick disperses it instantly and it keeps nothing. Not opaque: a drift
+// never blocks skylight, and its cell reads as passable to the light column.
+BLOCKS[SNOW_LAYER] = def("Snowdrift", {
+  tiles: cube(TILE.SNOW_TOP),
+  shape: "layer",
+  opaque: false,
+  colHeight: 0.12,
+  hardness: 0.05,
+  drops: null,
+  toolKind: "shovel",
+  sound: "sand",
+});
+// River Glass: the cold country's frozen lid. Glass-family mesh rules
+// (cutout + cullSame, not opaque so skylight reaches the water beneath);
+// breaks to nothing and reveals the old water it was politely holding down.
+// player.js halves ground traction on it — the slide is the point.
+BLOCKS[ICE] = def("River Glass", {
+  tiles: cube(TILE.ICE),
+  hardness: 0.6,
+  drops: null,
+  opaque: false,
+  bucket: "cutout",
+  cullSame: true,
+  toolKind: "pick",
+  sound: "glass",
 });
 
 // total damage-reduction fraction of a wear-slot array (entries are stacks or

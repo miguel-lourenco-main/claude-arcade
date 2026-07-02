@@ -214,6 +214,15 @@ export class World {
     return affected;
   }
 
+  // is this cell in the persistent edit overlay? (snow accumulation asks
+  // before settling a drift — never rework what a player worked)
+  hasEdit(x, y, z) {
+    if (y < 0 || y >= HEIGHT) return false;
+    const overlay = this.edits.get(chunkKey(x >> 4, z >> 4));
+    if (!overlay) return false;
+    return overlay.has(blockIndex(x - ((x >> 4) << 4), y, z - ((z >> 4) << 4)));
+  }
+
   // Create + generate a chunk (or return the existing one).
   ensureChunk(cx, cz) {
     const key = chunkKey(cx, cz);

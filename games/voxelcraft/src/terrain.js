@@ -6,7 +6,7 @@
 import {
   GRASS, DIRT, STONE, SAND, GRAVEL, LOG, LEAVES, LEAVES_COLD, WATER, BEDROCK,
   SNOWY_GRASS, TALLGRASS, POPPY, DANDELION, CACTUS, SANDSTONE, COAL_ORE,
-  IRON_ORE, BERRY_BUSH, AIR,
+  IRON_ORE, BERRY_BUSH, SNOW_LAYER, ICE, AIR,
 } from "./blocks.js";
 import { CHUNK, HEIGHT, SEA_LEVEL } from "./world.js";
 import { Perlin, hash2 } from "./noise.js";
@@ -159,9 +159,11 @@ export function makeGenerator(seed) {
           if (id !== AIR) chunk.set(lx, y, lz, id);
         }
 
-        // surface water
+        // surface water — the Rimelands pull a River Glass lid over theirs
+        // (only the topmost cell freezes; the old water waits underneath)
         if (h < SEA_LEVEL) {
           for (let y = h + 1; y <= SEA_LEVEL; y++) chunk.set(lx, y, lz, WATER);
+          if (biome === "snow") chunk.set(lx, SEA_LEVEL, lz, ICE);
         }
       }
     }
@@ -189,6 +191,18 @@ export function makeGenerator(seed) {
         if (cactus > 0 && chunk.get(lx, h, lz) === SAND) {
           for (let i = 1; i <= cactus; i++) {
             if (h + i < HEIGHT && chunk.get(lx, h + i, lz) === AIR) chunk.set(lx, h + i, lz, CACTUS);
+          }
+          continue;
+        }
+
+        // the Rimelands: scattered Snowdrifts on open snowy turf (skipping
+        // columns a rimewood trunk/canopy already claimed). Deterministic
+        // from the seed like every other decoration.
+        if (biome === "snow" && h > SEA_LEVEL && h + 1 < HEIGHT) {
+          const rs = hash2(x, z, seed ^ 0x5d01f);
+          if (rs < 0.3 && chunk.get(lx, h, lz) === SNOWY_GRASS &&
+              chunk.get(lx, h + 1, lz) === AIR) {
+            chunk.set(lx, h + 1, lz, SNOW_LAYER);
           }
           continue;
         }

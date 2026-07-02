@@ -72,6 +72,15 @@ specific item vocabulary.
   Planks / Sapling.
 - **Rimewood** — the cold-country cousin of knotwood; its needles hold frost.
   (Rimewood Leaves.)
+- **The Rimelands** — the cold country itself: the band of the Upturn where
+  the flip's chill never quite thawed. Snowy turf, sparse rimewood, and
+  showers that arrive already frozen. Wanderlings visit; the cold stays.
+- **Snowdrift** — a thin settled fall of fresh snow. Stands on any flat block
+  top, slows a stride a little, and disperses at a kick without leaving
+  anything worth journaling (×0, the stamp says, every time).
+- **River Glass** — the lid the Rimelands pull over their water: ice, milky
+  and crack-veined, slick enough that walking reads as negotiation. Break it
+  and it keeps nothing — it just hands the old water back.
 - **River Rubble** — broken stone, tumbled-looking as riverbed cobbles
   (mined from stone; kilns fuse it back). Also Rubble Slab / Rubble Stairs.
 - **World's Back** — the indestructible floor of the world. When everything

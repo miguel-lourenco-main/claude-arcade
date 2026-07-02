@@ -26,7 +26,7 @@ import { PlayerViewer } from "./player-viewer.js";
 import {
   SAPLING, LOG, LEAVES, LEAVES_COLD, BED, WATER as WATER_ID, dropFor,
   CROP_SPROUT, CROP_RIPE, CROP_STAGES, isCrop, SLING_STONE, BOAT, FISHING_POLE,
-  isSign, COMPASS, CLOCK,
+  isSign, COMPASS, CLOCK, SNOW_LAYER,
 } from "./blocks.js";
 import { makeGenerator, findSpawn, findBiomeLocation } from "./terrain.js";
 import {
@@ -347,6 +347,40 @@ if (save && Array.isArray(save.crops)) {
   }
 }
 if (save && save.edits) world.loadEdits(save.edits);
+
+// --- the Rimelands' snowfall: drifts settle while it snows -------------------
+// When the weather machine rains over the cold biome, the shower falls as
+// snow (rainFx mode) and fresh Snowdrifts settle nearby: bounded (at most one
+// per interval, a handful of probes), sky-lit full-block tops in the snow
+// biome only, and never on a player-edited cell. Placed through setBlock, so
+// settled snow persists in the edit overlay like anything player-made.
+const SNOW_SETTLE_INTERVAL = 1.5;
+let nextSnowSettle = 0;
+
+function settleSnow() {
+  for (let tries = 0; tries < 6; tries++) {
+    const a = Math.random() * Math.PI * 2;
+    const r = 3 + Math.random() * 9;
+    const bx = Math.floor(player.pos.x + Math.cos(a) * r);
+    const bz = Math.floor(player.pos.z + Math.sin(a) * r);
+    if (!world.isGenerated(bx >> 4, bz >> 4)) continue;
+    if (terrain.biomeAt(bx, bz, terrain.heightAt(bx, bz)) !== "snow") continue;
+    // the column's sky-lit top: the first non-air cell under the world
+    // ceiling — inside a structure this finds the ROOF, and the drift lands
+    // on top of it, never in the room below
+    let y = HEIGHT - 2;
+    while (y > 0 && world.getBlock(bx, y, bz) === AIR) y--;
+    if (y <= 0 || y + 1 >= HEIGHT) continue;
+    const support = BLOCKS[world.getBlock(bx, y, bz)];
+    // flat full-block tops only (turf, stone, canopy, river glass) — never
+    // slabs/fences/signs, never a drift on a drift, never open water
+    if (!support.solid || support.shape || support.colHeight !== 1) continue;
+    // never rework a player-edited cell (or bury something player-placed)
+    if (world.hasEdit(bx, y, bz) || world.hasEdit(bx, y + 1, bz)) continue;
+    lightAwareRemesh(world.setBlock(bx, y + 1, bz, SNOW_LAYER), false);
+    return;
+  }
+}
 
 const sky = new Sky(scene, seed);
 if (save && Number.isFinite(save.time)) sky.time = ((save.time % 1) + 1) % 1;
@@ -1081,6 +1115,11 @@ let frames = 0;
 let bobPhase = 0;
 let bobAmp = 0;
 let nextSaplingCheck = 0;
+// the player's biome, sampled on a slow timer (biomeAt runs fbm noise — no
+// need to pay that every frame). Drives the snow-vs-rain precip variant, the
+// muffled snow wash, the Murmur's cold sparkle, and drift settling.
+let playerBiome = "plains";
+let biomeTimer = 0;
 
 const CARDINALS = ["north (-z)", "east (+x)", "south (+z)", "west (-x)"];
 
@@ -1105,6 +1144,14 @@ function tick(now) {
   frames++;
 
   streamChunks(frames < 90);
+
+  biomeTimer -= frameDt;
+  if (biomeTimer <= 0) {
+    biomeTimer = 0.5;
+    const bx = Math.floor(player.pos.x), bz = Math.floor(player.pos.z);
+    playerBiome = terrain.biomeAt(bx, bz, terrain.heightAt(bx, bz));
+  }
+  const inColdBiome = playerBiome === "snow";
 
   // physics only once the ground around the whole AABB exists — the player's
   // own chunk AND its neighbors (collision near a border reads into them)
@@ -1140,6 +1187,12 @@ function tick(now) {
       updateSaplings();
       updateCrops();
       drainOverflow();
+    }
+    // snowfall accumulation: a proper shower (past the fade-in) over the
+    // cold biome settles the occasional fresh drift nearby
+    if (inColdBiome && sky.rain > 0.6 && worldSeconds >= nextSnowSettle) {
+      nextSnowSettle = worldSeconds + SNOW_SETTLE_INTERVAL;
+      settleSnow();
     }
   }
   mobs.setLight(sky.lightLevel, sky.lightTint);
@@ -1251,20 +1304,26 @@ function tick(now) {
         Math.floor(camera.position.z)) === WATER_ID
     : player.eyeInWater;
   sky.update(frameDt, camera, viewInWater);
-  rainFx.update(frameDt, camera, sky.rain);
+  // over the Rimelands the same shower falls as snow (the precip layer
+  // switches sprite/speed/color)
+  rainFx.update(frameDt, camera, sky.rain, inColdBiome ? "snow" : "rain");
   // the rain bed is silent under cover, underground, and underwater — gated
-  // on the same open-column test the streaks use, at the player's eye
+  // on the same open-column test the streaks use, at the player's eye.
+  // Snow hushes the wash: flakes land softer than rain.
   const skyOpen = rainFx.isOpen(player.pos.x, player.eyeY, player.pos.z);
   const rainAudible =
     sky.rain > 0.001 && !player.eyeInWater && skyOpen ? sky.rain : 0;
-  sfx.setRain(rainAudible);
+  const washLevel = rainAudible * (inColdBiome ? 0.35 : 1);
+  sfx.setRain(washLevel);
   // the Murmur reads the same world state each frame: night by the sky's
   // light, the delve by depth or a roofed-over head (the column test stands
-  // in for "no sky light here"), rain via the shared audibility gate
+  // in for "no sky light here"), the cold by the biome underfoot, rain via
+  // the shared (snow-muffled) audibility gate
   music.update({
     night: sky.lightLevel < 0.45,
     delve: player.pos.y < 24 || !skyOpen,
-    rain: rainAudible,
+    cold: inColdBiome,
+    rain: washLevel,
   });
   setDayLight(materials, sky.lightLevel, sky.lightTint);
   setHeldSkinLight(sky.lightLevel, sky.lightTint);
@@ -1312,6 +1371,7 @@ if (NO_LOCK) {
     growAllSaplings: () => { for (const k of saplings.keys()) saplings.set(k, 0); },
     growAllCrops: () => { for (const k of crops.keys()) crops.set(k, 0); },
     getGrowthSeconds: () => growthSeconds,
+    getPlayerBiome: () => playerBiome, // the slow-sampled biome underfoot
     dailyOffers, // (seed, day) — lets tests diff the Peddler's rotation
   };
 }

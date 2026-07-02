@@ -19,18 +19,27 @@ const RADIUS = 15;      // cylinder radius around the camera
 const FALL_SPEED = 21;  // blocks/s straight down
 const STREAK = 0.9;     // visible streak length
 const HIDDEN_Y = -64;   // parking spot for streaks in roofed columns
+// the snow variant (the Rimelands under the same shower): the streaks fall
+// slow and short — flakes, not lances — pale, drifting a little as they go
+const SNOW_FALL_SPEED = 5.5;
+const SNOW_STREAK = 0.22;
+const SNOW_DRIFT_X = 0.7;    // gentle sideways waft (blocks/s, sinusoidal)
+const RAIN_COLOR = 0xaebfce;
+const SNOW_COLOR = 0xeef4fb;
 
 export class Rain {
   constructor(scene, world) {
     this.world = world;
     this.visibleCount = 0; // streaks actually drawn this frame (test hook)
+    this.mode = "rain";    // "rain" | "snow" — which precip the layer renders
+    this._t = 0;           // clock for the snow waft
 
     this._pos = new Float32Array(COUNT * 6);
     this._pos.fill(HIDDEN_Y); // park everything until the first shower
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(this._pos, 3));
     this.mesh = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({
-      color: 0xaebfce, transparent: true, opacity: 0, depthWrite: false,
+      color: RAIN_COLOR, transparent: true, opacity: 0, depthWrite: false,
     }));
     this.mesh.frustumCulled = false;
     this.mesh.visible = false;
@@ -77,7 +86,15 @@ export class Rain {
     d.top = this._columnTop(Math.floor(d.x), Math.floor(d.z));
   }
 
-  update(dt, camera, intensity) {
+  // mode: "rain" | "snow" — main.js passes "snow" while the player stands in
+  // the cold biome, and the same precip layer switches sprite/speed/color
+  update(dt, camera, intensity, mode = "rain") {
+    if (mode !== this.mode) {
+      this.mode = mode;
+      this.mesh.material.color.setHex(mode === "snow" ? SNOW_COLOR : RAIN_COLOR);
+    }
+    const snow = this.mode === "snow";
+    this._t += dt;
     const active = intensity > 0.01;
     this.mesh.visible = active;
     if (!active) {
@@ -96,13 +113,17 @@ export class Rain {
       this._topsAge = 0;
     }
 
-    this.mesh.material.opacity = 0.45 * intensity;
+    this.mesh.material.opacity = (snow ? 0.6 : 0.45) * intensity;
     const camY = camera.position.y;
     const pos = this._pos;
+    const fall = snow ? SNOW_FALL_SPEED : FALL_SPEED;
+    const streak = snow ? SNOW_STREAK : STREAK;
     let visible = 0;
     for (let i = 0; i < COUNT; i++) {
       const d = this._drops[i];
-      d.y -= FALL_SPEED * dt;
+      d.y -= fall * dt;
+      // flakes waft: a slow per-flake sway instead of a plumb-line drop
+      if (snow) d.x += Math.sin(this._t * 1.3 + i * 1.7) * SNOW_DRIFT_X * dt;
       const dx = d.x - camera.position.x, dz = d.z - camera.position.z;
       if (d.y <= d.top || dx * dx + dz * dz > RADIUS * RADIUS * 1.8) {
         this._recycle(d, camera);
@@ -117,7 +138,7 @@ export class Rain {
       }
       visible++;
       pos[o] = d.x; pos[o + 1] = d.y; pos[o + 2] = d.z;
-      pos[o + 3] = d.x; pos[o + 4] = d.y + STREAK; pos[o + 5] = d.z;
+      pos[o + 3] = d.x; pos[o + 4] = d.y + streak; pos[o + 5] = d.z;
     }
     this.visibleCount = visible;
     this.mesh.geometry.attributes.position.needsUpdate = true;

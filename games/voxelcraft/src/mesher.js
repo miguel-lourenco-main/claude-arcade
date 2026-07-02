@@ -363,6 +363,10 @@ export function shapeBoxes(def) {
   if (boxes) return boxes;
   if (def.shape === "slab") {
     boxes = [SLAB_BOX];
+  } else if (def.shape === "layer") {
+    // a thin ground layer (Snowdrift): the box height IS the collision
+    // height, so what the boot meets is exactly what the eye sees
+    boxes = [{ x0: 0, y0: 0, z0: 0, x1: 1, y1: def.colHeight, z1: 1 }];
   } else if (def.shape === "stairs") {
     const b = STAIR_BACK[def.facing];
     boxes = [SLAB_BOX, { ...b, y0: 0.5, y1: 1, skipBottom: true }];

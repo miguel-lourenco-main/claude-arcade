@@ -101,6 +101,8 @@ export const TILE = {
   STARSTONE: 85,
   STARGLASS: 86,
   BLADE_STAR: 87,
+  // River Glass: the Rimelands' frozen lid over water (ICE block)
+  ICE: 88,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -1398,6 +1400,42 @@ painters[TILE.IRON_INGOT] = (p) => {
   for (let x = 4; x <= 11; x++) dot(x, 10, pal.lo);     // the shaded underside
   // the foundry stamp: a two-pip mark, counted like everything else
   p.px(7, 8, 96, 104, 122); p.px(9, 8, 96, 104, 122);
+};
+
+painters[TILE.ICE] = (p) => {
+  // River Glass: milky pale blue with darker old-water depths leaning
+  // through, hairline pressure cracks, and a few pinprick melt-holes (fully
+  // transparent, so the cutout pane reads as ice rather than painted stone)
+  p.noiseFill([176, 208, 232], 7);
+  // depth veins: short dark meanders where the water shows through the lid
+  for (let v = 0; v < 4; v++) {
+    let x = (p.rand() * TILE_PX) | 0, y = (p.rand() * TILE_PX) | 0;
+    const len = 4 + ((p.rand() * 5) | 0);
+    for (let i = 0; i < len; i++) {
+      const d = (p.rand() * 2 - 1) * 8;
+      p.px(x, y, 118 + d, 158 + d, 198 + d);
+      x = Math.max(0, Math.min(TILE_PX - 1, x + ((p.rand() * 3) | 0) - 1));
+      y = Math.max(0, Math.min(TILE_PX - 1, y + ((p.rand() * 3) | 0) - 1));
+    }
+  }
+  // two long pressure cracks, bright as a held breath
+  for (const [sx, sy, dx, dy] of [[1, 12, 1, -1], [4, 1, 1, 1]]) {
+    let x = sx, y = sy;
+    while (x >= 0 && x < TILE_PX && y >= 0 && y < TILE_PX) {
+      p.px(x, y, 228, 240, 250);
+      if (p.rand() < 0.5) p.px(x + 1, y, 205, 224, 240);
+      x += dx + (p.rand() < 0.3 ? dx : 0);
+      y += p.rand() < 0.6 ? dy : 0;
+    }
+  }
+  // melt pinholes: the only see-through pixels (alpha 0 -> cutout discard).
+  // px() paints source-over, so punching a hole needs a real clearRect.
+  for (let i = 0; i < 4; i++) {
+    p.ctx.clearRect(p.ox + ((p.rand() * TILE_PX) | 0),
+      p.oy + ((p.rand() * TILE_PX) | 0), 1, 1);
+  }
+  // a frosted glint near one corner
+  p.px(3, 3, 240, 248, 254); p.px(4, 3, 240, 248, 254); p.px(3, 4, 226, 238, 248);
 };
 
 export function buildAtlas(seed = 1337) {

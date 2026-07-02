@@ -1,7 +1,9 @@
 // First-person player: pointer-lock look, AABB voxel collision, walking /
 // sprinting / sneaking / jumping / swimming / creative flight.
 
-import { BLOCKS, isSolid, WATER, CACTUS, LADDER, armorProtection } from "./blocks.js";
+import {
+  BLOCKS, isSolid, WATER, CACTUS, LADDER, ICE, SNOW_LAYER, armorProtection,
+} from "./blocks.js";
 
 const HALF_W = 0.3;
 const PLAYER_HEIGHT = 1.8;
@@ -386,10 +388,19 @@ export class Player {
         this.vel.y = WATER_EXIT_BOOST;
       }
     } else {
-      const accel = (this.onGround ? (hasInput ? ACCEL_GROUND : FRICTION_GROUND)
+      // frost-country footing: River Glass halves traction (starts and stops
+      // alike — the slide), a Snowdrift drags the stride to 0.9x
+      let traction = 1, stride = 1;
+      if (this.onGround) {
+        const below = this.world.getBlock(
+          Math.floor(this.pos.x), Math.floor(this.pos.y - 0.05), Math.floor(this.pos.z));
+        if (below === ICE) traction = 0.5;
+        else if (below === SNOW_LAYER) stride = 0.9;
+      }
+      const accel = (this.onGround ? (hasInput ? ACCEL_GROUND : FRICTION_GROUND) * traction
         : ACCEL_AIR) * dt;
-      const dvx = dirX * speed - this.vel.x;
-      const dvz = dirZ * speed - this.vel.z;
+      const dvx = dirX * speed * stride - this.vel.x;
+      const dvz = dirZ * speed * stride - this.vel.z;
       const d = Math.hypot(dvx, dvz);
       if (d > 1e-9) {
         const s = Math.min(1, accel / d);

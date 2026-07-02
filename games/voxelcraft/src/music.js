@@ -41,6 +41,12 @@ const MOODS = {
     notes: [1, 3], dur: [2.5, 4.5], rest: [24, 45],
     wave: "sine", peak: 0.13, attack: 0.04, // plink: near-instant strike
   },
+  cold: {
+    scale: [0, 2, 4, 7, 9],        // the day's pentatonic, iced over
+    octave: 2,                      // two octaves up: a glassy sparkle
+    notes: [3, 6], dur: [1.4, 2.6], rest: [16, 34],
+    wave: "sine", peak: 0.07, attack: 0.05, // struck, like tapped river glass
+  },
 };
 
 export class Music {
@@ -64,6 +70,7 @@ export class Music {
 
     this.started = false;
     this.mood = "day";
+    this.moodTarget = "day"; // last mood update() computed (pre-start too)
     this.rainLevel = 0;
     this.nextPhraseAt = 0;
     this._timer = null;
@@ -203,10 +210,16 @@ export class Music {
     }
   }
 
-  // called every frame by main.js with the game's read of the world
+  // called every frame by main.js with the game's read of the world.
+  // Priority: the delve owns underground; the cold sparkle owns the
+  // Rimelands (day or night — frost doesn't keep office hours); then the
+  // usual day/night pair. moodTarget updates even before start() so tests
+  // can assert the read without an unlocked AudioContext.
   update(state) {
+    const mood = state.delve ? "delve" : state.cold ? "cold"
+      : state.night ? "night" : "day";
+    this.moodTarget = mood;
     if (!this.started) return;
-    const mood = state.delve ? "delve" : state.night ? "night" : "day";
     if (mood !== this.mood) {
       this.mood = mood;
       const now = this.ctx.currentTime;
