@@ -1,9 +1,10 @@
 // DOM HUD: hotbar with fake-isometric block icons, block picker, debug
 // overlay, pause overlay, underwater tint.
 
-import { BLOCKS, PLACEABLE, DEFAULT_HOTBAR } from "./blocks.js";
+import { BLOCKS, PLACEABLE, AIR } from "./blocks.js";
 import { ATLAS_TILES, TILE_PX } from "./textures.js";
-import { RECIPES, canCraft } from "./craft.js";
+import { RECIPES, BASIC_RECIPES, canCraft } from "./craft.js";
+import { SlotUI, invRegion, arrayRegion, paletteRegion } from "./slotui.js";
 
 const ICON = 40;
 
@@ -96,17 +97,30 @@ export class Hud {
     this.onSensitivity = opts.onSensitivity;       // (multiplier) => void
     this.onToggleMode = opts.onToggleMode;         // () => new game mode string
     this.onRespawn = opts.onRespawn;               // () => void
-    this.onCraft = opts.onCraft;                   // (recipe) => void
-    this.inventory = opts.inventory;               // survival Inventory
+    this.onCraft = opts.onCraft;                   // (recipe, max) => void
+    this.onSpillCursor = opts.onSpillCursor;       // (stack) => ground drop
+    this.onSlotsChanged = opts.onSlotsChanged;     // any slot mutation (sfx)
+    this.inventory = opts.inventory;               // slot Inventory
     this.playerViewer = opts.playerViewer;         // spinnable Wanderling
-    this.bindTarget = 0;                           // ribbon slot cards bind to
-    this.slots = [...DEFAULT_HOTBAR];
     this.selected = 0;
     this.pickerOpen = false;
+    this.chestOpen = false;
+    this.benchOpen = false;
     this.paused = true; // the boot overlay is showing
     this.gameMode = "creative";
     this._lastHealth = -1;
     this._lastBubbles = -1;
+
+    // one cursor-stack engine powers the inventory/chest/workbench windows
+    this.slotUI = new SlotUI({
+      drawIcon: (ctx, id) => drawBlockIcon(ctx, this.atlas, id),
+      onChange: () => {
+        this.refreshHotbarRow();
+        if (this.onSlotsChanged) this.onSlotsChanged();
+        if (this._chestChanged) this._chestChanged();
+      },
+      onSpill: (stack) => this.onSpillCursor && this.onSpillCursor(stack),
+    });
 
     this._buildHotbar();
     this._buildPicker();
@@ -254,23 +268,44 @@ export class Hud {
     }
   }
 
-  selectedId() { return this.slots[this.selected]; }
+  selectedId() {
+    const s = this.inventory.get(this.selected);
+    return s ? s.id : AIR;
+  }
 
   select(i) {
     this.selected = ((i % 9) + 9) % 9;
-    this._refreshHotbar();
-    const id = this.selectedId();
-    const empty = this.gameMode === "survival" && this.inventory.count(id) === 0;
-    this._announce(empty ? "Bare foot" : BLOCKS[id].name);
+    this.refreshHotbarRow();
+    const s = this.inventory.get(this.selected);
+    this._announce(s ? BLOCKS[s.id].name : "Bare foot");
   }
 
   scroll(delta) { this.select(this.selected + (delta > 0 ? 1 : -1)); }
 
-  setSlot(blockId, i = this.selected) {
-    this.slots[i] = blockId;
-    this._refreshHotbar();
-    this.refreshCounts();
-    this._announce(BLOCKS[blockId].name);
+  // middle-click pick-block: select it if it's on the belt, otherwise swap it
+  // in from the satchel; creative conjures a full stack
+  pickBlock(id) {
+    if (this.gameMode !== "survival") {
+      this.inventory.set(this.selected, { id, count: 64 });
+      this.refreshHotbarRow();
+      this._announce(BLOCKS[id].name);
+      return;
+    }
+    for (let i = 0; i < 9; i++) {
+      const s = this.inventory.get(i);
+      if (s && s.id === id) { this.select(i); return; }
+    }
+    for (let i = 9; i < 36; i++) {
+      const s = this.inventory.get(i);
+      if (s && s.id === id) {
+        const cur = this.inventory.get(this.selected);
+        this.inventory.set(i, cur);
+        this.inventory.set(this.selected, s);
+        this.refreshHotbarRow();
+        this._announce(BLOCKS[id].name);
+        return;
+      }
+    }
   }
 
   _announce(name) {
@@ -299,110 +334,43 @@ export class Hud {
       bar.appendChild(slot);
       this.slotEls.push({ slot, canvas, count });
     }
-    this._refreshHotbar();
+    this.refreshHotbarRow();
   }
 
-  _refreshHotbar() {
+  // the footer hotbar is a direct view of inventory slots 0-8
+  refreshHotbarRow() {
     for (let i = 0; i < 9; i++) {
-      const { slot, canvas } = this.slotEls[i];
+      const { slot, canvas, count } = this.slotEls[i];
       slot.classList.toggle("selected", i === this.selected);
-      drawBlockIcon(canvas.getContext("2d"), this.atlas, this.slots[i]);
+      const s = this.inventory.get(i);
+      slot.classList.toggle("empty", !s);
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (s) drawBlockIcon(ctx, this.atlas, s.id);
+      count.textContent = s && s.count > 1 ? String(s.count) : "";
     }
   }
+
+  // legacy name used by a few call sites
+  refreshCounts() { this.refreshHotbarRow(); }
 
   _buildPicker() {
     this.pickerEl = document.getElementById("picker");
-    // hotbar ribbon: 9 mini slots; the armed one receives card clicks
-    const ribbon = document.getElementById("inv-ribbon");
-    this.ribbonEls = [];
-    for (let i = 0; i < 9; i++) {
-      const slot = document.createElement("div");
-      slot.className = "ribbon-slot";
-      const canvas = document.createElement("canvas");
-      canvas.width = ICON; canvas.height = ICON;
-      slot.appendChild(canvas);
-      const n = document.createElement("span");
-      n.className = "n";
-      slot.appendChild(n);
-      slot.addEventListener("click", () => {
-        this.bindTarget = i;
-        this._renderRibbon();
-      });
-      ribbon.appendChild(slot);
-      this.ribbonEls.push({ slot, canvas, n });
-    }
   }
 
-  _renderRibbon() {
-    const survival = this.gameMode === "survival";
-    for (let i = 0; i < 9; i++) {
-      const { slot, canvas, n } = this.ribbonEls[i];
-      slot.classList.toggle("armed", i === this.bindTarget);
-      const count = survival ? this.inventory.count(this.slots[i]) : 0;
-      const show = !survival || count > 0;
-      canvas.style.visibility = show ? "visible" : "hidden";
-      if (show) drawBlockIcon(canvas.getContext("2d"), this.atlas, this.slots[i]);
-      n.textContent = survival && count > 0 ? String(count) : "";
-    }
+  // the compact "field recipes" list shown in the inventory window (survival)
+  _renderFieldRecipes() {
+    const el = document.getElementById("field-recipes");
+    if (this.gameMode !== "survival") { el.innerHTML = ""; return; }
+    this._renderCraftList(el, this._fieldOrder);
   }
 
-  // creative: every block; survival: only what the inventory holds, with counts
-  _renderPicker() {
-    const grid = document.getElementById("picker-grid");
-    grid.innerHTML = "";
-    const survival = this.gameMode === "survival";
-    const ids = survival ? this.inventory.ownedIds() : PLACEABLE;
-
-    if (survival) this._renderCrafting();
-    else document.getElementById("craft-list").innerHTML = "";
-
-    if (survival && ids.length === 0) {
-      const hint = document.createElement("p");
-      hint.className = "picker-hint";
-      hint.textContent = "Nothing yet — mine some blocks!";
-      grid.appendChild(hint);
-      return;
-    }
-
-    for (const id of ids) {
-      const cell = document.createElement("div");
-      cell.className = "picker-cell";
-      cell.title = BLOCKS[id].name;
-      const canvas = document.createElement("canvas");
-      canvas.width = ICON; canvas.height = ICON;
-      drawBlockIcon(canvas.getContext("2d"), this.atlas, id);
-      cell.appendChild(canvas);
-      const label = document.createElement("span");
-      label.textContent = BLOCKS[id].name;
-      cell.appendChild(label);
-      if (survival) {
-        const stamp = document.createElement("span");
-        stamp.className = "stamp";
-        stamp.textContent = `×${this.inventory.count(id)}`;
-        cell.appendChild(stamp);
-      }
-      // bind to the armed ribbon slot, then auto-advance so the whole hotbar
-      // can be outfitted in one visit; the window stays open
-      cell.addEventListener("click", () => {
-        this.setSlot(id, this.bindTarget);
-        this.bindTarget = (this.bindTarget + 1) % 9;
-        this._renderRibbon();
-      });
-      grid.appendChild(cell);
-    }
-  }
-
-  // craft list: one row per recipe, craftable rows first. The order is
-  // frozen per Satchel visit — re-sorting after a craft would slide a
-  // different recipe under the cursor mid-double-click.
-  _renderCrafting() {
-    const list = document.getElementById("craft-list");
+  // craft list: one row per recipe, from a pre-sorted order that is FROZEN
+  // per window visit — re-sorting after a craft would slide a different
+  // recipe under the cursor mid-double-click.
+  _renderCraftList(list, order) {
     list.innerHTML = "";
-    if (!this.pickerOpen || !this._craftOrder) {
-      this._craftOrder = [...RECIPES].sort(
-        (a, b) => Number(canCraft(b, this.inventory)) - Number(canCraft(a, this.inventory)));
-    }
-    for (const recipe of this._craftOrder) {
+    for (const recipe of order) {
       const ok = canCraft(recipe, this.inventory);
       const row = document.createElement("div");
       row.className = "craft-row" + (ok ? "" : " uncraftable");
@@ -421,22 +389,56 @@ export class Hud {
       row.appendChild(label);
 
       if (ok) {
-        row.addEventListener("click", () => {
-          this.onCraft(recipe);
-          this._renderPicker(); // counts changed everywhere
-          this._renderRibbon();
-          this.refreshCounts();
+        row.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          this.onCraft(recipe, e.shiftKey); // shift-click crafts max
+          this._renderCraftList(list, order);
+          this.slotUI.renderAll();
+          this.refreshHotbarRow();
         });
       }
       list.appendChild(row);
     }
   }
 
+  _sortedRecipes(recipes) {
+    return [...recipes].sort(
+      (a, b) => Number(canCraft(b, this.inventory)) - Number(canCraft(a, this.inventory)));
+  }
+
+  _invRegions() {
+    return {
+      hotbar: invRegion("hotbar", this.inventory, 0, 9),
+      main: invRegion("main", this.inventory, 9, 27),
+    };
+  }
+
+  // inventory window: survival = satchel grid + belt (+ field recipes);
+  // creative = full palette + belt
   openPicker() {
-    this.bindTarget = this.selected;
-    this._craftOrder = null; // re-sort once per visit
-    this._renderPicker();
-    this._renderRibbon();
+    const survival = this.gameMode === "survival";
+    document.getElementById("palette-grid").classList.toggle("hidden", survival);
+    document.getElementById("main-grid").classList.toggle("hidden", !survival);
+    document.getElementById("inv-main-label").textContent = survival ? "Satchel" : "All blocks";
+    const { hotbar, main } = this._invRegions();
+    let views, quick;
+    if (survival) {
+      views = [
+        { region: main, gridEl: document.getElementById("main-grid") },
+        { region: hotbar, gridEl: document.getElementById("hotbar-grid") },
+      ];
+      quick = { main: [hotbar], hotbar: [main] };
+    } else {
+      const palette = paletteRegion("palette", PLACEABLE);
+      views = [
+        { region: palette, gridEl: document.getElementById("palette-grid") },
+        { region: hotbar, gridEl: document.getElementById("hotbar-grid") },
+      ];
+      quick = { palette: [hotbar], hotbar: [] };
+    }
+    this.slotUI.open(views, quick);
+    this._fieldOrder = this._sortedRecipes(BASIC_RECIPES);
+    this._renderFieldRecipes();
     this.pickerOpen = true;
     this.pickerEl.classList.remove("hidden");
     if (this.playerViewer) this.playerViewer.start();
@@ -444,78 +446,63 @@ export class Hud {
   }
 
   closePicker() {
+    if (!this.pickerOpen) return;
     this.pickerOpen = false;
+    this.slotUI.close(); // spills any held cursor stack
     this.pickerEl.classList.add("hidden");
     if (this.playerViewer) this.playerViewer.stop();
   }
 
-  // ---- chest UI: two panels, click a stack to move it wholesale ----
-
-  openChest(store, onChange) {
+  // chest window: container grid + satchel + belt on the same engine
+  openChest(slots, onChange) {
     this.chestOpen = true;
-    this._chestStore = store;
     this._chestChanged = onChange;
-    this._renderChest();
+    const chest = arrayRegion("chest", slots);
+    const { hotbar, main } = this._invRegions();
+    this.slotUI.open([
+      { region: chest, gridEl: document.getElementById("chest-grid") },
+      { region: main, gridEl: document.getElementById("chest-main-grid") },
+      { region: hotbar, gridEl: document.getElementById("chest-hotbar-grid") },
+    ], { chest: [main, hotbar], main: [chest], hotbar: [chest] });
     document.getElementById("chest-ui").classList.remove("hidden");
     document.exitPointerLock();
   }
 
   closeChest() {
+    if (!this.chestOpen) return;
     this.chestOpen = false;
-    this._chestStore = null;
+    this.slotUI.close();
     document.getElementById("chest-ui").classList.add("hidden");
+    this._chestChanged = null;
   }
 
-  _renderChest() {
-    const store = this._chestStore;
-    const fill = (gridId, entries, onClickStack, emptyText) => {
-      const grid = document.getElementById(gridId);
-      grid.innerHTML = "";
-      if (entries.length === 0) {
-        const p = document.createElement("p");
-        p.className = "mini-empty";
-        p.textContent = emptyText;
-        grid.appendChild(p);
-        return;
-      }
-      for (const [id, n] of entries) {
-        const cell = document.createElement("div");
-        cell.className = "mini-cell";
-        cell.title = BLOCKS[id].name;
-        const canvas = document.createElement("canvas");
-        canvas.width = ICON; canvas.height = ICON;
-        drawBlockIcon(canvas.getContext("2d"), this.atlas, id);
-        cell.appendChild(canvas);
-        const count = document.createElement("span");
-        count.className = "n";
-        count.textContent = n;
-        cell.appendChild(count);
-        cell.addEventListener("click", () => {
-          onClickStack(id, n);
-          this._renderChest();
-          this.refreshCounts();
-          this._chestChanged();
-        });
-        grid.appendChild(cell);
-      }
-    };
+  // workbench window: the full cookbook + satchel + belt
+  openBench() {
+    this.benchOpen = true;
+    const { hotbar, main } = this._invRegions();
+    this.slotUI.open([
+      { region: main, gridEl: document.getElementById("bench-main-grid") },
+      { region: hotbar, gridEl: document.getElementById("bench-hotbar-grid") },
+    ], { main: [hotbar], hotbar: [main] });
+    this._benchOrder = this._sortedRecipes(RECIPES);
+    this._renderCraftList(document.getElementById("craft-list"), this._benchOrder);
+    document.getElementById("bench-ui").classList.remove("hidden");
+    document.exitPointerLock();
+  }
 
-    // both directions move only what fits under the 9999 cap and leave the
-    // remainder behind — the old delete-then-clamp destroyed the overflow
-    const CAP = 9999;
-    fill("chest-grid", [...store.entries()], (id, n) => {
-      const moved = Math.min(CAP - this.inventory.count(id), n);
-      if (moved <= 0) return;
-      this.inventory.add(id, moved);
-      if (moved === n) store.delete(id);
-      else store.set(id, n - moved);
-    }, "Empty");
-    fill("chest-inv-grid", [...this.inventory.counts.entries()], (id, n) => {
-      const moved = Math.min(CAP - (store.get(id) || 0), n);
-      if (moved <= 0) return;
-      this.inventory.take(id, moved);
-      store.set(id, (store.get(id) || 0) + moved);
-    }, "Nothing to store");
+  closeBench() {
+    if (!this.benchOpen) return;
+    this.benchOpen = false;
+    this.slotUI.close();
+    document.getElementById("bench-ui").classList.add("hidden");
+  }
+
+  anyWindowOpen() { return this.pickerOpen || this.chestOpen || this.benchOpen; }
+
+  closeAllWindows() {
+    this.closePicker();
+    this.closeChest();
+    this.closeBench();
   }
 
   showPause(firstTime = false) {

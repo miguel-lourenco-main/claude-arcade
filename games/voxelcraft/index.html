@@ -40,8 +40,7 @@
   <div id="picker" class="hidden">
     <div id="inv-panel">
       <div id="inv-head">
-        <h2>Satchel <span class="hint">(click a card to bind it to the glowing slot — E to close)</span></h2>
-        <div id="inv-ribbon"></div>
+        <h2>Satchel <span class="hint">(drag stacks with the cursor — shift-click to quick-move — E to close)</span></h2>
       </div>
       <div id="inv-cols">
         <div id="inv-you">
@@ -49,13 +48,13 @@
           <canvas id="player-view"></canvas>
           <p class="lore-blurb">A Wanderling of the Upturn. Hands like feet, feet like hands. It works out fine. Drag to spin.</p>
         </div>
-        <div id="inv-satchel">
-          <h3>Carried</h3>
-          <div id="picker-grid"></div>
-        </div>
-        <div id="inv-workbench">
-          <h3>Workbench</h3>
-          <div id="craft-list"></div>
+        <div id="inv-slots">
+          <h3 id="inv-main-label">Satchel</h3>
+          <div id="palette-grid" class="slot-grid hidden"></div>
+          <div id="main-grid" class="slot-grid"></div>
+          <h3>Belt</h3>
+          <div id="hotbar-grid" class="slot-grid"></div>
+          <div id="field-recipes"></div>
         </div>
       </div>
     </div>
@@ -63,13 +62,27 @@
 
   <div id="chest-ui" class="hidden">
     <div id="chest-panel">
-      <h2>Chest <span class="hint">(click a stack to move it — E to close)</span></h2>
-      <div class="chest-cols">
-        <div><h3>Chest</h3><div id="chest-grid" class="mini-grid"></div></div>
-        <div><h3>Inventory</h3><div id="chest-inv-grid" class="mini-grid"></div></div>
+      <h2>Chest <span class="hint">(shift-click to quick-move — E to close)</span></h2>
+      <h3>Chest</h3><div id="chest-grid" class="slot-grid"></div>
+      <h3>Satchel</h3><div id="chest-main-grid" class="slot-grid"></div>
+      <div id="chest-hotbar-grid" class="slot-grid belt"></div>
+    </div>
+  </div>
+
+  <div id="bench-ui" class="hidden">
+    <div id="bench-panel">
+      <h2>Workbench <span class="hint">(the cookbook — shift-click a recipe to craft max — E to close)</span></h2>
+      <div id="bench-cols">
+        <div id="bench-book"><h3>Cookbook</h3><div id="craft-list"></div></div>
+        <div id="bench-inv">
+          <h3>Satchel</h3><div id="bench-main-grid" class="slot-grid"></div>
+          <div id="bench-hotbar-grid" class="slot-grid belt"></div>
+        </div>
       </div>
     </div>
   </div>
+
+  <div id="cursor-stack" class="hidden"><canvas width="40" height="40"></canvas><span class="n"></span></div>
 
   <div id="overlay">
     <div id="overlay-panel">
