@@ -11,7 +11,7 @@ import { Mobs } from "./mobs.js";
 import { craft } from "./craft.js";
 import { PlayerModel, buildHeldFoot, setHeldSkinLight } from "./player-model.js";
 import { PlayerViewer } from "./player-viewer.js";
-import { SAPLING, LOG, LEAVES, LEAVES_COLD, dropFor } from "./blocks.js";
+import { SAPLING, LOG, LEAVES, LEAVES_COLD, WATER as WATER_ID, dropFor } from "./blocks.js";
 import { makeGenerator, findSpawn, findBiomeLocation } from "./terrain.js";
 import {
   buildMaterials, meshChunk, disposeChunkMeshes, setDayLight, buildBlockGeometry,
@@ -636,7 +636,9 @@ function tick(now) {
     const eye = { x: player.pos.x, y: player.eyeY, z: player.pos.z };
     const back = { x: -look.x, y: -look.y, z: -look.z };
     const hit = raycast(world, eye, back, 4);
-    const boom = hit ? Math.max(0.4, hit.dist - 0.3) : 4;
+    // never boom past the hit — a floor above hit.dist would put the camera
+    // INSIDE the wall the raycast just found (x-ray view)
+    const boom = hit ? Math.min(4, Math.max(0.05, hit.dist - 0.15)) : 4;
     camera.position.set(eye.x + back.x * boom, eye.y + back.y * boom, eye.z + back.z * boom);
   }
   playerModel.group.position.set(player.pos.x, player.pos.y, player.pos.z);
@@ -660,11 +662,16 @@ function tick(now) {
   }
 
   interaction.update(frameDt);
-  sky.update(frameDt, camera, player.eyeInWater);
+  // underwater fog/tint follow the RENDERING viewpoint: the boomed camera in
+  // third person, the player's eye otherwise
+  const viewInWater = thirdPerson
+    ? world.getBlock(Math.floor(camera.position.x), Math.floor(camera.position.y),
+        Math.floor(camera.position.z)) === WATER_ID
+    : player.eyeInWater;
+  sky.update(frameDt, camera, viewInWater);
   setDayLight(materials, sky.lightLevel, sky.lightTint);
   setHeldSkinLight(sky.lightLevel, sky.lightTint);
-  playerModel.setLight?.(sky.lightLevel, sky.lightTint);
-  hud.setUnderwater(player.eyeInWater);
+  hud.setUnderwater(viewInWater);
 
   if (debugVisible) {
     const p = player.pos;

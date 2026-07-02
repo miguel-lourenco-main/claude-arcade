@@ -32,7 +32,7 @@ export class PlayerViewer {
     this.camera.lookAt(0, 0.95, 0);
 
     // deliberately fully lit — this is a UI element, not part of the world
-    this.model = new PlayerModel(this.seed);
+    this.model = new PlayerModel(this.seed, { unlit: true });
     this.model.setPose("display");
     this.scene.add(this.model.group);
 

@@ -49,13 +49,14 @@ export function makeSkinTextures(seed = 0x5eed) {
   };
 }
 
-// registry of every skin material we hand out, so the day/night tint reaches
-// them all (the voxel-shader setDayLight path never sees these)
+// registry of the IN-WORLD skin materials, so the day/night tint reaches
+// them (the voxel-shader setDayLight path never sees these). UI models
+// (the Satchel viewer) opt out — they stay fully lit.
 const skinMaterials = new Set();
 
-function mat(tex) {
+function mat(tex, register = true) {
   const m = new THREE.MeshBasicMaterial({ map: tex, fog: false });
-  skinMaterials.add(m);
+  if (register) skinMaterials.add(m);
   return m;
 }
 
@@ -109,12 +110,13 @@ function handFoot(skinMat) {
 }
 
 export class PlayerModel {
-  constructor(seed = 0x5eed) {
+  constructor(seed = 0x5eed, { unlit = false } = {}) {
+    const reg = !unlit; // UI models skip the day/night tint registry
     const tex = makeSkinTextures(seed);
-    const skinMat = mat(tex.skin);
-    const tunicMat = mat(tex.tunic);
-    const trouserMat = mat(tex.trousers);
-    const faceMat = mat(tex.face);
+    const skinMat = mat(tex.skin, reg);
+    const tunicMat = mat(tex.tunic, reg);
+    const trouserMat = mat(tex.trousers, reg);
+    const faceMat = mat(tex.face, reg);
 
     this.group = new THREE.Group();
 
@@ -125,7 +127,7 @@ export class PlayerModel {
     // head pivots at the neck; face on +z
     this.headPivot = new THREE.Group();
     this.headPivot.position.y = 1.38;
-    const headMats = [mat(tex.skin), mat(tex.skin), mat(tex.skin), mat(tex.skin), faceMat, mat(tex.skin)];
+    const headMats = [skinMat, skinMat, skinMat, skinMat, faceMat, skinMat];
     const head = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.46, 0.46), headMats);
     head.position.y = 0.25;
     this.headPivot.add(head);
@@ -195,9 +197,10 @@ export class PlayerModel {
     if (s > 0.01) this.arms[1].rotation.x = -s * 1.8;
 
     // swimming: lean the whole body toward horizontal while moving
+    // (positive X tips the head toward local +z — the face/travel direction)
     const targetLean = swimming && speed > 0.5 ? 1 : 0;
     this.swimLean += (targetLean - this.swimLean) * Math.min(1, dt * 6);
-    this.group.rotation.x = this.swimLean * -1.25;
+    this.group.rotation.x = this.swimLean * 1.25;
   }
 
   setPose(pose) {

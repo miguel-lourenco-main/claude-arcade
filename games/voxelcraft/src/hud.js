@@ -392,13 +392,17 @@ export class Hud {
     }
   }
 
-  // craft list: one row per recipe, craftable rows first
+  // craft list: one row per recipe, craftable rows first. The order is
+  // frozen per Satchel visit — re-sorting after a craft would slide a
+  // different recipe under the cursor mid-double-click.
   _renderCrafting() {
     const list = document.getElementById("craft-list");
     list.innerHTML = "";
-    const sorted = [...RECIPES].sort(
-      (a, b) => Number(canCraft(b, this.inventory)) - Number(canCraft(a, this.inventory)));
-    for (const recipe of sorted) {
+    if (!this.pickerOpen || !this._craftOrder) {
+      this._craftOrder = [...RECIPES].sort(
+        (a, b) => Number(canCraft(b, this.inventory)) - Number(canCraft(a, this.inventory)));
+    }
+    for (const recipe of this._craftOrder) {
       const ok = canCraft(recipe, this.inventory);
       const row = document.createElement("div");
       row.className = "craft-row" + (ok ? "" : " uncraftable");
@@ -430,6 +434,7 @@ export class Hud {
 
   openPicker() {
     this.bindTarget = this.selected;
+    this._craftOrder = null; // re-sort once per visit
     this._renderPicker();
     this._renderRibbon();
     this.pickerOpen = true;

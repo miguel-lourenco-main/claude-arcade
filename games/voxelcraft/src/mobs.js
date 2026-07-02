@@ -332,11 +332,17 @@ export class Mobs {
     }
     if (caveY > 0) candidates.push("stalkid");
 
-    if (candidates.length === 0) return;
-    const pick = candidates[(Math.random() * candidates.length) | 0];
+    // filter at candidate time: a capped or rare-roll-failed species must not
+    // soak the whole 4-second attempt and starve the others
+    const eligible = candidates.filter((k) => {
+      const s = SPECIES[k];
+      if (this.count(k) >= s.cap) return false;
+      if (s.rareChance && Math.random() > s.rareChance) return false;
+      return true;
+    });
+    if (eligible.length === 0) return;
+    const pick = eligible[(Math.random() * eligible.length) | 0];
     const spec = SPECIES[pick];
-    if (this.count(pick) >= spec.cap) return;
-    if (spec.rareChance && Math.random() > spec.rareChance) return;
 
     const hostile = spec.behavior === "hostile" || spec.behavior === "ambush";
     const spawnY = pick === "stalkid" ? caveY : surfaceY + 1;
@@ -360,11 +366,13 @@ export class Mobs {
       const m = this.mobs[i];
       const spec = m.spec;
       const distToPlayer = Math.hypot(m.x - player.pos.x, m.z - player.pos.z);
+      // 3D distance for behavior: a stalkid 25 blocks below the surface must
+      // NOT wake up because someone walked overhead
+      const dist3 = Math.hypot(m.x - player.pos.x, m.y - player.pos.y, m.z - player.pos.z);
 
       if (distToPlayer > DESPAWN_DIST) { this._remove(i); continue; }
-      // creatures of the old sky are gone by dawn, as if embarrassed
-      if (!night && spec.habitat === "night") { this._remove(i); continue; }
-      if (!world.isGenerated(Math.floor(m.x) >> 4, Math.floor(m.z) >> 4)) continue;
+      // death pays out BEFORE the dawn cleanup — a kill landed on the
+      // dawn-crossing frame still drops its loot
       if (m.hp <= 0) {
         if (spec.drops && this.onDrop) {
           for (const [id, n] of spec.drops) this.onDrop(m.x, m.y + 0.4, m.z, id, n);
@@ -372,6 +380,9 @@ export class Mobs {
         this._remove(i);
         continue;
       }
+      // creatures of the old sky are gone by dawn, as if embarrassed
+      if (!night && spec.habitat === "night") { this._remove(i); continue; }
+      if (!world.isGenerated(Math.floor(m.x) >> 4, Math.floor(m.z) >> 4)) continue;
       m.hurtT = Math.max(0, m.hurtT - dt);
       m.attackCd = Math.max(0, m.attackCd - dt);
       m.contactCd = Math.max(0, m.contactCd - dt);
@@ -381,11 +392,11 @@ export class Mobs {
       const aggro = spec.aggro || 0;
       let chasing = false;
       if (canFight) {
-        if (spec.behavior === "hostile" && distToPlayer < aggro) chasing = true;
+        if (spec.behavior === "hostile" && dist3 < aggro) chasing = true;
         if (spec.behavior === "ambush") {
-          if (m.state === "wait" && distToPlayer < aggro) m.state = "hunt";
+          if (m.state === "wait" && dist3 < aggro) m.state = "hunt";
           if (m.state === "hunt") {
-            chasing = distToPlayer < aggro * 3;
+            chasing = dist3 < aggro * 3;
             if (!chasing) m.state = "wait";
           }
         }
@@ -396,9 +407,10 @@ export class Mobs {
       if (chasing) {
         m.yaw = Math.atan2(player.pos.x - m.x, player.pos.z - m.z);
         targetSpeed = spec.speed;
-        // melee
+        // melee — only with clear line of sight (no biting through walls)
         if (distToPlayer < spec.attackRange && m.attackCd <= 0 &&
-            Math.abs(player.pos.y - m.y) < 2) {
+            Math.abs(player.pos.y - m.y) < 2 &&
+            this._lineOfSight(world, m, player)) {
           m.attackCd = 1;
           player.damage(spec.damage, `a ${spec.name}`);
           const kx = player.pos.x - m.x, kz = player.pos.z - m.z;
@@ -473,6 +485,21 @@ export class Mobs {
       m.group.rotation.y = m.yaw;
       m.group.scale.setScalar(1 + (m.hurtT > 0 ? 0.06 : 0));
     }
+  }
+
+  // sampled visibility check between the mob's chest and the player's torso
+  _lineOfSight(world, m, player) {
+    const x0 = m.x, y0 = m.y + m.spec.height * 0.6, z0 = m.z;
+    const x1 = player.pos.x, y1 = player.pos.y + 0.9, z1 = player.pos.z;
+    const steps = Math.max(2, Math.ceil(Math.hypot(x1 - x0, y1 - y0, z1 - z0) / 0.3));
+    for (let s = 1; s < steps; s++) {
+      const t = s / steps;
+      if (isSolid(world.getBlock(
+        Math.floor(x0 + (x1 - x0) * t),
+        Math.floor(y0 + (y1 - y0) * t),
+        Math.floor(z0 + (z1 - z0) * t)))) return false;
+    }
+    return true;
   }
 
   // substepped per-axis AABB collision, sized per species

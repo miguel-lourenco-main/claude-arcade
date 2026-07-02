@@ -274,9 +274,11 @@ export class Player {
         this.vel.y = Math.max(-1.2, this.vel.y - 3 * dt); // idle sink
       }
       this.vel.y = Math.max(-4.2, Math.min(Math.max(SWIM_UP_MAX, speed), this.vel.y));
-      // pressing into a bank while heading upward or jumping: boost out of
-      // the water, or the 1-block ledge is never clearable
-      if ((jumping || ty > 0.2) && (this._hitWall || this.onGround) && (hasInput || jumping)) {
+      // boost out of the water at a bank: the jump path works from the
+      // bottom too, but the look-up path REQUIRES an actual wall — otherwise
+      // wading through shallow water while looking up pogo-launches forever
+      if (((jumping && (this._hitWall || this.onGround)) || (ty > 0.2 && this._hitWall)) &&
+          (hasInput || jumping)) {
         this.vel.y = WATER_EXIT_BOOST;
       }
     } else {

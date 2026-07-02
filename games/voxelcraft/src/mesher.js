@@ -45,9 +45,12 @@ void main() {
   vBlock = blocklight;
   vec4 mvPosition;
   #ifdef VOX_WAVE
-  // gentle water swell, phased by world position
+  // gentle water swell, phased by world position — only the lowered surface
+  // corners (fract y ≈ 0.85) move; integer-y edges stay pinned so no slits
+  // open where water meets static geometry
   vec4 wp = modelMatrix * vec4(position, 1.0);
-  wp.y += sin(uTime * 1.5 + wp.x * 0.9 + wp.z * 0.7) * 0.05;
+  float waveMask = step(0.5, fract(position.y));
+  wp.y += sin(uTime * 1.5 + wp.x * 0.9 + wp.z * 0.7) * 0.05 * waveMask;
   mvPosition = viewMatrix * wp;
   #else
   mvPosition = modelViewMatrix * vec4(position, 1.0);
