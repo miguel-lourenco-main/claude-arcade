@@ -339,12 +339,14 @@ export class Hud {
     }
   }
 
-  _announce(name) {
-    this.blockNameEl.textContent = name;
+  // transient center-screen caption: hotbar names, the Moss Cot's commentary
+  announce(text, ms = 1200) {
+    this.blockNameEl.textContent = text;
     this.blockNameEl.style.opacity = "1";
     clearTimeout(this._nameTimeout);
-    this._nameTimeout = setTimeout(() => { this.blockNameEl.style.opacity = "0"; }, 1200);
+    this._nameTimeout = setTimeout(() => { this.blockNameEl.style.opacity = "0"; }, ms);
   }
+  _announce(name) { this.announce(name); }
 
   _buildHotbar() {
     const bar = document.getElementById("hotbar");

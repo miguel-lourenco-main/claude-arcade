@@ -2,7 +2,7 @@
 // with hold-repeat, pick-block, and break particles.
 
 import * as THREE from "three";
-import { AIR, BEDROCK, CHEST, WORKBENCH, KILN, BLOCKS, isSolid, dropFor } from "./blocks.js";
+import { AIR, BEDROCK, CHEST, WORKBENCH, KILN, BED, BLOCKS, isSolid, dropFor } from "./blocks.js";
 import { HEIGHT } from "./world.js";
 import { EYE_HEIGHT, MAX_HUNGER } from "./player.js";
 
@@ -56,6 +56,7 @@ export class Interaction {
     this.onOpenChest = opts.onOpenChest;   // (x, y, z) => open chest UI (survival)
     this.onOpenBench = opts.onOpenBench;   // () => open workbench UI (survival)
     this.onOpenKiln = opts.onOpenKiln;     // (x, y, z) => open kiln UI (survival)
+    this.onSleep = opts.onSleep;           // (x, y, z) => Moss Cot rest (survival)
     this.onChestBreak = opts.onChestBreak; // (x, y, z) => spill contents
     this.onKilnBreak = opts.onKilnBreak;   // (x, y, z) => spill kiln slots
     this.onEat = opts.onEat;               // (kind) => chew/swallow sfx
@@ -165,9 +166,10 @@ export class Interaction {
   _updateEating(dt) {
     const id = this.hotbar.selectedId();
     const def = BLOCKS[id];
-    // right-click on a chest/workbench/kiln still opens it, food in hand or not
+    // right-click on a chest/workbench/kiln/cot still routes, food in hand or not
     const t = this.target;
-    const interactive = t && (t.id === CHEST || t.id === WORKBENCH || t.id === KILN) &&
+    const interactive = t &&
+      (t.id === CHEST || t.id === WORKBENCH || t.id === KILN || t.id === BED) &&
       !this.player._sneaking;
     const wants = this.buttons.has(2) && def && def.food && !interactive &&
       this.player.hunger < MAX_HUNGER - 1e-9;
@@ -329,6 +331,10 @@ export class Interaction {
     }
     if (t.id === KILN && this.player.mode === "survival" && !this.player._sneaking && this.onOpenKiln) {
       this.onOpenKiln(t.x, t.y, t.z);
+      return;
+    }
+    if (t.id === BED && this.player.mode === "survival" && !this.player._sneaking && this.onSleep) {
+      this.onSleep(t.x, t.y, t.z);
       return;
     }
     const id = this.hotbar.selectedId();

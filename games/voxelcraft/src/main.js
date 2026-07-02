@@ -12,7 +12,7 @@ import { craft } from "./craft.js";
 import { makeKiln, tickKilns } from "./kiln.js";
 import { PlayerModel, buildHeldFoot, setHeldSkinLight } from "./player-model.js";
 import { PlayerViewer } from "./player-viewer.js";
-import { SAPLING, LOG, LEAVES, LEAVES_COLD, WATER as WATER_ID, dropFor } from "./blocks.js";
+import { SAPLING, LOG, LEAVES, LEAVES_COLD, BED, WATER as WATER_ID, dropFor } from "./blocks.js";
 import { makeGenerator, findSpawn, findBiomeLocation } from "./terrain.js";
 import {
   buildMaterials, meshChunk, disposeChunkMeshes, setDayLight, buildBlockGeometry,
@@ -93,6 +93,13 @@ if (save && Number.isFinite(save.air)) {
 // hunger is an additive v2 field: saves from before it default to well-fed
 if (save && Number.isFinite(save.hunger)) {
   player.hunger = Math.min(20, Math.max(0, save.hunger));
+}
+// the Moss Cot respawn anchor (additive field): validated like the player pos;
+// whether the cot still stands is checked at respawn time, not here
+if (save && validPos(save.spawnPoint)) {
+  player.spawnPoint = {
+    x: save.spawnPoint.x, y: save.spawnPoint.y, z: save.spawnPoint.z,
+  };
 }
 
 const inventory = new Inventory();
@@ -231,6 +238,21 @@ function teleportTo(kind) {
   return { ok: true, message: `→ ${kind} at ${Math.round(dest.x)}, ${Math.round(dest.z)} — click to play.` };
 }
 
+// where death sends you back: the slept-in Moss Cot while it still stands,
+// otherwise the world spawn. The cot may sit in an unloaded chunk, so
+// ensureChunk first — generation re-applies the edit overlay, letting
+// getBlock actually see (or miss) the bed.
+function resolveRespawn() {
+  const sp = player.spawnPoint;
+  if (sp) {
+    const bx = Math.floor(sp.x), by = Math.round(sp.y) - 1, bz = Math.floor(sp.z);
+    world.ensureChunk(bx >> 4, bz >> 4);
+    if (world.getBlock(bx, by, bz) === BED) return sp;
+    player.spawnPoint = null; // the cot is gone — the Upturn forgets the nap
+  }
+  return spawnPoint;
+}
+
 // respawn/void landings must respect player edits: if the spawn column was
 // built over (or dug out), climb to the first clear spot above it
 function adjustToClearGround(pos) {
@@ -264,7 +286,7 @@ const hud = new Hud(atlas.canvas, {
     return player.mode;
   },
   onRespawn: () => {
-    player.respawn(spawnPoint);
+    player.respawn(resolveRespawn());
     adjustToClearGround(player.pos);
     player.resetFall();
     hud.hideDeath();
@@ -307,6 +329,31 @@ player.onDeath = (cause) => {
   if (document.pointerLockElement) document.exitPointerLock();
 };
 
+// --- the Moss Cot: sleep through the night, wake anchored to the bed --------
+
+const NIGHT_LIGHT = 0.35; // below this, the cot accepts guests
+const DAWN_TIME = 0.02;   // sky.time just after the light starts rising
+let sleeping = false;
+const sleepFadeEl = document.getElementById("sleep-fade");
+
+function sleepInCot(x, y, z) {
+  if (sleeping || player.dead) return;
+  if (sky.lightLevel >= NIGHT_LIGHT) {
+    hud.announce("The cot disapproves of daytime napping.", 2600);
+    return;
+  }
+  sleeping = true;
+  // the cot remembers you from the first tuck-in, even if you die mid-fade
+  player.spawnPoint = { x: x + 0.5, y: y + 1, z: z + 0.5 };
+  sleepFadeEl.style.opacity = "1";
+  setTimeout(() => {
+    sky.time = DAWN_TIME; // no healing — just the morning
+    sleepFadeEl.style.opacity = "0";
+    hud.announce("You wake, well-tucked.", 2600);
+    setTimeout(() => { sleeping = false; }, 1000); // let the fade-in finish
+  }, 1050);
+}
+
 const interaction = new Interaction(world, player, scene, hud, {
   onEdit: (chunks, info) => {
     if (chunks.length === 0) return;
@@ -318,6 +365,13 @@ const interaction = new Interaction(world, player, scene, hud, {
       if (info.placed === SAPLING) registerSapling(info.x, info.y, info.z);
       if (info.broken === SAPLING) saplings.delete(`${info.x},${info.y},${info.z}`);
       if (info.popped === SAPLING) saplings.delete(`${info.x},${info.y + 1},${info.z}`);
+      // breaking the slept-in Moss Cot unhooks the respawn anchor
+      const sp = player.spawnPoint;
+      if (info.broken === BED && sp &&
+          info.x === Math.floor(sp.x) && info.y === Math.round(sp.y) - 1 &&
+          info.z === Math.floor(sp.z)) {
+        player.spawnPoint = null;
+      }
     }
   },
   onSound: (kind, id) => sfx.block(kind, id),
@@ -340,6 +394,7 @@ const interaction = new Interaction(world, player, scene, hud, {
     hud.openChest(store, () => {});
   },
   onOpenBench: () => hud.openBench(),
+  onSleep: (x, y, z) => sleepInCot(x, y, z),
   onOpenKiln: (x, y, z) => {
     const key = `${x},${y},${z}`;
     let kiln = world.kilns.get(key);

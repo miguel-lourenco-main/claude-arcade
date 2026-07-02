@@ -48,6 +48,9 @@ export const TILE = {
   KILN_SIDE: 37,
   KILN_TOP: 38,
   IRON_BLOCK: 39,
+  MOSS_CLUMP: 40,
+  COT_TOP: 41,
+  COT_SIDE: 42,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -504,6 +507,68 @@ const painters = {
     for (const [rx, ry] of [[3, 3], [12, 3], [3, 12], [12, 12], [7, 7], [8, 8]]) {
       p.px(rx, ry, 226, 230, 238);
       p.px(rx, ry + 1, 120, 124, 134);
+    }
+  },
+  [TILE.MOSS_CLUMP](p) {
+    // a snuffet's back-moss, pried loose whole: springy green tufts packed
+    // over a damp dark core — the Upturn's softest building material
+    p.noiseFill([84, 126, 64], 12);
+    // tuft strands: bright tips with a shaded pixel underneath
+    for (let i = 0; i < 24; i++) {
+      const x = (p.rand() * TILE_PX) | 0, y = (p.rand() * (TILE_PX - 1)) | 0;
+      const g = 150 + p.rand() * 28;
+      p.px(x, y, 98, g, 76);
+      p.px(x, y + 1, 62, 100 + p.rand() * 14, 52);
+    }
+    p.speckle(10, [52, 86, 44], 8);   // damp pockets between tufts
+    p.speckle(6, [152, 188, 112], 8); // sun-bleached ends
+  },
+  [TILE.COT_TOP](p) {
+    // the Moss Cot from above: a quilted moss mattress pinched into tufted
+    // squares, with a paler bog-mint pillow pad tucked across one end
+    for (let y = 0; y < TILE_PX; y++) for (let x = 0; x < TILE_PX; x++) {
+      const d = (p.rand() * 2 - 1) * 10;
+      if (x === 0 || x === 15 || y === 0 || y === 15) {
+        p.px(x, y, 104 + d, 78 + d, 46 + d); // plank frame rim
+        continue;
+      }
+      const seam = x % 5 === 2 || y % 5 === 2; // the quilting stitches
+      if (seam) p.px(x, y, 54 + d, 90 + d, 48 + d);
+      else p.px(x, y, 92 + d, 140 + d, 72 + d);
+    }
+    // the pillow: softer, paler, and firmly opinionated about naps
+    for (let y = 2; y <= 5; y++) for (let x = 3; x <= 12; x++) {
+      const d = (p.rand() * 2 - 1) * 8;
+      const edge = y === 2 || y === 5 || x === 3 || x === 12;
+      if (edge) p.px(x, y, 152 + d, 170 + d, 132 + d);
+      else p.px(x, y, 186 + d, 202 + d, 158 + d);
+    }
+  },
+  [TILE.COT_SIDE](p) {
+    // side-on: moss bedding drooping unevenly over a low plank frame that
+    // stands on stub legs, dark shadow beneath
+    for (let y = 0; y < TILE_PX; y++) for (let x = 0; x < TILE_PX; x++) {
+      const d = (p.rand() * 2 - 1) * 8;
+      const seam = y === 10 ? -24 : 0; // the frame's bottom rail
+      p.px(x, y, 158 + d + seam, 124 + d + seam, 76 + d + seam);
+    }
+    for (let y = 11; y < TILE_PX; y++) for (let x = 0; x < TILE_PX; x++) {
+      const leg = x <= 1 || x >= 14;
+      const d = (p.rand() * 2 - 1) * 8;
+      if (leg) p.px(x, y, 112 + d, 84 + d, 50 + d);
+      else p.px(x, y, 44 + d, 38 + d, 30 + d); // under-cot gloom
+    }
+    // the mattress: a ragged green overhang spilling past the rail
+    for (let x = 0; x < TILE_PX; x++) {
+      const depth = 4 + ((p.rand() * 3) | 0);
+      for (let y = 0; y < depth; y++) {
+        const d = (p.rand() * 2 - 1) * 12;
+        p.px(x, y, 88 + d, 134 + d, 70 + d);
+      }
+    }
+    for (let i = 0; i < 8; i++) { // bright tuft tips along the top
+      p.px((p.rand() * TILE_PX) | 0, (p.rand() * 4) | 0,
+        140, 178 + p.rand() * 20, 104);
     }
   },
   [TILE.SAPLING](p) {

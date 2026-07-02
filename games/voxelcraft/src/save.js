@@ -38,6 +38,8 @@ export function writeSave(world, player, sky, hud, inventory, extra = {}) {
       health: player.health,
       hunger: player.hunger,
       air: player.air,
+      // additive: the Moss Cot respawn anchor (absent/null = world spawn)
+      spawnPoint: player.spawnPoint || undefined,
       inventory: inventory ? inventory.serialize() : [],
       selected: hud.selected,
       edits: world.serializeEdits(),

@@ -73,6 +73,10 @@ export class Player {
 
     // survival state ("creative" ignores all of it)
     this.mode = "creative";     // "creative" | "survival"
+    // respawn anchor set by sleeping in a Moss Cot: {x, y, z} feet position on
+    // top of the bed, or null for the world spawn. main.js validates the bed
+    // still stands before using it (and clears it when the cot is broken).
+    this.spawnPoint = null;
     this.health = MAX_HEALTH;
     this.hunger = MAX_HUNGER;
     this.air = AIR_SECONDS;

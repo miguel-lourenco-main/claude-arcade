@@ -85,6 +85,15 @@ body {
 }
 #damage-flash.active { opacity: 1; }
 
+/* Moss Cot sleep: the world tucks itself in and lets you out at dawn */
+#sleep-fade {
+  position: absolute; inset: 0; z-index: 15;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 1s ease;
+}
+
 /* ---- death screen ---- */
 
 #death {

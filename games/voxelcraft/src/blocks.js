@@ -35,6 +35,8 @@ export const ROAST_LOIN = 29;
 export const BERRY_BUSH = 30;
 export const KILN = 31;
 export const IRON_BLOCK = 32;
+export const MOSS_CLUMP = 33;
+export const BED = 34;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -209,6 +211,17 @@ BLOCKS[KILN] = def("Kiln", { hardness: 2.0,
   tiles: cube({ top: TILE.KILN_TOP, side: TILE.KILN_SIDE, bottom: TILE.STONE }),
 });
 BLOCKS[IRON_BLOCK] = def("Iron Block", { hardness: 3.0, tiles: cube(TILE.IRON_BLOCK) });
+
+// snuffet back-moss: a soft deco block, and the stuffing of the Moss Cot
+BLOCKS[MOSS_CLUMP] = def("Moss Clump", { hardness: 0.3,
+  tiles: cube(TILE.MOSS_CLUMP), sound: "plant",
+});
+// the Moss Cot: right-click it at night to sleep to dawn and anchor your
+// respawn there (see the sleep routing in interact.js/main.js)
+BLOCKS[BED] = def("Moss Cot", { hardness: 0.8,
+  tiles: cube({ top: TILE.COT_TOP, side: TILE.COT_SIDE, bottom: TILE.PLANKS }),
+  sound: "plant",
+});
 
 // Blocks offered in the hotbar picker (everything but air).
 export const PLACEABLE = BLOCKS.map((b, id) => id).filter((id) => id !== AIR);
