@@ -20,7 +20,7 @@ let warnedQuota = false;
 export function writeSave(world, player, sky, hud, inventory, extra = {}) {
   try {
     localStorage.setItem(KEY, JSON.stringify({
-      v: 1,
+      v: 2, // slot-based inventory + slot-array chests
       seed: world.seed,
       time: sky.time,
       chests: world.serializeChests(),
@@ -37,7 +37,7 @@ export function writeSave(world, player, sky, hud, inventory, extra = {}) {
       health: player.health,
       air: player.air,
       inventory: inventory ? inventory.serialize() : [],
-      hotbar: hud.slots,
+      selected: hud.selected,
       edits: world.serializeEdits(),
     }));
   } catch (e) {

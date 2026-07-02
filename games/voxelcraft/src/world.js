@@ -36,27 +36,54 @@ export class World {
     this.seed = seed;
     this.chunks = new Map();          // chunkKey -> Chunk
     this.edits = new Map();           // chunkKey -> Map(blockIndex -> id)
-    this.chests = new Map();          // "x,y,z" -> Map(blockId -> count)
+    this.chests = new Map();          // "x,y,z" -> Array(>=27) of null|{id,count}
     this.generator = null;            // set by terrain.js
     this._lastChunk = null;           // 1-entry lookup cache (meshing/physics locality)
   }
 
+  // v2: chest values are slot arrays (null | {id,count}, stacks capped at 64,
+  // length >= 27; migrated oversize chests keep extra slots so nothing is
+  // destroyed, and trailing empties beyond 27 are trimmed on save)
   serializeChests() {
-    return [...this.chests].map(([key, store]) => [key, [...store]]);
+    return [...this.chests].map(([key, slots]) => {
+      const out = slots.map((s) => (s ? [s.id, s.count] : 0));
+      while (out.length > 27 && out[out.length - 1] === 0) out.pop();
+      return [key, { slots: out }];
+    });
   }
 
   loadChests(arr) {
     if (!Array.isArray(arr)) return;
     for (const pair of arr) {
-      if (!Array.isArray(pair) || typeof pair[0] !== "string" || !Array.isArray(pair[1])) continue;
-      const store = new Map();
-      for (const entry of pair[1]) {
-        if (!Array.isArray(entry)) continue;
-        const [id, n] = entry;
-        if (!Number.isInteger(id) || !BLOCKS[id] || !Number.isInteger(n) || n <= 0) continue;
-        store.set(id, Math.min(9999, n));
+      if (!Array.isArray(pair) || typeof pair[0] !== "string") continue;
+      const payload = pair[1];
+      let slots = null;
+      if (payload && Array.isArray(payload.slots)) {
+        // v2 shape
+        slots = payload.slots.map((e) => {
+          if (!Array.isArray(e)) return null;
+          const [id, n] = e;
+          if (!Number.isInteger(id) || !BLOCKS[id] || !Number.isInteger(n) || n <= 0) return null;
+          return { id, count: Math.min(64, n) };
+        });
+      } else if (Array.isArray(payload)) {
+        // v1 shape: [id, count] pairs with unbounded counts — pack losslessly
+        slots = [];
+        for (const entry of payload) {
+          if (!Array.isArray(entry)) continue;
+          const [id, n] = entry;
+          if (!Number.isInteger(id) || !BLOCKS[id] || !Number.isInteger(n) || n <= 0) continue;
+          let left = n;
+          while (left > 0) {
+            const take = Math.min(64, left);
+            slots.push({ id, count: take });
+            left -= take;
+          }
+        }
       }
-      if (store.size > 0) this.chests.set(pair[0], store);
+      if (!slots) continue;
+      while (slots.length < 27) slots.push(null);
+      if (slots.some((s) => s)) this.chests.set(pair[0], slots);
     }
   }
 

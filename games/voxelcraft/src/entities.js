@@ -29,11 +29,11 @@ export class ItemDrops {
     return geo;
   }
 
-  spawn(x, y, z, id, qty = 1) {
+  spawn(x, y, z, id, qty = 1, opts = {}) {
     if (!BLOCKS[id]) return;
     if (this.drops.length >= MAX_DROPS) {
-      // evict the oldest SINGLE first — FIFO could delete a 9999-item
-      // chest-spill stack to make room for one leaf
+      // evict the oldest SINGLE first — FIFO could delete a huge chest-spill
+      // stack to make room for one leaf
       let evict = this.drops.findIndex((d) => d.qty === 1);
       if (evict === -1) {
         evict = 0;
@@ -53,11 +53,13 @@ export class ItemDrops {
     this.drops.push({
       id, qty, mesh,
       x, y, z,
-      vx: (Math.random() - 0.5) * 2.2,
-      vy: 2.4 + Math.random() * 1.2,
-      vz: (Math.random() - 0.5) * 2.2,
+      vx: opts.vel ? opts.vel.x : (Math.random() - 0.5) * 2.2,
+      vy: opts.vel ? opts.vel.y : 2.4 + Math.random() * 1.2,
+      vz: opts.vel ? opts.vel.z : (Math.random() - 0.5) * 2.2,
       age: Math.random() * 6, // desync the bob/spin phases
       life: 0,
+      pickupDelay: opts.pickupDelay ?? 0.5, // Q-drops/spills must not boomerang
+      retryAt: 0, // full-inventory pickups back off instead of thrashing
     });
   }
 
@@ -100,16 +102,22 @@ export class ItemDrops {
       }
       if (d.y < -40) { this._remove(i); continue; }
 
-      // pickup: drift toward a living player, collect on contact
-      if (!player.dead) {
+      // pickup: drift toward a living player, collect on contact. onPickup
+      // returns how many were ACCEPTED — a full inventory keeps the rest on
+      // the ground and backs off before retrying
+      if (!player.dead && d.life > d.pickupDelay) {
         const px = player.pos.x - d.x, py = player.pos.y + 0.9 - d.y, pz = player.pos.z - d.z;
         const dist = Math.hypot(px, py, pz);
-        if (dist < PICKUP_DIST) {
-          onPickup(d.id, d.qty);
-          this._remove(i);
-          continue;
+        if (dist < PICKUP_DIST && d.life >= d.retryAt) {
+          const accepted = onPickup(d.id, d.qty);
+          if (accepted >= d.qty) {
+            this._remove(i);
+            continue;
+          }
+          d.qty -= accepted;
+          d.retryAt = d.life + 0.6;
         }
-        if (dist < MAGNET_DIST && d.life > 0.5) {
+        if (dist < MAGNET_DIST) {
           const pull = 26 * dt / Math.max(dist, 0.3);
           d.vx += px * pull; d.vy += py * pull; d.vz += pz * pull;
         }
