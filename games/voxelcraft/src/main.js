@@ -16,12 +16,16 @@ import { SignBoards } from "./signs.js";
 import { craft } from "./craft.js";
 import { dailyOffers, executeTrade } from "./trade.js";
 import { makeKiln, tickKilns } from "./kiln.js";
-import { PlayerModel, buildHeldFoot, buildHeldTool, setHeldSkinLight } from "./player-model.js";
+import {
+  PlayerModel, buildHeldFoot, buildHeldTool, buildHeldCompass, buildHeldClock,
+  setHeldSkinLight,
+} from "./player-model.js";
+import { Wayfinder, bearingYaw, normAngle } from "./wayfinding.js";
 import { PlayerViewer } from "./player-viewer.js";
 import {
   SAPLING, LOG, LEAVES, LEAVES_COLD, BED, WATER as WATER_ID, dropFor,
   CROP_SPROUT, CROP_RIPE, CROP_STAGES, isCrop, SLING_STONE, BOAT, FISHING_POLE,
-  isSign,
+  isSign, COMPASS, CLOCK,
 } from "./blocks.js";
 import { makeGenerator, findSpawn, findBiomeLocation } from "./terrain.js";
 import {
@@ -432,6 +436,12 @@ if (save && Number.isInteger(save.selected) && save.selected >= 0 && save.select
   hud.select(save.selected);
 }
 
+// the wayfinding kit's HUD half: the Homeward Needle + Sky Dial widgets and
+// the Field Chart window. The needle leans toward the slept-in Moss Cot when
+// one is anchored, else the world spawn.
+const wayfinder = new Wayfinder(atlas.avgColor, () => player.spawnPoint || spawnPoint);
+if (save && save.chart) wayfinder.loadChart(save.chart); // additive v2 field
+
 // toss a stack out in front of the player (cursor spills, craft overflow)
 function spillStack(stack) {
   const dir = player.lookDir();
@@ -701,6 +711,7 @@ const stopAutosave = startAutosave(() => writeSave(world, player, sky, hud, inve
     Math.round(sky.weatherTimer * 10) / 10,
     Math.round(sky.rain * 100) / 100,
   ],
+  chart: wayfinder.serializeChart(), // additive: the Field Chart's inked leaf
 }));
 
 // --- held item (first-person hand) — its own scene + depth-cleared pass ------
@@ -743,6 +754,10 @@ let swingT = 1; // 0..1 swing animation progress (1 = at rest)
 // box-built held tool models, one per tool id (12 at most), built on demand
 const heldToolCache = new Map();
 let heldToolGroup = null;
+// the wayfinding instruments in hand: cached {group, needle|hand} pairs whose
+// live part the tick loop turns every frame
+const heldWayCache = new Map();
+let heldWay = null;
 
 function refreshHeldMesh() {
   // slots are the truth: empty selected slot = bare foot, in both modes
@@ -752,10 +767,26 @@ function refreshHeldMesh() {
   heldKey = key;
   const empty = key === "foot";
   const toolDef = empty ? null : BLOCKS[st.id].tool;
+  const wayId = !empty && (st.id === COMPASS || st.id === CLOCK) ? st.id : null;
   if (heldToolGroup) { heldGroup.remove(heldToolGroup); heldToolGroup = null; }
+  if (heldWay) { heldGroup.remove(heldWay.group); heldWay = null; }
   heldFoot.visible = empty;
-  heldBlock.visible = !empty && !toolDef;
-  if (toolDef) {
+  heldBlock.visible = !empty && !toolDef && !wayId;
+  if (wayId) {
+    // an instrument in hand: a cased disc held face-up, its live part turned
+    // by the tick loop (the Needle leans home, the Dial's wheel rides time)
+    let w = heldWayCache.get(wayId);
+    if (!w) {
+      w = wayId === COMPASS ? buildHeldCompass(1337) : buildHeldClock(1337);
+      w.group.scale.setScalar(0.9);
+      w.group.rotation.set(0.5, 0.1, 0.05); // face tipped up toward the eye
+      w.group.position.set(-0.04, 0.02, 0);
+      w.group.traverse((o) => { o.frustumCulled = false; });
+      heldWayCache.set(wayId, w);
+    }
+    heldWay = w;
+    heldGroup.add(w.group);
+  } else if (toolDef) {
     // a tool in hand: its haft-and-head box model instead of the flat sprite
     let g = heldToolCache.get(st.id);
     if (!g) {
@@ -1095,6 +1126,23 @@ function tick(now) {
 
   animateHeld(frameDt, bobY);
 
+  // the instruments stay honest in hand: the Needle leans toward the anchor
+  // (+0.3 cancels the held group's resting yaw), the Dial's wheel rides time
+  if (heldWay) {
+    if (heldKey === COMPASS) {
+      const t = player.spawnPoint || spawnPoint;
+      heldWay.needle.rotation.y =
+        normAngle(bearingYaw(player.pos.x, player.pos.z, t.x, t.z) - player.yaw) + 0.3;
+    } else {
+      heldWay.hand.rotation.y = -sky.time * Math.PI * 2;
+    }
+  }
+  // widgets show on hotbar presence; the chart reveals only while play runs
+  wayfinder.update(frameDt, {
+    inventory, hud, player, sky, world,
+    playing: playerChunkReady && inputActive(),
+  });
+
   // sprint FOV kick (+8°, applies to sprint-flight too): eased both ways
   // with a ~0.15s time constant, so it swells in and settles out
   const targetFov = player.sprintActive ? 78 : 70;
@@ -1157,8 +1205,9 @@ requestAnimationFrame(tick);
 if (NO_LOCK) {
   window.voxelcraft = {
     player, world, hud, sky, terrain, interaction, mobs, drops, saplings, crops,
-    inventory, kegs, stones, boats, fishing, signBoards,
+    inventory, kegs, stones, boats, fishing, signBoards, wayfinder,
     rain: rainFx, sfx, camera,
+    spawnTarget: () => player.spawnPoint || spawnPoint,
     growAllSaplings: () => { for (const k of saplings.keys()) saplings.set(k, 0); },
     growAllCrops: () => { for (const k of crops.keys()) crops.set(k, 0); },
     getGrowthSeconds: () => growthSeconds,

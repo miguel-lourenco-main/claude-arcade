@@ -10,7 +10,7 @@ import {
   FENCE, GATE, SLING_STONE, BOAT, FISHING_POLE, SIGN,
   PLANK_PICK, STONE_PICK, IRON_PICK, PLANK_AXE, STONE_AXE, IRON_AXE,
   PLANK_SHOVEL, STONE_SHOVEL, IRON_SHOVEL, PLANK_BLADE, STONE_BLADE, IRON_BLADE,
-  IRON_INGOT, IRON_BLOCK,
+  IRON_INGOT, IRON_BLOCK, COMPASS, CLOCK, CHART,
 } from "./blocks.js";
 
 // in: [[blockId, count], ...]  out: [blockId, count]  note: extra recipe copy
@@ -66,6 +66,13 @@ export const RECIPES = [
   // sky-iron, folded and unfolded: four ingots to the block and back
   { in: [[IRON_INGOT, 4]], out: [IRON_BLOCK, 1] },
   { in: [[IRON_BLOCK, 1]], out: [IRON_INGOT, 4] },
+  // --- the wayfinding kit (workbench). Sky-iron instruments: four ingots
+  // case each; a swinging sling stone points the Needle, soot marks the
+  // Dial's hours, and eight planks board a Chart around the Needle that
+  // walks its edges.
+  { in: [[IRON_INGOT, 4], [SLING_STONE, 1]], out: [COMPASS, 1], note: "the stone swings, the iron leans home" },
+  { in: [[IRON_INGOT, 4], [COAL_ORE, 1]], out: [CLOCK, 1], note: "soot marks the hours" },
+  { in: [[PLANKS, 8], [COMPASS, 1]], out: [CHART, 1], note: "the needle walks the edges" },
 ];
 
 export const BASIC_RECIPES = RECIPES.filter((r) => r.basic);

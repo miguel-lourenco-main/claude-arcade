@@ -69,6 +69,25 @@ body {
   image-rendering: pixelated;
 }
 
+/* ---- the wayfinding kit ---- */
+
+/* the Homeward Needle + Sky Dial widgets, top right in the dark UI idiom */
+#wayfinding {
+  position: absolute; top: 10px; right: 10px;
+  display: flex; gap: 8px;
+}
+#wayfinding canvas { width: 56px; height: 56px; }
+
+/* the Field Chart: a parchment leaf unrolled in the lower right */
+#chart-widget {
+  position: absolute; right: 12px; bottom: 12px;
+  width: 256px; height: 256px;
+  image-rendering: pixelated;
+  border: 3px solid #6b5636; border-radius: 4px;
+  background: #cfb27c;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+}
+
 .slot .count {
   position: absolute; right: 3px; bottom: 1px;
   font-size: 11px; color: #fff;

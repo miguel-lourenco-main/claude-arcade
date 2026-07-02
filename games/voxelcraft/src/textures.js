@@ -83,6 +83,10 @@ export const TILE = {
   BLADE_STONE: 71,
   BLADE_IRON: 72,
   IRON_INGOT: 73,
+  // the wayfinding kit: three carried instruments (icons + drops)
+  COMPASS: 74,
+  SKY_DIAL: 75,
+  FIELD_CHART: 76,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -1139,6 +1143,92 @@ painters[TILE.SHOVEL_IRON] = toolPainter("shovel", TOOL_PALETTES.iron);
 painters[TILE.BLADE_PLANK] = toolPainter("blade", TOOL_PALETTES.plank);
 painters[TILE.BLADE_STONE] = toolPainter("blade", TOOL_PALETTES.stone);
 painters[TILE.BLADE_IRON] = toolPainter("blade", TOOL_PALETTES.iron);
+
+// --- the wayfinding kit -----------------------------------------------------
+painters[TILE.COMPASS] = (p) => {
+  // the Homeward Needle: a sky-iron field compass — pale case, slate face,
+  // a rust needle leaning home over a mustard pivot pin
+  p.clear();
+  for (let y = 0; y < TILE_PX; y++) {
+    for (let x = 0; x < TILE_PX; x++) {
+      const d2 = (x - 7.5) ** 2 + (y - 7.5) ** 2;
+      if (d2 > 47) continue;
+      const d = (p.rand() * 2 - 1) * 7;
+      if (d2 > 31) p.px(x, y, 196 + d, 204 + d, 218 + d);          // the case
+      else p.px(x, y, 46 + d * 0.5, 50 + d * 0.5, 60 + d * 0.5);   // slate face
+    }
+  }
+  // cardinal ticks scribed into the face (the top pair reads brightest)
+  p.px(7, 3, 168, 176, 192); p.px(8, 3, 168, 176, 192);
+  p.px(7, 12, 118, 124, 138); p.px(8, 12, 118, 124, 138);
+  p.px(3, 7, 118, 124, 138); p.px(3, 8, 118, 124, 138);
+  p.px(12, 7, 118, 124, 138); p.px(12, 8, 118, 124, 138);
+  // the needle: rust end leaning home (up-left), pale iron tail trailing
+  for (const [x, y] of [[5, 5], [6, 6], [5, 6], [6, 5]]) p.px(x, y, 197, 106, 43);
+  p.px(4, 4, 224, 128, 56); // the hot tip
+  for (const [x, y] of [[9, 9], [10, 10], [9, 10]]) p.px(x, y, 214, 220, 230);
+  // the mustard pin at the pivot
+  p.px(7, 7, 214, 176, 74); p.px(8, 7, 214, 176, 74);
+  p.px(7, 8, 190, 152, 60); p.px(8, 8, 190, 152, 60);
+};
+
+painters[TILE.SKY_DIAL] = (p) => {
+  // the Sky Dial: an iron-cased day-dial — marsh-light day half over a
+  // pearl-specked night half, a mustard sun riding high, the moon below
+  p.clear();
+  for (let y = 0; y < TILE_PX; y++) {
+    for (let x = 0; x < TILE_PX; x++) {
+      const d2 = (x - 7.5) ** 2 + (y - 7.5) ** 2;
+      if (d2 > 47) continue;
+      const d = (p.rand() * 2 - 1) * 7;
+      if (d2 > 31) { p.px(x, y, 196 + d, 204 + d, 218 + d); continue; }
+      if (y <= 7) p.px(x, y, 96 + d, 142 + d, 190 + d);            // the day
+      else p.px(x, y, 22 + d * 0.4, 28 + d * 0.4, 48 + d * 0.4);   // the night
+    }
+  }
+  // the horizon seam
+  for (let x = 3; x <= 12; x++) p.px(x, 8, 150, 158, 174);
+  // the sun, riding high
+  p.px(7, 4, 255, 214, 128); p.px(8, 4, 255, 214, 128);
+  p.px(7, 5, 232, 168, 70); p.px(8, 5, 232, 168, 70);
+  p.px(6, 4, 232, 168, 70); p.px(9, 4, 232, 168, 70);
+  // the moon under the seam, and the old pearls around it
+  p.px(7, 11, 221, 228, 240); p.px(8, 11, 200, 208, 224);
+  p.px(7, 12, 200, 208, 224);
+  p.px(4, 10, 159, 176, 216); p.px(11, 12, 159, 176, 216); p.px(10, 10, 159, 176, 216);
+};
+
+painters[TILE.FIELD_CHART] = (p) => {
+  // the Field Chart: a journal leaf scraped pale, mustard-trimmed like all
+  // official Wanderling paper, inked with terraces, a river, and an X
+  for (let y = 0; y < TILE_PX; y++) {
+    for (let x = 0; x < TILE_PX; x++) {
+      const d = (p.rand() * 2 - 1) * 6;
+      p.px(x, y, 208 + d, 186 + d, 138 + d);
+    }
+  }
+  // mustard trim frame — trim is how a Wanderling says "official"
+  for (let i = 0; i < TILE_PX; i++) {
+    const d = (p.rand() * 2 - 1) * 8;
+    p.px(i, 0, 190 + d, 152 + d, 60 + d); p.px(i, 15, 168 + d, 134 + d, 52 + d);
+    p.px(0, i, 190 + d, 152 + d, 60 + d); p.px(15, i, 168 + d, 134 + d, 52 + d);
+  }
+  // a fold crease down the middle
+  for (let y = 1; y < 15; y++) if (p.rand() < 0.7) p.px(7, y, 188, 164, 118);
+  // a river inked across the leaf
+  const river = [[1, 10], [2, 10], [3, 9], [4, 9], [5, 8], [6, 8], [7, 9],
+    [8, 9], [9, 10], [10, 10], [11, 11], [12, 11], [13, 12], [14, 12]];
+  for (const [x, y] of river) p.px(x, y, 74, 112, 168);
+  // terrace contours, the field-journal way
+  for (const [x, y] of [[3, 3], [4, 3], [5, 3], [4, 4], [9, 3], [10, 3],
+    [11, 4], [10, 4], [12, 5], [3, 6], [4, 6]]) {
+    p.px(x, y, 122, 102, 62);
+  }
+  // the X: somewhere worth walking to
+  p.px(11, 12, 176, 58, 40); p.px(13, 12, 176, 58, 40);
+  p.px(12, 13, 176, 58, 40);
+  p.px(11, 14, 150, 48, 34); p.px(13, 14, 150, 48, 34);
+};
 
 painters[TILE.IRON_INGOT] = (p) => {
   // the Sky-Iron Ingot: a squat cast bar, bright-topped, stamped like a

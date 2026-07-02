@@ -124,6 +124,13 @@ export const IRON_BLADE = 85;
 // the Sky-Iron Ingot: what the kiln renders iron ore down to — the sky that
 // fell, folded into a bar. The head material of the iron tool tier.
 export const IRON_INGOT = 86;
+// the wayfinding kit: three carried instruments, one per question a walker
+// asks — where is home (the Homeward Needle), what hour is it (the Sky
+// Dial), and where am I (the Field Chart). Never placed; the HUD widgets
+// and the chart window live in wayfinding.js.
+export const COMPASS = 87;
+export const CLOCK = 88;
+export const CHART = 89;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -704,6 +711,26 @@ BLOCKS[IRON_INGOT] = def("Sky-Iron Ingot", {
   placeable: false,
   sound: "stone",
 });
+
+// --- the wayfinding kit -------------------------------------------------------
+// Carried instruments, never stacked (a satchel holds one of each and that's
+// plenty), never placed. The Needle leans toward the spawn anchor and the
+// Dial rides sky.time whenever either sits in ANY hotbar slot; the Chart
+// paints the walked world while actually held (see wayfinding.js).
+const instrument = (name, tile, sound) => def(name, {
+  tiles: cube(tile),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  hardness: 0.05,
+  placeable: false,
+  sound,
+  maxStack: 1,
+});
+BLOCKS[COMPASS] = instrument("Homeward Needle", TILE.COMPASS, "stone");
+BLOCKS[CLOCK] = instrument("Sky Dial", TILE.SKY_DIAL, "stone");
+BLOCKS[CHART] = instrument("Field Chart", TILE.FIELD_CHART, "wood");
 
 // a cross block that pops off / is replaced in place when built over (plants;
 // NOT ladders or open door halves)

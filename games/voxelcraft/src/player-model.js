@@ -255,6 +255,63 @@ const HELD_TIER_HEAD = {
   3: [200, 208, 222], // sky-iron
 };
 
+// --- wayfinding instruments -------------------------------------------------
+// First-person models for the Homeward Needle and the Sky Dial: a flat cased
+// disc held face-up, with one live part — the needle group / the day wheel —
+// that main.js turns every frame. Registered for the day/night tint like the
+// foot and the tools.
+
+const CASE_IRON = [196, 204, 218];
+const FACE_SLATE = [46, 50, 60];
+const NEEDLE_RUST = [197, 106, 43];
+const PALE_IRON = [214, 220, 230];
+const PIN_MUSTARD = [214, 176, 74];
+
+function instrumentCase(seed) {
+  const g = new THREE.Group();
+  const rim = box(0.36, 0.05, 0.36, mat(paintTexture(seed, CASE_IRON)));
+  g.add(rim);
+  const face = box(0.29, 0.055, 0.29, mat(paintTexture(seed ^ 0x11, FACE_SLATE)));
+  g.add(face);
+  return g;
+}
+
+export function buildHeldCompass(seed = 0x5eed) {
+  const g = instrumentCase(seed ^ 0x920);
+  // the needle: rust end leaning home (-z at rotation 0), pale tail trailing
+  const needle = new THREE.Group();
+  const home = box(0.05, 0.02, 0.16, mat(paintTexture(seed ^ 0x921, NEEDLE_RUST)));
+  home.position.z = -0.085;
+  needle.add(home);
+  const tail = box(0.04, 0.02, 0.11, mat(paintTexture(seed ^ 0x922, PALE_IRON)));
+  tail.position.z = 0.065;
+  needle.add(tail);
+  needle.position.y = 0.04;
+  g.add(needle);
+  const pin = box(0.05, 0.025, 0.05, mat(paintTexture(seed ^ 0x923, PIN_MUSTARD)));
+  pin.position.y = 0.05;
+  g.add(pin);
+  return { group: g, needle };
+}
+
+export function buildHeldClock(seed = 0x5eed) {
+  const g = instrumentCase(seed ^ 0x930);
+  // the day wheel: a mustard sun pip and a pale moon pip riding opposite ends
+  const wheel = new THREE.Group();
+  const sun = box(0.07, 0.02, 0.07, mat(paintTexture(seed ^ 0x931, [255, 205, 110])));
+  sun.position.z = -0.09;
+  wheel.add(sun);
+  const moon = box(0.055, 0.02, 0.055, mat(paintTexture(seed ^ 0x932, PALE_IRON)));
+  moon.position.z = 0.09;
+  wheel.add(moon);
+  wheel.position.y = 0.04;
+  g.add(wheel);
+  const pin = box(0.04, 0.025, 0.04, mat(paintTexture(seed ^ 0x933, PIN_MUSTARD)));
+  pin.position.y = 0.05;
+  g.add(pin);
+  return { group: g, hand: wheel };
+}
+
 export function buildHeldTool(kind, tier, seed = 0x5eed) {
   const haftMat = mat(paintTexture(seed ^ (0x700 + tier), HELD_HAFT));
   const headMat = mat(paintTexture(seed ^ (0x770 + tier * 4), HELD_TIER_HEAD[tier] || HELD_TIER_HEAD[1]));
