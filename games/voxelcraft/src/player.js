@@ -1,7 +1,7 @@
 // First-person player: pointer-lock look, AABB voxel collision, walking /
 // sprinting / sneaking / jumping / swimming / creative flight.
 
-import { BLOCKS, isSolid, WATER, CACTUS, LADDER } from "./blocks.js";
+import { BLOCKS, isSolid, WATER, CACTUS, LADDER, armorProtection } from "./blocks.js";
 
 const HALF_W = 0.3;
 const PLAYER_HEIGHT = 1.8;
@@ -93,6 +93,11 @@ export class Player {
     this.dead = false;
     this.onDamage = null;       // (amount, cause) => void
     this.onDeath = null;        // (cause) => void
+    // the 4 wear slots (main.js owns the array; the Satchel window edits it).
+    // Entries are stacks {id, count: 1, dur?} or null, in WEAR_KINDS order.
+    this.wear = null;
+    this.onArmorBreak = null;   // (blockId) => a worn piece shattered
+    this.onArmorWear = null;    // () => dur ticked down on the worn set
     this._peakY = 0;            // highest point of the current fall
     this._sinceDamage = 999;
     this._drownTimer = 0;
@@ -105,6 +110,7 @@ export class Player {
 
   damage(amount, cause) {
     if (this.mode !== "survival" || this.dead || amount <= 0) return;
+    amount = this._absorb(amount, cause);
     this.health = Math.max(0, this.health - amount);
     this._sinceDamage = 0;
     if (this.onDamage) this.onDamage(amount, cause);
@@ -114,6 +120,37 @@ export class Player {
       this.clearInput();
       if (this.onDeath) this.onDeath(cause);
     }
+  }
+
+  // worn armor absorbs a fraction of PHYSICAL damage (mob hits, spines,
+  // cactus, keg blasts, falls) — drowning, starvation, and the void go
+  // straight through the plate. Falls use armorProtection's reduced formula
+  // (25% value, treads in full — see blocks.js). Every absorbing hit costs
+  // 1 dur on EACH worn piece (they all contributed); a piece at 0 shatters
+  // out of its wear slot. Death never touches the wear slots — the set keeps
+  // protecting after a respawn (there is no death-drop in the Upturn).
+  _absorb(amount, cause) {
+    const wear = this.wear;
+    if (!wear) return amount;
+    if (cause === "drowning" || cause === "starvation" || cause === "the void") {
+      return amount;
+    }
+    const red = armorProtection(wear, cause === "fall");
+    if (red <= 0) return amount;
+    for (let i = 0; i < wear.length; i++) {
+      const s = wear[i];
+      const a = s && BLOCKS[s.id] ? BLOCKS[s.id].armor : null;
+      if (!a) continue;
+      const left = (Number.isInteger(s.dur) ? s.dur : a.maxDur) - 1;
+      if (left <= 0) {
+        wear[i] = null;
+        if (this.onArmorBreak) this.onArmorBreak(s.id);
+      } else {
+        s.dur = left;
+      }
+    }
+    if (this.onArmorWear) this.onArmorWear();
+    return amount * (1 - red);
   }
 
   respawn(spawnPoint) {

@@ -56,9 +56,11 @@ body {
   width: 452px;
   display: flex; justify-content: space-between; align-items: flex-end;
 }
-#hearts, #bubbles, #hunger { display: flex; gap: 2px; }
+#hearts, #bubbles, #hunger, #shields { display: flex; gap: 2px; }
 /* hunger sits on the hotbar row; bubbles stack one row up when visible */
 #status-right { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+/* the armor pips ride a slim row above the hearts, only while armor is worn */
+#status-left { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
 /* mirrored: hunger depletes from the left, toward the screen center */
 #hunger { flex-direction: row-reverse; }
 #bubbles { transition: opacity 0.4s; }
@@ -421,8 +423,11 @@ body {
 
 #inv-cols { display: grid; grid-template-columns: 240px 1fr; gap: 20px; }
 #inv-you { display: flex; flex-direction: column; }
+/* the viewer and the wear column share the "You" panel side by side */
+#you-row { display: flex; gap: 8px; align-items: flex-start; }
+.slot-grid.wear { grid-template-columns: 46px; margin-bottom: 0; }
 #player-view {
-  width: 220px; height: 300px;
+  width: 166px; height: 300px;
   border: 1px solid #2a2f38; border-radius: 6px;
   background: radial-gradient(ellipse at 50% 30%, #1e2530 0%, #12151b 75%);
   cursor: grab; touch-action: none;

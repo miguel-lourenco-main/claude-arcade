@@ -131,6 +131,18 @@ export const IRON_INGOT = 86;
 export const COMPASS = 87;
 export const CLOCK = 88;
 export const CHART = 89;
+// armor: 2 tiers × 4 wear slots, carried items that never stack and never
+// place. Bark ware is boiled knotwood-bark plate (cheap, modest); sky-iron
+// ware is hammered from ingots (strong). Worn in the Satchel's wear column;
+// player.js applies the protection and the wear-per-hit.
+export const BARK_CROWN = 90;
+export const BARK_JERKIN = 91;
+export const BARK_LEGGINGS = 92;
+export const BARK_TREADS = 93;
+export const IRON_CROWN = 94;
+export const IRON_JERKIN = 95;
+export const IRON_LEGGINGS = 96;
+export const IRON_TREADS = 97;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -163,6 +175,8 @@ const def = (name, opts) => ({
   extraDrops: null,  // () => [ids] — bonus survival drops beyond drops/randomDrop
   maxStack: 0,       // 0 = the global 64-stack; 1 = never stacks (tools)
   tool: null,        // {kind, tier, speed, damage, maxDur} — a carried tool
+  armor: null,       // {kind, prot, maxDur} — a wearable piece; kind is one
+                     // of WEAR_KINDS, prot its damage-reduction share
   toolKind: null,    // which tool kind mines this block fast ('pick'|'axe'|'shovel')
   needsPick: 0,      // survival: drops NOTHING unless mined with a pick of
                      // at least this tier (0 = drops for anyone, bare feet too)
@@ -731,6 +745,61 @@ const instrument = (name, tile, sound) => def(name, {
 BLOCKS[COMPASS] = instrument("Homeward Needle", TILE.COMPASS, "stone");
 BLOCKS[CLOCK] = instrument("Sky Dial", TILE.SKY_DIAL, "stone");
 BLOCKS[CHART] = instrument("Field Chart", TILE.FIELD_CHART, "wood");
+
+// --- armor: 2 tiers × 4 wear slots ---------------------------------------------
+// The Satchel window carries a wear column with one slot per kind, in this
+// order (top to bottom, head to hand-feet). Save data indexes it the same way.
+export const WEAR_KINDS = ["crown", "jerkin", "leggings", "treads"];
+
+// per-piece damage-reduction shares. A full bark set totals 0.25, a full
+// sky-iron set 0.60 (also the hard cap in armorProtection) — the jerkin
+// carries the most plate, the treads the least.
+//   bark:     crown .05  jerkin .08  leggings .07  treads .05   (Σ .25)
+//   sky-iron: crown .12  jerkin .20  leggings .16  treads .12   (Σ .60)
+const ARMOR_TIERS = {
+  bark: { adj: "Bark", maxDur: 64, sound: "wood",
+    prot: { crown: 0.05, jerkin: 0.08, leggings: 0.07, treads: 0.05 } },
+  iron: { adj: "Sky-Iron", maxDur: 256, sound: "stone",
+    prot: { crown: 0.12, jerkin: 0.2, leggings: 0.16, treads: 0.12 } },
+};
+const defArmor = (id, kindName, kind, tierKey, tile) => {
+  const t = ARMOR_TIERS[tierKey];
+  BLOCKS[id] = def(`${t.adj} ${kindName}`, {
+    tiles: cube(tile),
+    kind: "cross",
+    bucket: "cutout",
+    solid: false,
+    opaque: false,
+    hardness: 0.05,
+    placeable: false,
+    sound: t.sound,
+    maxStack: 1,
+    armor: { kind, tier: tierKey, prot: t.prot[kind], maxDur: t.maxDur },
+  });
+};
+defArmor(BARK_CROWN, "Crown", "crown", "bark", TILE.CROWN_BARK);
+defArmor(BARK_JERKIN, "Jerkin", "jerkin", "bark", TILE.JERKIN_BARK);
+defArmor(BARK_LEGGINGS, "Leggings", "leggings", "bark", TILE.LEGGINGS_BARK);
+defArmor(BARK_TREADS, "Treads", "treads", "bark", TILE.TREADS_BARK);
+defArmor(IRON_CROWN, "Crown", "crown", "iron", TILE.CROWN_IRON);
+defArmor(IRON_JERKIN, "Jerkin", "jerkin", "iron", TILE.JERKIN_IRON);
+defArmor(IRON_LEGGINGS, "Leggings", "leggings", "iron", TILE.LEGGINGS_IRON);
+defArmor(IRON_TREADS, "Treads", "treads", "iron", TILE.TREADS_IRON);
+
+// total damage-reduction fraction of a wear-slot array (entries are stacks or
+// null), capped at 0.60. Falls are a special case: armor helps a fall at only
+// 25% of its value — EXCEPT the treads, which count in full (it's the
+// hand-feet that take the landing). Full sky-iron: 0.60 vs hits, 0.24 vs
+// falls; full bark: 0.25 vs hits, 0.10 vs falls.
+export function armorProtection(slots, fall = false) {
+  let total = 0;
+  for (const s of slots || []) {
+    const a = s && BLOCKS[s.id] ? BLOCKS[s.id].armor : null;
+    if (!a) continue;
+    total += fall ? a.prot * (a.kind === "treads" ? 1 : 0.25) : a.prot;
+  }
+  return Math.min(0.6, total);
+}
 
 // a cross block that pops off / is replaced in place when built over (plants;
 // NOT ladders or open door halves)

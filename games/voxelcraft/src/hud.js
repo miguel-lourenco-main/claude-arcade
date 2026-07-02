@@ -1,7 +1,7 @@
 // DOM HUD: hotbar with fake-isometric block icons, block picker, debug
 // overlay, pause overlay, underwater tint.
 
-import { BLOCKS, PLACEABLE, AIR } from "./blocks.js";
+import { BLOCKS, PLACEABLE, AIR, WEAR_KINDS, armorProtection } from "./blocks.js";
 import { clampSignText, SIGN_LINES, SIGN_COLS } from "./world.js";
 import { shapeBoxes } from "./mesher.js";
 import { ATLAS_TILES, TILE_PX } from "./textures.js";
@@ -121,10 +121,11 @@ function drawShapedIcon(ctx, atlas, def, src) {
   }
 }
 
-// the wear bar: only on tools, only once worn (absent dur = factory-fresh)
+// the wear bar: tools and armor only, only once worn (absent dur = fresh)
 function drawDurabilityBar(ctx, def, stack) {
-  if (!def.tool || !Number.isInteger(stack.dur) || stack.dur >= def.tool.maxDur) return;
-  const ratio = Math.max(0, Math.min(1, stack.dur / def.tool.maxDur));
+  const maxDur = def.tool ? def.tool.maxDur : def.armor ? def.armor.maxDur : 0;
+  if (!maxDur || !Number.isInteger(stack.dur) || stack.dur >= maxDur) return;
+  const ratio = Math.max(0, Math.min(1, stack.dur / maxDur));
   ctx.fillStyle = "rgba(12,12,16,0.85)";
   ctx.fillRect(4, ICON - 5, ICON - 8, 4);
   // green -> yellow -> red as the uses run out
@@ -157,6 +158,9 @@ const BUBBLE_ROWS = [".XXX.", "XXXXX", "XoXXX", "XXXXX", ".XXX."];
 // rust-orange crockery, mustard morsel (the tunic colors, see LORE.md)
 const BOWL_ROWS = ["..mm...", ".mmmm..", "XXXXXXX", "XXXXXXX", ".XXXXX.", "..XXX.."];
 const BOWL_COLORS = { X: "#c56a2b", m: "#d9a441" };
+// armor pips: a small buckler — pale sky-iron plate with a mustard boss
+const SHIELD_ROWS = [".XXXXX.", "XXXoXXX", "XXooXXX", ".XXXXX.", "..XXX..", "...X..."];
+const SHIELD_COLORS = { X: "#c4ccda", o: "#d6b04a" };
 
 const ICONS = {
   heartFull: pixelIcon(HEART_ROWS, (ch) => (ch === "X" ? "#d4342a" : null)),
@@ -168,6 +172,8 @@ const ICONS = {
   // colored half toward the full end: the RIGHT side of the icon
   bowlHalf: pixelIcon(BOWL_ROWS, (ch, x) => (BOWL_COLORS[ch] ? (x >= 3 ? BOWL_COLORS[ch] : "#3a3a44") : null)),
   bowlEmpty: pixelIcon(BOWL_ROWS, (ch) => (BOWL_COLORS[ch] ? "#3a3a44" : null)),
+  shieldFull: pixelIcon(SHIELD_ROWS, (ch) => SHIELD_COLORS[ch] || null),
+  shieldEmpty: pixelIcon(SHIELD_ROWS, (ch) => (SHIELD_COLORS[ch] ? "#3a3a44" : null)),
 };
 
 export class Hud {
@@ -203,6 +209,9 @@ export class Hud {
     this._lastHealth = -1;
     this._lastBubbles = -1;
     this._lastHunger = -1;
+    this._lastArmorPips = -1;
+    // the 4 wear slots (main.js owns the array; shared with player.wear)
+    this.wearSlots = opts.wearSlots || [null, null, null, null];
 
     // one cursor-stack engine powers the inventory/chest/workbench windows
     this.slotUI = new SlotUI({
@@ -328,9 +337,11 @@ export class Hud {
     const hearts = document.getElementById("hearts");
     const bubbles = document.getElementById("bubbles");
     const hunger = document.getElementById("hunger");
+    const shields = document.getElementById("shields");
     this.heartEls = [];
     this.bubbleEls = [];
     this.hungerEls = [];
+    this.shieldEls = [];
     for (let i = 0; i < 10; i++) {
       const h = document.createElement("div");
       h.className = "icon";
@@ -345,6 +356,24 @@ export class Hud {
       f.className = "icon";
       hunger.appendChild(f);
       this.hungerEls.push(f);
+      const s = document.createElement("div");
+      s.className = "icon";
+      shields.appendChild(s);
+      this.shieldEls.push(s);
+    }
+  }
+
+  // the shield-pips row above the hearts: pips proportional to the current
+  // damage reduction (10 pips = the 60% cap, so a full sky-iron set fills
+  // the row and a full bark set shows ~4). Hidden with nothing worn.
+  setArmor(reduction) {
+    const pips = reduction > 0 ? Math.max(1, Math.round((reduction / 0.6) * 10)) : 0;
+    if (pips === this._lastArmorPips) return;
+    this._lastArmorPips = pips;
+    document.getElementById("shields").classList.toggle("hidden", pips === 0);
+    for (let i = 0; i < 10; i++) {
+      this.shieldEls[i].style.backgroundImage =
+        `url(${i < pips ? ICONS.shieldFull : ICONS.shieldEmpty})`;
     }
   }
 
@@ -602,30 +631,61 @@ export class Hud {
     };
   }
 
+  // the wear column: 4 kind-gated slots (crown/jerkin/leggings/treads) —
+  // accepts rejects anything but the matching armor kind, so a wrong-kind
+  // cursor placement is a no-op that keeps the stack on the cursor
+  _wearRegion() {
+    const region = arrayRegion("wear", this.wearSlots);
+    region.accepts = (i, stack) => {
+      const a = BLOCKS[stack.id] && BLOCKS[stack.id].armor;
+      return !!a && a.kind === WEAR_KINDS[i];
+    };
+    return region;
+  }
+
   // inventory window: survival = satchel grid + belt (+ field recipes);
-  // creative = full palette + belt
+  // creative = full palette + belt. Both carry the wear column by the viewer.
   openPicker() {
     const survival = this.gameMode === "survival";
     document.getElementById("palette-grid").classList.toggle("hidden", survival);
     document.getElementById("main-grid").classList.toggle("hidden", !survival);
     document.getElementById("inv-main-label").textContent = survival ? "Satchel" : "All blocks";
     const { hotbar, main } = this._invRegions();
+    const wear = this._wearRegion();
+    const wearView = { region: wear, gridEl: document.getElementById("wear-grid") };
     let views, quick;
     if (survival) {
+      // shift-click routing: armor auto-equips to its wear slot (falling
+      // through to the other grid if that slot's taken); a shift-clicked
+      // wear slot returns the piece to the satchel
+      const route = (fallback) => (s) =>
+        (BLOCKS[s.id].armor ? [wear, fallback] : [fallback]);
       views = [
         { region: main, gridEl: document.getElementById("main-grid") },
         { region: hotbar, gridEl: document.getElementById("hotbar-grid") },
+        wearView,
       ];
-      quick = { main: [hotbar], hotbar: [main] };
+      quick = { main: route(hotbar), hotbar: route(main), wear: [main, hotbar] };
     } else {
       const palette = paletteRegion("palette", PLACEABLE);
       views = [
         { region: palette, gridEl: document.getElementById("palette-grid") },
         { region: hotbar, gridEl: document.getElementById("hotbar-grid") },
+        wearView,
       ];
-      quick = { palette: [hotbar], hotbar: [] };
+      quick = {
+        palette: [hotbar],
+        hotbar: (s) => (BLOCKS[s.id].armor ? [wear] : []),
+        wear: [hotbar],
+      };
     }
     this.slotUI.open(views, quick);
+    // name each wear slot for the hoverer (open() clones the view objects,
+    // so read the built cells back off the engine)
+    const builtWear = this.slotUI._views.find((v) => v.region.name === "wear");
+    builtWear.cells.forEach(({ cell }, i) => {
+      cell.title = WEAR_KINDS[i][0].toUpperCase() + WEAR_KINDS[i].slice(1);
+    });
     this._fieldOrder = this._sortedRecipes(BASIC_RECIPES);
     this._renderFieldRecipes();
     this.pickerOpen = true;

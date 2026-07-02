@@ -11,6 +11,8 @@ import {
   PLANK_PICK, STONE_PICK, IRON_PICK, PLANK_AXE, STONE_AXE, IRON_AXE,
   PLANK_SHOVEL, STONE_SHOVEL, IRON_SHOVEL, PLANK_BLADE, STONE_BLADE, IRON_BLADE,
   IRON_INGOT, IRON_BLOCK, COMPASS, CLOCK, CHART,
+  BARK_CROWN, BARK_JERKIN, BARK_LEGGINGS, BARK_TREADS,
+  IRON_CROWN, IRON_JERKIN, IRON_LEGGINGS, IRON_TREADS,
 } from "./blocks.js";
 
 // in: [[blockId, count], ...]  out: [blockId, count]  note: extra recipe copy
@@ -63,6 +65,18 @@ export const RECIPES = [
   { in: [[IRON_INGOT, 3], [PLANKS, 2]], out: [IRON_AXE, 1], note: "the planks are the haft" },
   { in: [[IRON_INGOT, 1], [PLANKS, 2]], out: [IRON_SHOVEL, 1], note: "the planks are the haft" },
   { in: [[IRON_INGOT, 2], [PLANKS, 2]], out: [IRON_BLADE, 1], note: "the planks are the haft" },
+  // --- armor (workbench). Classic piece shapes: crown 5, jerkin 8,
+  // leggings 7, treads 4 of the material. The bark set is planks boiled and
+  // beaten back into stiff bark plate (cheap, modest); the sky-iron set is
+  // hammered from ingots (strong). Wear them in the Satchel's wear column.
+  { in: [[PLANKS, 5]], out: [BARK_CROWN, 1], note: "boiled bark, bent to the brow" },
+  { in: [[PLANKS, 8]], out: [BARK_JERKIN, 1], note: "bark plate, lashed at the seam" },
+  { in: [[PLANKS, 7]], out: [BARK_LEGGINGS, 1], note: "bark greaves for the walking legs" },
+  { in: [[PLANKS, 4]], out: [BARK_TREADS, 1], note: "stiff wraps for the hand-feet" },
+  { in: [[IRON_INGOT, 5]], out: [IRON_CROWN, 1], note: "the fallen sky, bent to the brow" },
+  { in: [[IRON_INGOT, 8]], out: [IRON_JERKIN, 1], note: "hammered plate, lashed at the seam" },
+  { in: [[IRON_INGOT, 7]], out: [IRON_LEGGINGS, 1], note: "iron greaves for the walking legs" },
+  { in: [[IRON_INGOT, 4]], out: [IRON_TREADS, 1], note: "iron wraps for the hand-feet" },
   // sky-iron, folded and unfolded: four ingots to the block and back
   { in: [[IRON_INGOT, 4]], out: [IRON_BLOCK, 1] },
   { in: [[IRON_BLOCK, 1]], out: [IRON_INGOT, 4] },

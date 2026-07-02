@@ -20,7 +20,10 @@
     <div id="crosshair"></div>
     <div id="block-name"></div>
     <div id="status" class="hidden">
-      <div id="hearts"></div>
+      <div id="status-left">
+        <div id="shields" class="hidden"></div>
+        <div id="hearts"></div>
+      </div>
       <div id="status-right">
         <div id="bubbles"></div>
         <div id="hunger"></div>
@@ -54,8 +57,11 @@
       <div id="inv-cols">
         <div id="inv-you">
           <h3>You</h3>
-          <canvas id="player-view"></canvas>
-          <p class="lore-blurb">A Wanderling of the Upturn. Hands like feet, feet like hands. It works out fine. Drag to spin.</p>
+          <div id="you-row">
+            <canvas id="player-view"></canvas>
+            <div id="wear-grid" class="slot-grid wear"></div>
+          </div>
+          <p class="lore-blurb">A Wanderling of the Upturn. Hands like feet, feet like hands. It works out fine. Drag to spin. Wear goes in the column.</p>
         </div>
         <div id="inv-slots">
           <h3 id="inv-main-label">Satchel</h3>

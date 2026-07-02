@@ -18,13 +18,15 @@ export function maxStackFor(id) {
   return b && b.maxStack ? b.maxStack : MAX_STACK;
 }
 
-// the validated dur for a stack of this id: a positive int on a tool, else
-// undefined (non-tools never carry dur; garbage dur is dropped, not crashed)
+// the validated dur for a stack of this id: a positive int on a tool or an
+// armor piece, else undefined (other items never carry dur; garbage dur is
+// dropped, not crashed)
 export function validDur(id, dur) {
   const b = BLOCKS[id];
-  if (!b || !b.tool) return undefined;
+  const maxDur = b && (b.tool ? b.tool.maxDur : b.armor ? b.armor.maxDur : 0);
+  if (!maxDur) return undefined;
   if (!Number.isInteger(dur) || dur <= 0) return undefined;
-  return Math.min(dur, b.tool.maxDur);
+  return Math.min(dur, maxDur);
 }
 
 // canonical stack copy: clamps count to the per-id ceiling and carries a

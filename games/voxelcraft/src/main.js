@@ -3,9 +3,9 @@
 
 import * as THREE from "three";
 import { buildAtlas, buildWaterTexture, buildCrackTextures } from "./textures.js";
-import { BLOCKS, AIR } from "./blocks.js";
+import { BLOCKS, AIR, WEAR_KINDS, armorProtection } from "./blocks.js";
 import { World, CHUNK, HEIGHT } from "./world.js";
-import { Inventory } from "./inventory.js";
+import { Inventory, makeStack } from "./inventory.js";
 import { ItemDrops } from "./entities.js";
 import { PrimedKegs } from "./explosives.js";
 import { SlingStones } from "./projectiles.js";
@@ -154,6 +154,22 @@ if (save) {
     pendingOverflow = migrated.overflow;
   }
 }
+// the 4 wear slots (crown/jerkin/leggings/treads — WEAR_KINDS order): stacks
+// or null, shared by reference with the Satchel window (hud) and the player
+// (protection + wear). Additive save field; older saves load in bare. Death
+// does NOT clear them — armor keeps protecting after a respawn.
+const wearSlots = [null, null, null, null];
+if (save && Array.isArray(save.wear)) {
+  for (let i = 0; i < WEAR_KINDS.length; i++) {
+    const e = save.wear[i];
+    if (!validSaveStack(e)) continue;
+    const a = BLOCKS[e[0]].armor;
+    if (!a || a.kind !== WEAR_KINDS[i]) continue; // only the matching kind
+    wearSlots[i] = makeStack(e[0], 1, e[2]);
+  }
+}
+player.wear = wearSlots;
+
 const drops = new ItemDrops(scene, materials);
 
 // retry pendingOverflow against the satchel; called on a slow timer from the
@@ -442,8 +458,9 @@ const hud = new Hud(atlas.canvas, {
     if (crafted) sfx.craft();
   },
   onSpillCursor: (stack) => spillStack(stack),
-  onSlotsChanged: () => { sfx.click(); drainOverflow(); },
+  onSlotsChanged: () => { sfx.click(); drainOverflow(); refreshArmor(); },
   inventory,
+  wearSlots,
   playerViewer: new PlayerViewer(document.getElementById("player-view"), 1337),
 });
 hud.setMovementLabel(player.moveMode);
@@ -473,6 +490,17 @@ player.onDamage = () => { hud.flashDamage(); sfx.hurt(); };
 player.onDeath = (cause) => {
   hud.showDeath(cause);
   if (document.pointerLockElement) document.exitPointerLock();
+};
+// worn armor: every absorbed hit ticks dur down across the set (player.js);
+// keep the pips, dur bars, and model overlays honest, and let a shattered
+// piece announce itself the way a spent tool does
+player.onArmorWear = () => {
+  refreshArmor();
+  if (hud.pickerOpen) hud.slotUI.renderAll();
+};
+player.onArmorBreak = (id) => {
+  sfx.stoneCrack();
+  hud.announce(`The ${BLOCKS[id].name} falls to pieces.`, 2200);
 };
 
 // --- the Moss Cot: sleep through the night, wake anchored to the bed --------
@@ -723,6 +751,9 @@ const stopAutosave = startAutosave(() => writeSave(world, player, sky, hud, inve
   }),
   overflowStacks: pendingOverflow.map((s) =>
     (s.dur !== undefined ? [s.id, s.count, s.dur] : [s.id, s.count])),
+  // additive: the 4 wear slots incl. dur ([id, count, dur?] or 0 each)
+  wear: wearSlots.map((s) =>
+    (s ? (s.dur !== undefined ? [s.id, s.count, s.dur] : [s.id, s.count]) : 0)),
   boats: boats.serialize(), // additive: deployed skiffs [[x,y,z,yaw]...]
   weather: [
     sky.weatherPhase,
@@ -767,6 +798,22 @@ function toggleThirdPerson() {
   thirdPerson = !thirdPerson;
   playerModel.group.visible = thirdPerson;
 }
+
+// keep every armor consumer in step with the wear slots: the third-person
+// model's overlays, the Satchel viewer's, and the HUD shield pips. Cheap
+// enough to run on any slot change (hud.onSlotsChanged) and every wear tick.
+function refreshArmor() {
+  const state = {};
+  for (let i = 0; i < WEAR_KINDS.length; i++) {
+    const s = wearSlots[i];
+    const a = s && BLOCKS[s.id] ? BLOCKS[s.id].armor : null;
+    state[WEAR_KINDS[i]] = a ? a.tier : null;
+  }
+  playerModel.setArmor(state);
+  hud.playerViewer.setArmor(state);
+  hud.setArmor(armorProtection(wearSlots));
+}
+refreshArmor(); // dress the model from the loaded save
 
 let heldKey = null;
 let swingT = 1; // 0..1 swing animation progress (1 = at rest)
@@ -1236,6 +1283,7 @@ if (NO_LOCK) {
   window.voxelcraft = {
     player, world, hud, sky, terrain, interaction, mobs, drops, saplings, crops,
     inventory, kegs, stones, boats, fishing, signBoards, wayfinder,
+    wear: wearSlots, playerModel,
     rain: rainFx, sfx, music, camera,
     spawnTarget: () => player.spawnPoint || spawnPoint,
     growAllSaplings: () => { for (const k of saplings.keys()) saplings.set(k, 0); },

@@ -87,6 +87,15 @@ export const TILE = {
   COMPASS: 74,
   SKY_DIAL: 75,
   FIELD_CHART: 76,
+  // armor: one front-view silhouette tile per piece × tier (icons + drops)
+  CROWN_BARK: 77,
+  JERKIN_BARK: 78,
+  LEGGINGS_BARK: 79,
+  TREADS_BARK: 80,
+  CROWN_IRON: 81,
+  JERKIN_IRON: 82,
+  LEGGINGS_IRON: 83,
+  TREADS_IRON: 84,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -1143,6 +1152,91 @@ painters[TILE.SHOVEL_IRON] = toolPainter("shovel", TOOL_PALETTES.iron);
 painters[TILE.BLADE_PLANK] = toolPainter("blade", TOOL_PALETTES.plank);
 painters[TILE.BLADE_STONE] = toolPainter("blade", TOOL_PALETTES.stone);
 painters[TILE.BLADE_IRON] = toolPainter("blade", TOOL_PALETTES.iron);
+
+// --- armor tiles ------------------------------------------------------------
+// Front-view piece silhouettes on transparent tiles, per kind × tier. Bark
+// ware reads as boiled knotwood-bark plate (warm brown, striated); sky-iron
+// ware borrows the pale tool palette. Every piece carries one mustard lashing
+// pixel — Wanderling trim is how gear says "finished".
+const ARMOR_PALETTES = {
+  bark: { hi: [150, 116, 72], mid: [118, 90, 54], lo: [82, 62, 38] },
+  iron: TOOL_PALETTES.iron,
+};
+const TRIM_MUSTARD = [214, 176, 74];
+
+function armorPainter(kind, pal) {
+  return (p) => {
+    p.clear();
+    const dot = (x, y, c, j = 7) => {
+      if (x < 0 || y < 0 || x >= TILE_PX || y >= TILE_PX) return;
+      const d = (p.rand() * 2 - 1) * j;
+      p.px(x, y, c[0] + d, c[1] + d, c[2] + d);
+    };
+    if (kind === "crown") {
+      // a low dome with a brow band — sits over the ears, not the eyes
+      for (let y = 3; y <= 8; y++) {
+        const half = y === 3 ? 2 : y === 4 ? 3 : 4;
+        for (let x = 8 - half; x <= 7 + half; x++) {
+          const edge = x === 8 - half || x === 7 + half || y === 3;
+          dot(x, y, edge ? pal.lo : pal.mid);
+        }
+      }
+      for (let x = 3; x <= 12; x++) dot(x, 9, pal.lo);       // the brow band
+      for (let x = 6; x <= 9; x++) dot(x, 4, pal.hi);        // crest shine
+      dot(7, 9, TRIM_MUSTARD); dot(8, 9, TRIM_MUSTARD);      // band lashing
+    } else if (kind === "jerkin") {
+      // shoulders, an open neck, and a plated torso
+      for (let x = 3; x <= 12; x++) {
+        if (x >= 6 && x <= 9) continue; // the neck hole
+        dot(x, 3, pal.mid); dot(x, 4, pal.mid);
+      }
+      dot(3, 3, pal.lo); dot(12, 3, pal.lo);                 // shoulder caps
+      for (let y = 5; y <= 12; y++) {
+        for (let x = 4; x <= 11; x++) {
+          const edge = x === 4 || x === 11 || y === 12;
+          dot(x, y, edge ? pal.lo : pal.mid);
+        }
+      }
+      for (let y = 5; y <= 11; y++) dot(7, y, pal.hi);       // the center seam
+      dot(7, 6, TRIM_MUSTARD); dot(7, 9, TRIM_MUSTARD);      // seam lashings
+    } else if (kind === "leggings") {
+      // a waistband splitting into two plated legs
+      for (let x = 4; x <= 11; x++) { dot(x, 3, pal.lo); dot(x, 4, pal.mid); }
+      for (let y = 5; y <= 13; y++) {
+        for (const x0 of [4, 9]) {
+          for (let x = x0; x <= x0 + 2; x++) {
+            const edge = x === x0 || x === x0 + 2 || y === 13;
+            dot(x, y, edge ? pal.lo : pal.mid);
+          }
+        }
+      }
+      dot(5, 6, pal.hi); dot(10, 6, pal.hi);                 // thigh shine
+      dot(7, 3, TRIM_MUSTARD); dot(8, 3, TRIM_MUSTARD);      // belt lashing
+    } else {
+      // treads: two stout wraps for the hand-feet, toes forward, deep soles
+      for (const x0 of [2, 9]) {
+        for (let y = 8; y <= 11; y++) {
+          for (let x = x0; x <= x0 + 4; x++) {
+            const edge = x === x0 || x === x0 + 4 || y === 8;
+            dot(x, y, edge ? pal.lo : pal.mid);
+          }
+        }
+        for (let x = x0; x <= x0 + 4; x++) dot(x, 12, pal.lo); // the sole
+        dot(x0 + 1, 9, pal.hi);                                // toe shine
+        dot(x0 + 2, 8, TRIM_MUSTARD);                          // ankle lashing
+      }
+    }
+  };
+}
+
+painters[TILE.CROWN_BARK] = armorPainter("crown", ARMOR_PALETTES.bark);
+painters[TILE.JERKIN_BARK] = armorPainter("jerkin", ARMOR_PALETTES.bark);
+painters[TILE.LEGGINGS_BARK] = armorPainter("leggings", ARMOR_PALETTES.bark);
+painters[TILE.TREADS_BARK] = armorPainter("treads", ARMOR_PALETTES.bark);
+painters[TILE.CROWN_IRON] = armorPainter("crown", ARMOR_PALETTES.iron);
+painters[TILE.JERKIN_IRON] = armorPainter("jerkin", ARMOR_PALETTES.iron);
+painters[TILE.LEGGINGS_IRON] = armorPainter("leggings", ARMOR_PALETTES.iron);
+painters[TILE.TREADS_IRON] = armorPainter("treads", ARMOR_PALETTES.iron);
 
 // --- the wayfinding kit -----------------------------------------------------
 painters[TILE.COMPASS] = (p) => {

@@ -13,7 +13,10 @@ import { maxStackFor, makeStack } from "./inventory.js";
 
 const copyStack = (s, count = s.count) => makeStack(s.id, count, s.dur);
 
-// region: { name, size, get(i), set(i, stack|null), palette?, takeOnly? }
+// region: { name, size, get(i), set(i, stack|null), palette?, takeOnly?,
+//           accepts?(i, stack) } — accepts gates what may be PLACED into a
+// slot (the Satchel's wear column takes only its matching armor kind); a
+// rejected placement is a handled no-op and the cursor keeps its stack.
 export function invRegion(name, inventory, offset, length) {
   return {
     name,
@@ -200,12 +203,19 @@ export class SlotUI {
     this.cursor = this.cursor ? null : copyStack(region.get(i));
   }
 
+  // may this stack be placed into region slot i? (kind-gated wear slots)
+  _canPlace(region, i, stack) {
+    return !region.accepts || region.accepts(i, stack);
+  }
+
   _leftClick(region, i) {
     const s = region.get(i);
     if (!this.cursor) {
       if (!s) return;
       this.cursor = { ...s };
       region.set(i, null);
+    } else if (!this._canPlace(region, i, this.cursor)) {
+      return; // wrong kind for this slot — the cursor keeps the stack
     } else if (!s) {
       region.set(i, this.cursor);
       this.cursor = null;
@@ -230,6 +240,8 @@ export class SlotUI {
       const take = Math.ceil(s.count / 2);
       this.cursor = copyStack(s, take);
       region.set(i, s.count - take > 0 ? copyStack(s, s.count - take) : null);
+    } else if (!this._canPlace(region, i, this.cursor)) {
+      return; // wrong kind for this slot — the cursor keeps the stack
     } else if (!s) {
       region.set(i, copyStack(this.cursor, 1));
       this.cursor.count -= 1;
@@ -258,6 +270,7 @@ export class SlotUI {
     for (const pass of ["merge", "fill"]) {
       for (const target of targets) {
         for (let t = 0; t < target.size && left > 0; t++) {
+          if (!this._canPlace(target, t, s)) continue; // kind-gated slot
           const ts = target.get(t);
           if (pass === "merge" && ts && ts.id === s.id && ts.count < max) {
             const move = Math.min(max - ts.count, left);

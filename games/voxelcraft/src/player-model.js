@@ -12,6 +12,9 @@ const SKIN = [126, 200, 178];
 const TUNIC = [188, 92, 48];
 const TRIM = [214, 176, 74];
 const TROUSER = [52, 56, 66];
+// armor overlay tints: boiled knotwood-bark plate and pale sky-iron
+const ARMOR_BARK = [118, 90, 54];
+const ARMOR_IRON = [196, 204, 218];
 
 function paintTexture(seed, base, decorate) {
   const canvas = document.createElement("canvas");
@@ -163,9 +166,67 @@ export class PlayerModel {
       this.legs.push(pivot);
     }
 
+    // --- armor overlays: boxes a hair larger than the body parts they guard,
+    // tinted per material with procedural detail lines. Hidden until worn;
+    // setArmor toggles them (and despawns them when a piece shatters).
+    this._armorMats = {
+      bark: mat(paintTexture(seed ^ 8, ARMOR_BARK, (ctx, rand) => {
+        // bark striations: dark vertical grain runs
+        ctx.fillStyle = "rgba(58,42,24,0.75)";
+        for (const x of [2, 6, 11, 14]) {
+          const y0 = (rand() * 6) | 0;
+          ctx.fillRect(x, y0, 1, 8 + ((rand() * 6) | 0));
+        }
+        ctx.fillStyle = `rgb(${TRIM[0]},${TRIM[1]},${TRIM[2]})`;
+        ctx.fillRect(4, 8, 2, 1); ctx.fillRect(10, 3, 2, 1); // mustard lashings
+      }), reg),
+      iron: mat(paintTexture(seed ^ 9, ARMOR_IRON, (ctx, rand) => {
+        // hammered plate: a seam line and a scatter of rivet caps
+        ctx.fillStyle = "rgba(120,128,146,0.85)";
+        ctx.fillRect(0, 7, 16, 1);
+        ctx.fillStyle = "rgb(232,238,248)";
+        for (let i = 0; i < 5; i++) {
+          ctx.fillRect((rand() * 15) | 0, (rand() * 15) | 0, 1, 1);
+        }
+        ctx.fillStyle = `rgb(${TRIM[0]},${TRIM[1]},${TRIM[2]})`;
+        ctx.fillRect(7, 12, 2, 1); // mustard lashing
+      }), reg),
+    };
+    this._overlays = { crown: [], jerkin: [], leggings: [], treads: [] };
+    const overlay = (parent, w, h, d, x, y, z, kind) => {
+      const m = box(w, h, d, this._armorMats.bark);
+      m.position.set(x, y, z);
+      m.visible = false;
+      parent.add(m);
+      this._overlays[kind].push(m);
+    };
+    // crown: a cap over the head's upper half (head is 0.46³ centered at .25)
+    overlay(this.headPivot, 0.52, 0.26, 0.52, 0, 0.4, 0, "crown");
+    // jerkin: torso shell + upper-arm guards (they ride the arm pivots)
+    overlay(this.group, 0.56, 0.78, 0.32, 0, 1.02, 0, "jerkin");
+    for (const p of this.arms) overlay(p, 0.24, 0.4, 0.24, 0, -0.2, 0, "jerkin");
+    for (const p of this.legs) {
+      // leggings sheath each leg; treads wrap the hand-feet at the ends
+      overlay(p, 0.26, 0.52, 0.26, 0, -0.3, 0, "leggings");
+      overlay(p, 0.32, 0.16, 0.36, 0, -0.66, -0.04, "treads");
+    }
+
     this.phase = 0;
     this.swimLean = 0;
     this._swing = 1;
+  }
+
+  // dress the model: state maps each wear kind to "bark" | "iron" | null
+  // (null despawns that kind's overlays — unequipped or shattered)
+  setArmor(state = {}) {
+    for (const kind of Object.keys(this._overlays)) {
+      const tier = state[kind];
+      const material = tier && this._armorMats[tier];
+      for (const m of this._overlays[kind]) {
+        m.visible = !!material;
+        if (material) m.material = material;
+      }
+    }
   }
 
   // punch/mine: kick the right arm forward

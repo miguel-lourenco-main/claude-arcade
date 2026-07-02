@@ -7,7 +7,7 @@
 import {
   BERRIES, IRON_ORE, COBBLE, TORCH, MEAL_ROOT, SLING_STONE, PLANKS, BOAT,
   COAL_ORE, GLASS, GRAVEL, MOSS_CLUMP, ROOT_SEED, SILVERFIN, ROAST_LOIN,
-  STONE_PICK, COMPASS,
+  STONE_PICK, COMPASS, BARK_JERKIN, IRON_TREADS,
 } from "./blocks.js";
 import { mulberry32 } from "./noise.js";
 
@@ -34,6 +34,12 @@ export const OFFERS = [
   // ore for a Homeward Needle: he smelts and cases one on the road — knowing
   // the way home is his stock-in-trade
   { give: [[IRON_ORE, 6]], get: [COMPASS, 1] },
+  // lumber for a bark jerkin: he boils the bark in his supper pot, allegedly
+  // after the supper
+  { give: [[PLANKS, 12]], get: [BARK_JERKIN, 1] },
+  // ore for sky-iron treads: hammered flat on a River Rubble anvil — his own
+  // hand-feet have walked in worse
+  { give: [[IRON_ORE, 8]], get: [IRON_TREADS, 1] },
 ];
 
 export const OFFERS_PER_DAY = 3;

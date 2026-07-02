@@ -62,6 +62,10 @@ export function writeSave(world, player, sky, hud, inventory, extra = {}) {
       // additive: the Moss Cot respawn anchor (absent/null = world spawn)
       spawnPoint: player.spawnPoint || undefined,
       inventory: inventory ? inventory.serialize() : [],
+      // additive: the 4 wear slots (crown/jerkin/leggings/treads), same
+      // entry shape as inventory ([id, count, dur?] or 0) — absent in older
+      // saves, which simply load in bare
+      wear: extra.wear || undefined,
       // additive: the stack held on the drag cursor mid-window — it lives in
       // no slot, so without this field a save written mid-drag deletes it
       cursor: hud.slotUI && hud.slotUI.cursor
