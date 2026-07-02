@@ -57,6 +57,12 @@ export const TILE = {
   KEG_SIDE: 46,
   KEG_TOP: 47,
   WATTLE: 48,
+  ROOT_PIPS: 49,
+  CROP_SPROUT: 50,
+  CROP_HALF: 51,
+  CROP_RIPE: 52,
+  MEAL_ROOT: 53,
+  BAKED_ROOT: 54,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -719,6 +725,150 @@ const painters = {
     // frayed withy ends and peeled-bark highlights
     p.speckle(10, [180, 148, 92], 10);
     p.speckle(8, [88, 64, 38], 8);
+  },
+  [TILE.ROOT_PIPS](p) {
+    // a Wanderling seed pouch: mustard-cloth, cinched with cord, a few pale
+    // meal-root pips spilled beside it — stamped like a field-journal specimen
+    p.clear();
+    // the pouch: a squat sack, widest at the bottom, gathered at the neck
+    for (let y = 6; y <= 13; y++) {
+      const half = y <= 7 ? 2 : y <= 9 ? 3 : 4;
+      for (let x = 7 - half; x <= 7 + half; x++) {
+        const d = (p.rand() * 2 - 1) * 10;
+        const edge = x === 7 - half || x === 7 + half || y === 13;
+        if (edge) p.px(x, y, 146 + d, 108 + d, 40 + d);
+        else p.px(x, y, 190 + d, 150 + d, 58 + d);
+      }
+    }
+    // cinch cord + gathered neck
+    p.px(6, 6, 96, 66, 34); p.px(7, 6, 112, 78, 38); p.px(8, 6, 96, 66, 34);
+    p.px(7, 5, 150, 112, 46); p.px(7, 4, 122, 90, 40);
+    // a weave seam across the belly
+    for (let x = 5; x <= 9; x++) if (p.rand() < 0.7) p.px(x, 10, 158, 120, 44);
+    // spilled pips: plump pale-cream teardrops with a dark eye
+    for (const [x, y] of [[12, 12], [13, 14], [11, 14], [3, 13]]) {
+      p.px(x, y, 226, 206, 158); p.px(x, y + 1, 198, 176, 128);
+      p.px(x + 1, y + 1, 92, 74, 48);
+    }
+  },
+  [TILE.CROP_SPROUT](p) {
+    // meal-root, first showing: a few shy green pips split and reaching up
+    p.clear();
+    for (const [x, lean] of [[4, -1], [8, 0], [12, 1]]) {
+      const h = 3 + ((p.rand() * 2) | 0);
+      for (let i = 0; i < h; i++) {
+        const d = (p.rand() * 2 - 1) * 12;
+        p.px(x + (i >= h - 1 ? lean : 0), 15 - i, 96 + d, 160 + d, 62 + d);
+      }
+      // seed leaf pair at the tip
+      p.px(x - 1, 15 - h, 118, 178, 74); p.px(x + 1, 15 - h, 118, 178, 74);
+    }
+  },
+  [TILE.CROP_HALF](p) {
+    // half-grown: leafy rosettes knee-high, the root shoulder just breaking
+    // the soil — pale amber peeking through
+    p.clear();
+    for (const cx of [4, 11]) {
+      // stem
+      for (let i = 0; i < 6; i++) {
+        const d = (p.rand() * 2 - 1) * 10;
+        p.px(cx, 15 - i, 74 + d, 132 + d, 52 + d);
+      }
+      // a loose whorl of leaves
+      for (const [dx, dy] of [[-1, 5], [1, 5], [-2, 6], [2, 6], [0, 7], [-1, 7], [1, 8], [-2, 8], [2, 7]]) {
+        const d = (p.rand() * 2 - 1) * 14;
+        p.px(cx + dx, 15 - dy, 92 + d, 158 + d, 60 + d);
+      }
+      // the root shoulder at the soil line
+      p.px(cx - 1, 15, 196, 148, 84); p.px(cx, 15, 210, 160, 92); p.px(cx + 1, 15, 182, 136, 76);
+    }
+  },
+  [TILE.CROP_RIPE](p) {
+    // ripe: frilly tops gone bushy, fat amber root shoulders heaved up out of
+    // the ground — the Upturn pushes back what it's done growing
+    p.clear();
+    for (const cx of [4, 11]) {
+      // bushy top: a dense frill blob
+      for (let dy = 5; dy <= 10; dy++) {
+        const half = dy <= 6 ? 1 : dy <= 9 ? 2 : 1;
+        for (let dx = -half; dx <= half; dx++) {
+          if (p.rand() < 0.18) continue; // ragged frill
+          const d = (p.rand() * 2 - 1) * 16;
+          p.px(cx + dx, 15 - dy, 84 + d, 150 + d, 56 + d);
+        }
+      }
+      p.px(cx, 15 - 11, 110, 172, 70); // topmost frond
+      // stems down to the shoulder
+      for (let i = 3; i < 5; i++) {
+        const d = (p.rand() * 2 - 1) * 8;
+        p.px(cx, 15 - i, 68 + d, 122 + d, 48 + d);
+      }
+      // the heaved-up root: a plump amber dome, two rows proud of the soil
+      for (let dy = 0; dy <= 2; dy++) {
+        const half = dy === 2 ? 1 : 2;
+        for (let dx = -half; dx <= half; dx++) {
+          const d = (p.rand() * 2 - 1) * 10;
+          const edge = dx === -half || dx === half;
+          if (edge) p.px(cx + dx, 15 - dy, 172 + d, 122 + d, 62 + d);
+          else p.px(cx + dx, 15 - dy, 214 + d, 162 + d, 90 + d);
+        }
+      }
+      p.px(cx - 1, 13, 234, 190, 120); // proud highlight
+    }
+  },
+  [TILE.MEAL_ROOT](p) {
+    // the meal root itself: a stout tapered tuber, russet-skinned and mealy,
+    // whiskered with fine roots — a Wanderling staple, pried up by hand-foot
+    p.clear();
+    for (let y = 3; y <= 13; y++) {
+      // widest at the shoulder (top), tapering to the tail
+      const half = y <= 5 ? 3 : y <= 8 ? 4 : y <= 10 ? 3 : y <= 12 ? 2 : 1;
+      for (let x = 7 - half; x <= 7 + half; x++) {
+        const d = (p.rand() * 2 - 1) * 10;
+        const edge = x === 7 - half || x === 7 + half || y === 3 || y === 13;
+        if (edge) p.px(x, y, 148 + d, 96 + d * 0.7, 48 + d * 0.5);
+        else p.px(x, y, 202 + d, 146 + d * 0.7, 82 + d * 0.5);
+      }
+    }
+    // growth girdles across the skin
+    for (const gy of [6, 9]) {
+      for (let x = 5; x <= 10; x++) if (p.rand() < 0.7) p.px(x, gy, 164, 112, 56);
+    }
+    // whisker roots off the tail and flanks
+    p.px(7, 14, 150, 118, 76); p.px(8, 15, 132, 104, 68);
+    p.px(3, 7, 150, 118, 76); p.px(2, 8, 132, 104, 68);
+    p.px(12, 10, 150, 118, 76);
+    // the leaf-scar tuft up top
+    p.px(6, 2, 96, 142, 62); p.px(8, 2, 96, 142, 62); p.px(7, 1, 110, 156, 70);
+  },
+  [TILE.BAKED_ROOT](p) {
+    // baked meal root: the same tuber out of the kiln — skin gone deep amber,
+    // split down the middle to show the pale mealy inside, still steaming
+    p.clear();
+    for (let y = 4; y <= 13; y++) {
+      const half = y <= 6 ? 3 : y <= 9 ? 4 : y <= 11 ? 3 : 2;
+      for (let x = 7 - half; x <= 7 + half; x++) {
+        const d = (p.rand() * 2 - 1) * 10;
+        const edge = x === 7 - half || x === 7 + half || y === 4 || y === 13;
+        if (edge) p.px(x, y, 112 + d * 0.6, 66 + d * 0.4, 30 + d * 0.3);
+        else p.px(x, y, 176 + d, 112 + d * 0.7, 50 + d * 0.5);
+      }
+    }
+    // the split: a pale fluffy seam bursting down the middle
+    for (let y = 6; y <= 11; y++) {
+      const d = (p.rand() * 2 - 1) * 8;
+      p.px(7, y, 236 + d, 214 + d, 168 + d);
+      if (p.rand() < 0.5) p.px(8, y, 222 + d, 198 + d, 152 + d);
+    }
+    p.px(7, 7, 248, 232, 192); // the hottest, fluffiest bite
+    // char kisses where it sat on the kiln floor
+    for (const [x, y] of [[5, 12], [10, 11], [4, 8], [11, 7], [6, 13]]) {
+      const d = (p.rand() * 2 - 1) * 8;
+      p.px(x, y, 70 + d, 46 + d, 26 + d);
+    }
+    // a curl of steam — it's still warm
+    p.px(6, 2, 226, 222, 214, 150); p.px(7, 1, 226, 222, 214, 120);
+    p.px(9, 2, 226, 222, 214, 150);
   },
   [TILE.SAPLING](p) {
     p.clear();

@@ -13,7 +13,10 @@ import { craft } from "./craft.js";
 import { makeKiln, tickKilns } from "./kiln.js";
 import { PlayerModel, buildHeldFoot, setHeldSkinLight } from "./player-model.js";
 import { PlayerViewer } from "./player-viewer.js";
-import { SAPLING, LOG, LEAVES, LEAVES_COLD, BED, WATER as WATER_ID, dropFor } from "./blocks.js";
+import {
+  SAPLING, LOG, LEAVES, LEAVES_COLD, BED, WATER as WATER_ID, dropFor,
+  CROP_SPROUT, CROP_RIPE, CROP_STAGES, isCrop,
+} from "./blocks.js";
 import { makeGenerator, findSpawn, findBiomeLocation } from "./terrain.js";
 import {
   buildMaterials, meshChunk, disposeChunkMeshes, setDayLight, buildBlockGeometry,
@@ -261,6 +264,45 @@ if (save && Array.isArray(save.saplings)) {
     }
   }
 }
+
+// --- meal-root crops: planted pips grow sprout -> greens -> ripe -------------
+// Same clock as the saplings (growthSeconds), so rain halves the wait for a
+// growing meal root too. The map holds only the stages still growing — a ripe
+// root just stands there, patiently, until harvested.
+
+const crops = new Map(); // "x,y,z" -> growthSeconds when the next stage lands
+
+function registerCrop(x, y, z, delay = 45 + Math.random() * 30) {
+  crops.set(`${x},${y},${z}`, growthSeconds + delay);
+}
+
+function updateCrops() {
+  for (const [key, due] of crops) {
+    if (growthSeconds < due) continue;
+    const [x, y, z] = key.split(",").map(Number);
+    // a crop in an ungenerated chunk waits (setBlock refuses those cells)
+    if (!world.isGenerated(x >> 4, z >> 4)) continue;
+    crops.delete(key);
+    // the world block is the truth about the stage — a stale entry (the crop
+    // was broken/overwritten while the timer ran) simply falls out here
+    const stage = CROP_STAGES.indexOf(world.getBlock(x, y, z));
+    if (stage === -1 || stage === CROP_STAGES.length - 1) continue;
+    const next = CROP_STAGES[stage + 1];
+    lightAwareRemesh(world.setBlock(x, y, z, next), false);
+    if (next !== CROP_RIPE) registerCrop(x, y, z);
+  }
+}
+// additive v2 field: [[x,y,z,stage,remain]...] — stage is written for
+// forward-compat/validation, but the persisted world edit is what proves it
+if (save && Array.isArray(save.crops)) {
+  for (const c of save.crops) {
+    if (!Array.isArray(c) || c.length !== 5) continue;
+    const [x, y, z, stage, remain] = c;
+    if ([x, y, z, stage].every(Number.isInteger) && Number.isFinite(remain)) {
+      registerCrop(x, y, z, Math.max(1, Math.min(90, remain)));
+    }
+  }
+}
 if (save && save.edits) world.loadEdits(save.edits);
 
 const sky = new Sky(scene, seed);
@@ -418,6 +460,11 @@ const interaction = new Interaction(world, player, scene, hud, {
       if (info.placed === SAPLING) registerSapling(info.x, info.y, info.z);
       if (info.broken === SAPLING) saplings.delete(`${info.x},${info.y},${info.z}`);
       if (info.popped === SAPLING) saplings.delete(`${info.x},${info.y + 1},${info.z}`);
+      // crop lifecycle: planting pips writes a sprout; breaking or popping
+      // (soil dug out underneath) any growing stage cancels its timer
+      if (info.placed === CROP_SPROUT) registerCrop(info.x, info.y, info.z);
+      if (isCrop(info.broken)) crops.delete(`${info.x},${info.y},${info.z}`);
+      if (isCrop(info.popped)) crops.delete(`${info.x},${info.y + 1},${info.z}`);
       // breaking the slept-in Moss Cot unhooks the respawn anchor
       const sp = player.spawnPoint;
       if (info.broken === BED && sp &&
@@ -512,6 +559,11 @@ const stopAutosave = startAutosave(() => writeSave(world, player, sky, hud, inve
   saplings: [...saplings].map(([key, due]) => {
     const [x, y, z] = key.split(",").map(Number);
     return [x, y, z, Math.max(1, due - growthSeconds)];
+  }),
+  crops: [...crops].map(([key, due]) => {
+    const [x, y, z] = key.split(",").map(Number);
+    const stage = Math.max(0, CROP_STAGES.indexOf(world.getBlock(x, y, z)));
+    return [x, y, z, stage, Math.max(1, due - growthSeconds)];
   }),
   overflowStacks: pendingOverflow.map((s) => [s.id, s.count]),
   weather: [
@@ -809,6 +861,7 @@ function tick(now) {
     if (worldSeconds >= nextSaplingCheck) {
       nextSaplingCheck = worldSeconds + 1;
       updateSaplings();
+      updateCrops();
       drainOverflow();
     }
   }
@@ -933,9 +986,11 @@ requestAnimationFrame(tick);
 // automated-test handle (only in ?nolock mode, which headless tests use)
 if (NO_LOCK) {
   window.voxelcraft = {
-    player, world, hud, sky, terrain, interaction, mobs, drops, saplings, inventory, kegs,
+    player, world, hud, sky, terrain, interaction, mobs, drops, saplings, crops,
+    inventory, kegs,
     rain: rainFx, sfx,
     growAllSaplings: () => { for (const k of saplings.keys()) saplings.set(k, 0); },
+    growAllCrops: () => { for (const k of crops.keys()) crops.set(k, 0); },
     getGrowthSeconds: () => growthSeconds,
   };
 }

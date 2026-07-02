@@ -70,6 +70,17 @@ export const COBBLE_STAIRS_W = 55;
 export const FENCE = 56;
 export const GATE = 57;
 export const GATE_OPEN = 58;
+// meal-root farming: ROOT_SEED is the user-visible item (a pouch of pips);
+// planting it on worked soil writes CROP_SPROUT, which grows through
+// CROP_HALF to CROP_RIPE on a timer in main.js. The stages are internal
+// world states; MEAL_ROOT/BAKED_ROOT are foods (the kiln bakes one into
+// the other).
+export const ROOT_SEED = 59;
+export const CROP_SPROUT = 60;
+export const CROP_HALF = 61;
+export const CROP_RIPE = 62;
+export const MEAL_ROOT = 63;
+export const BAKED_ROOT = 64;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -99,6 +110,7 @@ const def = (name, opts) => ({
   facings: null,     // stairs: [northId, eastId, southId, westId] of this material
   base: null,        // facing variants: the canonical id (pick-block routes here)
   colHeight: 1,      // collision height within the cell (slab 0.5); solid only
+  extraDrops: null,  // () => [ids] — bonus survival drops beyond drops/randomDrop
   ...opts,
 });
 
@@ -144,6 +156,7 @@ BLOCKS[SNOWY_GRASS] = def("Snowy Grass", { hardness: 0.6, drops: DIRT,
   sound: "dirt",
 });
 BLOCKS[TALLGRASS] = def("Tall Grass", { hardness: 0.05, drops: null,
+  randomDrop: { id: ROOT_SEED, chance: 0.25 }, // a snuffled-over pouch of pips
   tiles: cube(TILE.TALLGRASS),
   kind: "cross",
   bucket: "cutout",
@@ -404,6 +417,71 @@ BLOCKS[GATE_OPEN] = def("Wattle Gate (open)", { hardness: 1.2,
 });
 
 export function isGate(id) { return id === GATE || id === GATE_OPEN; }
+
+// --- meal-root farming --------------------------------------------------------
+// The crop-cross template: non-solid cutout plants that pop off broken soil.
+const cropCross = (opts) => ({
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  sound: "plant",
+  hardness: 0.05,
+  ...opts,
+});
+
+// the pouch of pips — user-visible, "placeable" only onto worked soil
+// (interact.js checks DIRT/GRASS below and writes CROP_SPROUT instead)
+BLOCKS[ROOT_SEED] = def("Root Pips", cropCross({
+  tiles: cube(TILE.ROOT_PIPS),
+}));
+// the three growth stages: internal world states, all handing back pips —
+// only a ripe root repays the digging
+BLOCKS[CROP_SPROUT] = def("Meal Root Sprouts", cropCross({
+  tiles: cube(TILE.CROP_SPROUT),
+  drops: ROOT_SEED,
+  base: ROOT_SEED, // pick-block hands back the pips
+  placeable: false,
+  hidden: true,
+}));
+BLOCKS[CROP_HALF] = def("Meal Root Greens", cropCross({
+  tiles: cube(TILE.CROP_HALF),
+  drops: ROOT_SEED,
+  base: ROOT_SEED,
+  placeable: false,
+  hidden: true,
+}));
+BLOCKS[CROP_RIPE] = def("Ripe Meal Root", cropCross({
+  tiles: cube(TILE.CROP_RIPE),
+  drops: MEAL_ROOT, // guaranteed root, then the bonus roll below
+  base: ROOT_SEED,
+  // 1-2 roots + 1-2 pips per harvest — the patch always comes out ahead
+  extraDrops: () => {
+    const out = [ROOT_SEED];
+    if (Math.random() < 0.5) out.push(ROOT_SEED);
+    if (Math.random() < 0.5) out.push(MEAL_ROOT);
+    return out;
+  },
+  placeable: false,
+  hidden: true,
+}));
+// the foods: carried and eaten, never placed. Raw is a snack; the kiln
+// bakes it into a proper meal (see SMELTS in kiln.js)
+BLOCKS[MEAL_ROOT] = def("Meal Root", cropCross({
+  tiles: cube(TILE.MEAL_ROOT),
+  placeable: false,
+  food: { restore: 3 },
+}));
+BLOCKS[BAKED_ROOT] = def("Baked Meal Root", cropCross({
+  tiles: cube(TILE.BAKED_ROOT),
+  placeable: false,
+  food: { restore: 7 },
+}));
+
+export const CROP_STAGES = [CROP_SPROUT, CROP_HALF, CROP_RIPE];
+export function isCrop(id) {
+  return id === CROP_SPROUT || id === CROP_HALF || id === CROP_RIPE;
+}
 
 // yaw -> cardinal facing index (0 N(-z), 1 E(+x), 2 S(+z), 3 W(-x)).
 // Stairs place with their tall back in the look direction, so the steps

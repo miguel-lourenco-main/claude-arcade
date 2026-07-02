@@ -26,6 +26,9 @@ export function writeSave(world, player, sky, hud, inventory, extra = {}) {
       chests: world.serializeChests(),
       kilns: world.serializeKilns(), // additive: absent in older saves
       saplings: extra.saplings || [],
+      // additive: growing meal-root crops [[x,y,z,stage,remain]...] — the
+      // stage blocks themselves live in the edit overlay; this is the timers
+      crops: extra.crops || [],
       // additive: [phase, secondsLeftInPhase, intensity] — absent in older
       // saves, which simply boot clear with a fresh timer
       weather: extra.weather || undefined,

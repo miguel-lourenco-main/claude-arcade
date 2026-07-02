@@ -4,7 +4,7 @@
 import * as THREE from "three";
 import {
   AIR, BEDROCK, CHEST, WORKBENCH, KILN, BED, LADDER, DOOR, DOOR_TOP, BLAST_KEG,
-  GATE, GATE_OPEN,
+  GATE, GATE_OPEN, ROOT_SEED, CROP_SPROUT, DIRT, GRASS,
   BLOCKS, isSolid, isPlant, isDoor, isDoorLower, isGate, DOOR_TOGGLE,
   dropFor, yawToFacing,
 } from "./blocks.js";
@@ -259,6 +259,17 @@ export class Interaction {
     this.crack.visible = true;
   }
 
+  // everything a broken block hands over in survival: its base drop, the
+  // randomDrop roll, and any extraDrops (a ripe meal root's bonus haul)
+  _spawnBlockDrops(id, x, y, z) {
+    const drop = dropFor(id);
+    if (drop !== null) this.onSpawnDrop(x, y, z, drop);
+    const rand = BLOCKS[id].randomDrop;
+    if (rand && Math.random() < rand.chance) this.onSpawnDrop(x, y, z, rand.id);
+    const extra = BLOCKS[id].extraDrops;
+    if (extra) for (const e of extra()) this.onSpawnDrop(x, y, z, e);
+  }
+
   // survival break: remove the block, spawn its drop (and the popped plant's)
   _completeBreak(t) {
     if (isDoor(t.id)) { this._breakDoor(t); return; }
@@ -275,15 +286,9 @@ export class Interaction {
     this.onSound("break", t.id);
     this.particles.burst(t.x, t.y, t.z, this.avgColor[BLOCKS[t.id].tiles.side] || [0.5, 0.5, 0.5]);
 
-    const drop = dropFor(t.id);
-    if (drop !== null) this.onSpawnDrop(t.x + 0.5, t.y + 0.4, t.z + 0.5, drop);
-    const rand = BLOCKS[t.id].randomDrop;
-    if (rand && Math.random() < rand.chance) {
-      this.onSpawnDrop(t.x + 0.5, t.y + 0.4, t.z + 0.5, rand.id);
-    }
+    this._spawnBlockDrops(t.id, t.x + 0.5, t.y + 0.4, t.z + 0.5);
     if (popped !== null) {
-      const plantDrop = dropFor(popped);
-      if (plantDrop !== null) this.onSpawnDrop(t.x + 0.5, t.y + 1.3, t.z + 0.5, plantDrop);
+      this._spawnBlockDrops(popped, t.x + 0.5, t.y + 1.3, t.z + 0.5);
     }
   }
 
@@ -358,8 +363,7 @@ export class Interaction {
     if (this.player.mode === "survival") {
       this.onSpawnDrop(t.x + 0.5, lowerY + 0.4, t.z + 0.5, DOOR);
       if (popped !== null) {
-        const plantDrop = dropFor(popped);
-        if (plantDrop !== null) this.onSpawnDrop(t.x + 0.5, lowerY + 2.3, t.z + 0.5, plantDrop);
+        this._spawnBlockDrops(popped, t.x + 0.5, lowerY + 2.3, t.z + 0.5);
       }
     }
   }
@@ -471,6 +475,10 @@ export class Interaction {
           !isSolid(this.world.getBlock(px - 1, py, pz)) &&
           !isSolid(this.world.getBlock(px, py, pz + 1)) &&
           !isSolid(this.world.getBlock(px, py, pz - 1))) return;
+    } else if (id === ROOT_SEED) {
+      // root pips want WORKED soil — dirt or grass, never stone or sand
+      const below = this.world.getBlock(px, py - 1, pz);
+      if (below !== DIRT && below !== GRASS) return;
     } else if (def.kind === "cross" && !isSolid(this.world.getBlock(px, py - 1, pz))) {
       return; // plants need soil
     }
@@ -492,6 +500,9 @@ export class Interaction {
     if (def.shape === "stairs" && def.facings) {
       placeId = def.facings[yawToFacing(this.player.yaw)];
     }
+    // planted pips go into the ground as a sprout — the seed item never
+    // exists as a world block
+    if (id === ROOT_SEED) placeId = CROP_SPROUT;
     const affected = this.world.setBlock(px, py, pz, placeId);
     if (affected.length === 0) return;
     // include the replaced block: overwriting a torch must clear its light
@@ -501,8 +512,7 @@ export class Interaction {
 
   _popReplacedPlant(existing, px, py, pz) {
     if (this.player.mode !== "survival" || !isPlant(existing)) return;
-    const plantDrop = dropFor(existing);
-    if (plantDrop !== null) this.onSpawnDrop(px + 0.5, py + 0.3, pz + 0.5, plantDrop);
+    this._spawnBlockDrops(existing, px + 0.5, py + 0.3, pz + 0.5);
   }
 
   // the Plank Door: needs its cell AND the one above free, plus a solid
