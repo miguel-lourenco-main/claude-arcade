@@ -7,6 +7,7 @@ import {
   LOG, PLANKS, SAND, COBBLE, STONE, BRICKS, SANDSTONE, COAL_ORE,
   TORCH, CHEST, WORKBENCH, KILN, MOSS_CLUMP, BED, LADDER, DOOR, BLAST_KEG,
   PLANK_SLAB, STONE_SLAB, COBBLE_SLAB, PLANK_STAIRS, STONE_STAIRS, COBBLE_STAIRS,
+  FENCE, GATE,
 } from "./blocks.js";
 
 // in: [[blockId, count], ...]  out: [blockId, count]
@@ -30,6 +31,9 @@ export const RECIPES = [
   { in: [[PLANKS, 6]], out: [PLANK_STAIRS, 4] },
   { in: [[STONE, 6]], out: [STONE_STAIRS, 4] },
   { in: [[COBBLE, 6]], out: [COBBLE_STAIRS, 4] },
+  // wattle-work: woven field fencing and its swinging gate (workbench)
+  { in: [[PLANKS, 4]], out: [FENCE, 3] },
+  { in: [[PLANKS, 4]], out: [GATE, 1] },
 ];
 
 export const BASIC_RECIPES = RECIPES.filter((r) => r.basic);

@@ -63,6 +63,13 @@ export const COBBLE_STAIRS = 52;
 export const COBBLE_STAIRS_E = 53;
 export const COBBLE_STAIRS_S = 54;
 export const COBBLE_STAIRS_W = 55;
+// wattle-work: waist-high woven fencing with neighbor-aware arms (mesher).
+// The gate is TWO ids — closed (solid, 1.5-block collision like the fence:
+// too tall to jump or hop) and open (pass-through, leaf swung aside). GATE
+// is the one user-visible id; GATE_OPEN is an internal world state.
+export const FENCE = 56;
+export const GATE = 57;
+export const GATE_OPEN = 58;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -86,7 +93,8 @@ const def = (name, opts) => ({
   sturdy: false,     // cross-kind that is NOT a plant: never replaced in place,
                      // never popped when the block under it breaks (ladder, door)
   hidden: false,     // internal id: kept out of the creative palette
-  shape: null,       // null (full cube/cross) | "slab" | "stairs" (see mesher.js)
+  shape: null,       // null (full cube/cross) | "slab" | "stairs" | "fence" | "gate"
+  open: false,       // gate only: leaf swung aside (mesher) + non-solid
   facing: 0,         // stairs: 0 north(-z) | 1 east(+x) | 2 south(+z) | 3 west(-x)
   facings: null,     // stairs: [northId, eastId, southId, westId] of this material
   base: null,        // facing variants: the canonical id (pick-block routes here)
@@ -363,6 +371,39 @@ defStairs([STONE_STAIRS, STONE_STAIRS_E, STONE_STAIRS_S, STONE_STAIRS_W],
   "Stone Stairs", TILE.STONE, { hardness: 1.9 });
 defStairs([COBBLE_STAIRS, COBBLE_STAIRS_E, COBBLE_STAIRS_S, COBBLE_STAIRS_W],
   "Cobblestone Stairs", TILE.COBBLE, { hardness: 2.0 });
+
+// --- wattle fence + gate ------------------------------------------------------
+// Both are shaped blocks whose mesh depends on their neighbors (the mesher
+// grows arms toward adjacent fence/gate/solid-cube cells). colHeight 1.5 makes
+// them un-jumpable by the player (1.25-block jump) and un-hoppable by mobs.
+BLOCKS[FENCE] = def("Wattle Fence", { hardness: 1.2,
+  tiles: cube(TILE.WATTLE),
+  shape: "fence",
+  opaque: false,
+  colHeight: 1.5,
+  sound: "wood",
+});
+BLOCKS[GATE] = def("Wattle Gate", { hardness: 1.2,
+  tiles: cube(TILE.WATTLE),
+  shape: "gate",
+  opaque: false,
+  colHeight: 1.5,
+  sound: "wood",
+});
+BLOCKS[GATE_OPEN] = def("Wattle Gate (open)", { hardness: 1.2,
+  tiles: cube(TILE.WATTLE),
+  shape: "gate",
+  open: true,
+  solid: false,
+  opaque: false,
+  drops: GATE,
+  base: GATE,
+  sound: "wood",
+  placeable: false,
+  hidden: true,
+});
+
+export function isGate(id) { return id === GATE || id === GATE_OPEN; }
 
 // yaw -> cardinal facing index (0 N(-z), 1 E(+x), 2 S(+z), 3 W(-x)).
 // Stairs place with their tall back in the look direction, so the steps

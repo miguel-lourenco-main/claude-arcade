@@ -56,6 +56,7 @@ export const TILE = {
   DOOR_UPPER: 45,
   KEG_SIDE: 46,
   KEG_TOP: 47,
+  WATTLE: 48,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -691,6 +692,33 @@ const painters = {
       }
     }
     p.px(7, 7, 255, 210, 120); p.px(8, 8, 255, 210, 120);
+  },
+  [TILE.WATTLE](p) {
+    // wattle-work: springy marsh withies woven over upright hazel stakes —
+    // the Wanderling field fence, lashed by hand-feet in an afternoon
+    for (let y = 0; y < TILE_PX; y++) {
+      // horizontal withies in 2px courses, alternate courses shaded as the
+      // weave dips behind the stakes
+      const course = (y >> 1) % 2 === 0;
+      for (let x = 0; x < TILE_PX; x++) {
+        const d = (p.rand() * 2 - 1) * 9;
+        const dip = course ? 0 : -16;
+        p.px(x, y, 150 + d + dip, 116 + d + dip, 68 + d + dip);
+      }
+    }
+    // upright stakes: the weave passes over them on alternating courses
+    for (const sx of [2, 7, 12]) {
+      for (let y = 0; y < TILE_PX; y++) {
+        const over = ((y >> 1) + (sx >> 2)) % 2 === 0; // weave alternation
+        if (over) continue; // a withy crosses in front of the stake here
+        const d = (p.rand() * 2 - 1) * 8;
+        p.px(sx, y, 118 + d, 88 + d, 50 + d);
+        p.px(sx + 1, y, 102 + d, 76 + d, 44 + d); // shaded stake edge
+      }
+    }
+    // frayed withy ends and peeled-bark highlights
+    p.speckle(10, [180, 148, 92], 10);
+    p.speckle(8, [88, 64, 38], 8);
   },
   [TILE.SAPLING](p) {
     p.clear();

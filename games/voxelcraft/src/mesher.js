@@ -252,7 +252,82 @@ const STAIR_BACK = [
 
 const SLAB_BOX = { x0: 0, y0: 0, z0: 0, x1: 1, y1: 0.5, z1: 1 };
 
-// def -> [{x0,y0,z0,x1,y1,z1,skipBottom?}], cached per block def
+// --- fences + gates -----------------------------------------------------------
+// Wattle-work is neighbor-aware: a center post grows connecting arms toward
+// each horizontal neighbor that is a fence, a gate, or a solid full cube.
+// Connections are recomputed on every remesh — setBlock already dirties the
+// chunk (and border neighbors), so arms follow the world as it changes.
+
+const FENCE_POST = { x0: 0.375, y0: 0, z0: 0.375, x1: 0.625, y1: 1, z1: 0.625 };
+const RAILS = [[0.375, 0.5625], [0.75, 0.9375]]; // two courses of woven withies
+const ARM = 0.4375; // rail cross-section: ARM..1-ARM
+
+// does a fence/gate arm reach toward this neighbor?
+function fenceConnects(id) {
+  const n = BLOCKS[id];
+  return n.shape === "fence" || n.shape === "gate" ||
+    (n.solid && n.kind === "cube" && !n.shape && n.colHeight >= 1);
+}
+
+// c: [north(-z), east(+x), south(+z), west(-x)] connection flags.
+// Boxes are ordered back-to-front (N/W arms, post, S/E arms) so the HUD's
+// painter's-order iso projector layers them correctly.
+function fenceBoxes(c) {
+  const boxes = [];
+  for (const [y0, y1] of RAILS) {
+    if (c[0]) boxes.push({ x0: ARM, x1: 1 - ARM, y0, y1, z0: 0, z1: 0.375 });
+    if (c[3]) boxes.push({ x0: 0, x1: 0.375, y0, y1, z0: ARM, z1: 1 - ARM });
+  }
+  boxes.push(FENCE_POST);
+  for (const [y0, y1] of RAILS) {
+    if (c[2]) boxes.push({ x0: ARM, x1: 1 - ARM, y0, y1, z0: 0.625, z1: 1 });
+    if (c[1]) boxes.push({ x0: 0.625, x1: 1, y0, y1, z0: ARM, z1: 1 - ARM });
+  }
+  return boxes;
+}
+
+// The gate spans the axis its neighbors suggest: hinge posts at the two cell
+// edges, a woven leaf between them. Open, the leaf splits and both halves
+// fold aside (toward +z / +x), leaving the middle clear to walk through.
+function gateBoxes(open, c) {
+  const spanX = (c[1] || c[3]) || !(c[0] || c[2]); // default: spans x
+  const post = (x0, x1) => ({ x0, x1, y0: 0.25, y1: 1, z0: ARM, z1: 1 - ARM });
+  const boxes = [post(0, 0.125)]; // far hinge post first (icon painter order)
+  if (open) {
+    // the leaf splits and both halves fold back against the posts (toward
+    // +z), leaving the middle of the cell clear to walk through
+    for (const [y0, y1] of RAILS) {
+      boxes.push({ x0: 0, x1: 0.125, y0, y1, z0: 1 - ARM, z1: 0.9375 });
+      boxes.push({ x0: 0.875, x1: 1, y0, y1, z0: 1 - ARM, z1: 0.9375 });
+    }
+  } else {
+    for (const [y0, y1] of RAILS) {
+      boxes.push({ x0: 0.125, x1: 0.875, y0, y1, z0: ARM, z1: 1 - ARM });
+    }
+    // center brace joining the two courses — reads as the leaf's frame
+    boxes.push({ x0: ARM, x1: 1 - ARM, y0: 0.375, y1: 0.9375, z0: ARM, z1: 1 - ARM });
+  }
+  boxes.push(post(0.875, 1)); // near hinge post
+  if (spanX) return boxes;
+  // spanning z: mirror every box across the x/z diagonal
+  return boxes.map((b) => ({ x0: b.z0, x1: b.z1, y0: b.y0, y1: b.y1, z0: b.x0, z1: b.x1 }));
+}
+
+// neighbor-aware boxes for a shaped block standing in the world
+function shapeBoxesAt(def, get, wx, y, wz) {
+  if (def.shape !== "fence" && def.shape !== "gate") return shapeBoxes(def);
+  const c = [
+    fenceConnects(get(wx, y, wz - 1)),
+    fenceConnects(get(wx + 1, y, wz)),
+    fenceConnects(get(wx, y, wz + 1)),
+    fenceConnects(get(wx - 1, y, wz)),
+  ];
+  return def.shape === "fence" ? fenceBoxes(c) : gateBoxes(def.open, c);
+}
+
+// def -> [{x0,y0,z0,x1,y1,z1,skipBottom?}], cached per block def. For fences
+// and gates this is the CONTEXT-FREE shape (arms east+west) used by icons,
+// item drops, and the held mesh; world meshing goes through shapeBoxesAt.
 const shapeBoxCache = new Map();
 export function shapeBoxes(def) {
   let boxes = shapeBoxCache.get(def);
@@ -262,6 +337,10 @@ export function shapeBoxes(def) {
   } else if (def.shape === "stairs") {
     const b = STAIR_BACK[def.facing];
     boxes = [SLAB_BOX, { ...b, y0: 0.5, y1: 1, skipBottom: true }];
+  } else if (def.shape === "fence") {
+    boxes = fenceBoxes([false, true, false, true]);
+  } else if (def.shape === "gate") {
+    boxes = gateBoxes(def.open, [false, true, false, true]);
   } else {
     boxes = [];
   }
@@ -304,7 +383,7 @@ function boxCorner(box, p) {
 }
 
 function addShapedBlock(bucket, def, lx, y, lz, get, wx, wz, lightAt, blockLightAt) {
-  for (const box of shapeBoxes(def)) {
+  for (const box of shapeBoxesAt(def, get, wx, y, wz)) {
     for (const face of FACES) {
       const [dx, dy, dz] = face.dir;
       if (dy < 0 && box.skipBottom) continue;

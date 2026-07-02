@@ -518,7 +518,11 @@ export class Player {
     const eps = 0.001;
 
     const x0 = Math.floor(minX), x1 = Math.floor(maxX - eps);
-    const y0 = Math.floor(minY), y1 = Math.floor(maxY - eps);
+    // scan one row BELOW the feet too: tall blocks (fence/gate, colHeight
+    // 1.5) reach into the cell above them — a jumper at +1.2 must still hit
+    // the fence standing in the cell underneath. The `minY >= top` check
+    // below skips that row for every normal-height block.
+    const y0 = Math.floor(minY) - 1, y1 = Math.floor(maxY - eps);
     const z0 = Math.floor(minZ), z1 = Math.floor(maxZ - eps);
 
     for (let by = y0; by <= y1; by++) {
@@ -569,7 +573,8 @@ export class Player {
   _boxCollides(px, py, pz) {
     const eps = 0.001;
     const x0 = Math.floor(px - HALF_W), x1 = Math.floor(px + HALF_W - eps);
-    const y0 = Math.floor(py), y1 = Math.floor(py + PLAYER_HEIGHT - eps);
+    // one row below the feet: tall blocks (colHeight > 1) reach up here
+    const y0 = Math.floor(py) - 1, y1 = Math.floor(py + PLAYER_HEIGHT - eps);
     const z0 = Math.floor(pz - HALF_W), z1 = Math.floor(pz + HALF_W - eps);
     for (let by = y0; by <= y1; by++) for (let bz = z0; bz <= z1; bz++) for (let bx = x0; bx <= x1; bx++) {
       const d = BLOCKS[this.world.getBlock(bx, by, bz)];

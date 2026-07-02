@@ -523,7 +523,9 @@ export class Mobs {
     const eps = 0.001;
     const hw = m.spec.halfW, hh = m.spec.height;
     const x0 = Math.floor(m.x - hw), x1 = Math.floor(m.x + hw - eps);
-    const y0 = Math.floor(m.y), y1 = Math.floor(m.y + hh - eps);
+    // one row below the feet too: tall blocks (fence/gate, colHeight 1.5)
+    // reach into the cell above, so a hopping mob at +1.3 still hits them
+    const y0 = Math.floor(m.y) - 1, y1 = Math.floor(m.y + hh - eps);
     const z0 = Math.floor(m.z - hw), z1 = Math.floor(m.z + hw - eps);
     for (let by = y0; by <= y1; by++) for (let bz = z0; bz <= z1; bz++) for (let bx = x0; bx <= x1; bx++) {
       const bDef = BLOCKS[world.getBlock(bx, by, bz)];

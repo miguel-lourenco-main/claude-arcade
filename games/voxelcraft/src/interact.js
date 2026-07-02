@@ -4,7 +4,9 @@
 import * as THREE from "three";
 import {
   AIR, BEDROCK, CHEST, WORKBENCH, KILN, BED, LADDER, DOOR, DOOR_TOP, BLAST_KEG,
-  BLOCKS, isSolid, isPlant, isDoor, isDoorLower, DOOR_TOGGLE, dropFor, yawToFacing,
+  GATE, GATE_OPEN,
+  BLOCKS, isSolid, isPlant, isDoor, isDoorLower, isGate, DOOR_TOGGLE,
+  dropFor, yawToFacing,
 } from "./blocks.js";
 import { HEIGHT } from "./world.js";
 import { EYE_HEIGHT, MAX_HUNGER } from "./player.js";
@@ -175,7 +177,7 @@ export class Interaction {
     const t = this.target;
     const interactive = t &&
       (t.id === CHEST || t.id === WORKBENCH || t.id === KILN || t.id === BED ||
-       t.id === BLAST_KEG || isDoor(t.id)) &&
+       t.id === BLAST_KEG || isDoor(t.id) || isGate(t.id)) &&
       !this.player._sneaking;
     const wants = this.buttons.has(2) && def && def.food && !interactive &&
       this.player.hunger < MAX_HUNGER - 1e-9;
@@ -386,12 +388,36 @@ export class Interaction {
     if (this.onDoor) this.onDoor(opening);
   }
 
+  // right-click a Wattle Gate: swing the leaf. Closing checks nobody's
+  // standing in the gateway — the closed gate is a solid 1.5-block column.
+  _toggleGate(t) {
+    const opening = t.id === GATE;
+    if (!opening) {
+      const a = this.player.aabb();
+      const h = BLOCKS[GATE].colHeight;
+      if (t.x + 1 > a.minX && t.x < a.maxX &&
+          t.y + h > a.minY && t.y < a.maxY &&
+          t.z + 1 > a.minZ && t.z < a.maxZ) {
+        return; // never swing the gate shut on the Wanderling inside it
+      }
+    }
+    const affected = this.world.setBlock(t.x, t.y, t.z, opening ? GATE_OPEN : GATE);
+    if (affected.length === 0) return;
+    this.onEdit(affected, { ids: [opening ? GATE_OPEN : GATE], x: t.x, y: t.y, z: t.z });
+    if (this.onDoor) this.onDoor(opening);
+  }
+
   _place() {
     const t = this.target;
     if (!t) return;
     // right-click on a door toggles it — in BOTH modes (sneak to place against)
     if (isDoor(t.id) && !this.player._sneaking) {
       this._toggleDoor(t);
+      return;
+    }
+    // right-click on a Wattle Gate swings it — routed exactly like the door
+    if (isGate(t.id) && !this.player._sneaking) {
+      this._toggleGate(t);
       return;
     }
     // right-click on a Blast Keg primes it — in BOTH modes, like the door
