@@ -67,6 +67,9 @@ export class World {
     this.chests = new Map();          // "x,y,z" -> Array(>=27) of null|{id,count}
     this.kilns = new Map();           // "x,y,z" -> {slots:[in,fuel,out], burnLeft, progress}
     this.signs = new Map();           // "x,y,z" -> Notice Post text (see signs.js)
+    this.ruinsSeeded = new Set();     // "cx,cz" ruin chunks whose chest/sign
+                                      // state was seeded (once per world — a
+                                      // regenerated chunk never re-deals loot)
     this.generator = null;            // set by terrain.js
     this._lastChunk = null;           // 1-entry lookup cache (meshing/physics locality)
   }
@@ -152,6 +155,21 @@ export class World {
       if (!/^-?\d+,-?\d+,-?\d+$/.test(pair[0])) continue;
       const text = clampSignText(pair[1]);
       if (text) this.signs.set(pair[0], text);
+    }
+  }
+
+  // ruin seeding markers (additive save field): ["cx,cz", ...] — which ruin
+  // chunks already had their chest/sign state dealt (see ruins.js)
+  serializeRuins() {
+    return [...this.ruinsSeeded];
+  }
+
+  loadRuins(arr) {
+    if (!Array.isArray(arr)) return;
+    for (const key of arr) {
+      if (typeof key === "string" && /^-?\d+,-?\d+$/.test(key)) {
+        this.ruinsSeeded.add(key);
+      }
     }
   }
 

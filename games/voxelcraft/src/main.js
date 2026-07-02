@@ -29,6 +29,7 @@ import {
   isSign, COMPASS, CLOCK, SNOW_LAYER,
 } from "./blocks.js";
 import { makeGenerator, findSpawn, findBiomeLocation } from "./terrain.js";
+import { findNearestRuin, ruinForChunk } from "./ruins.js";
 import {
   buildMaterials, meshChunk, disposeChunkMeshes, setDayLight, buildBlockGeometry,
   sampleBlockLight,
@@ -202,6 +203,9 @@ if (save && save.chests) world.loadChests(save.chests);
 if (save && save.kilns) world.loadKilns(save.kilns); // additive v2 field
 if (save && Array.isArray(save.boats)) boats.load(save.boats); // additive v2 field
 if (save && save.signs) world.loadSigns(save.signs); // additive v2 field
+// additive v2 field: ruin chunks whose loot was already dealt — must load
+// before any chunk generates, or a looted stead would re-seed its chest
+if (save && save.ruins) world.loadRuins(save.ruins);
 // the Notice Posts' text boards — synced against world.signs every frame
 const signBoards = new SignBoards(scene, world);
 
@@ -417,9 +421,22 @@ if (save && Array.isArray(save.music)) {
 }
 
 function teleportTo(kind) {
-  const dest = kind === "spawn"
-    ? spawnPoint
-    : findBiomeLocation(terrain, kind, player.pos.x, player.pos.z);
+  let dest;
+  if (kind === "spawn") {
+    dest = spawnPoint;
+  } else if (kind === "ruin") {
+    // predicted from the placement hash (no generation needed); land just
+    // south of the stead, facing its doorway side
+    const ruin = findNearestRuin(terrain, player.pos.x, player.pos.z);
+    if (!ruin) return { ok: false, message: "No stead found within 1000 blocks of here." };
+    dest = {
+      x: ruin.x + 0.5,
+      y: terrain.heightAt(ruin.x, ruin.z + 5) + 2.5,
+      z: ruin.z + 5.5,
+    };
+  } else {
+    dest = findBiomeLocation(terrain, kind, player.pos.x, player.pos.z);
+  }
   if (!dest) return { ok: false, message: `No ${kind} found within 3000 blocks of here.` };
   Object.assign(player.pos, dest);
   player.vel.x = player.vel.y = player.vel.z = 0;
@@ -1373,5 +1390,8 @@ if (NO_LOCK) {
     getGrowthSeconds: () => growthSeconds,
     getPlayerBiome: () => playerBiome, // the slow-sampled biome underfoot
     dailyOffers, // (seed, day) — lets tests diff the Peddler's rotation
+    // the Steads-Before: placement prediction, for ruin tests
+    findNearestRuin: (x, z) => findNearestRuin(terrain, x, z),
+    ruinForChunk: (cx, cz) => ruinForChunk(terrain, cx, cz),
   };
 }

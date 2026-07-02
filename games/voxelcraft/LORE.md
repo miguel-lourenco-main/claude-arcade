@@ -105,6 +105,14 @@ specific item vocabulary.
   which is technically true.
 - **Star-Edge** — a starstone edge honed onto a sky-iron shiv; the keenest
   blade a Wanderling can carry, and it hums very faintly on clear nights.
+- **The Steads-Before** — the pre-Upturn homesteads: raised when the world
+  faced the other way, and carried along when it turned. They came through
+  the flip the way crockery comes through a move — mostly. What's left
+  stands scattered about the Upturn: cottages folded down to their footings,
+  watch posts with a permanent lean, root cellars that kept better than the
+  houses above them. Wanderlings don't rebuild a stead; they read whatever
+  the Notice Post still says, take what the chest offers, and leave the
+  walls to their sulk. It's agreed this is a fair split.
 
 Generic category words (Dirt, Sand, Stone, Gravel, Water, Glass, Torch,
 Chest, Workbench, Bricks, Sandstone, Coal Ore, Tall Grass, Cactus) stay

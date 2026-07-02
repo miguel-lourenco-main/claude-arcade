@@ -31,6 +31,10 @@ export function writeSave(world, player, sky, hud, inventory, extra = {}) {
       // additive: Notice Post text [["x,y,z", text]...] — absent in older
       // saves, which simply have no writing anywhere
       signs: world.serializeSigns(),
+      // additive: ruin chunks whose chest/sign state was already seeded
+      // (["cx,cz", ...]) — absent in older saves, whose ruins simply seed
+      // on first generation like a new world's
+      ruins: world.serializeRuins(),
       saplings: extra.saplings || [],
       // additive: growing meal-root crops [[x,y,z,stage,remain]...] — the
       // stage blocks themselves live in the edit overlay; this is the timers

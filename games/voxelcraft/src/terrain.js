@@ -10,6 +10,7 @@ import {
 } from "./blocks.js";
 import { CHUNK, HEIGHT, SEA_LEVEL } from "./world.js";
 import { Perlin, hash2 } from "./noise.js";
+import { ruinForChunk, stampRuin, seedRuinState } from "./ruins.js";
 
 const TREE_CELL = 5;   // one tree candidate per 5x5-column cell (grid jitter)
 const TREE_MARGIN = 3; // canopy radius 2 + 1 safety
@@ -222,6 +223,16 @@ export function makeGenerator(seed) {
           }
         }
       }
+    }
+
+    // pass 3: the Steads-Before — ~1 chunk in 40 carries a homestead ruin
+    // (see ruins.js). Stamped last so it clears any tree/plant that wandered
+    // into its footprint; strictly chunk-local, so every other chunk
+    // generates exactly as it always did.
+    const ruin = ruinForChunk(t, chunk.cx, chunk.cz);
+    if (ruin) {
+      stampRuin(chunk, ruin);
+      seedRuinState(world, ruin);
     }
   };
 
