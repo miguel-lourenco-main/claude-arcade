@@ -676,7 +676,10 @@ const stones = new SlingStones(scene, materials, {
   },
 });
 
-mobs.onMobHurt = () => sfx.mobHurt();
+// a falling crit lands with a sharper crack than the ordinary thud
+mobs.onMobHurt = (crit) => (crit ? sfx.critHit() : sfx.mobHurt());
+// sprint suppresses while chewing: the player asks interact for its state
+player.isEating = () => interaction.eating;
 mobs.onSound = (kind) => sfx.creature(kind);
 mobs.onDrop = (x, y, z, id, n) => drops.spawn(x, y, z, id, n);
 
@@ -1092,10 +1095,11 @@ function tick(now) {
 
   animateHeld(frameDt, bobY);
 
-  // sprint FOV kick (applies to sprint-flight too, like MC)
-  const targetFov = player.sprintActive ? 77 : 70;
+  // sprint FOV kick (+8°, applies to sprint-flight too): eased both ways
+  // with a ~0.15s time constant, so it swells in and settles out
+  const targetFov = player.sprintActive ? 78 : 70;
   if (Math.abs(camera.fov - targetFov) > 0.1) {
-    camera.fov += (targetFov - camera.fov) * Math.min(1, frameDt * 10);
+    camera.fov += (targetFov - camera.fov) * Math.min(1, frameDt * 6.7);
     camera.updateProjectionMatrix();
   }
 
@@ -1154,7 +1158,7 @@ if (NO_LOCK) {
   window.voxelcraft = {
     player, world, hud, sky, terrain, interaction, mobs, drops, saplings, crops,
     inventory, kegs, stones, boats, fishing, signBoards,
-    rain: rainFx, sfx,
+    rain: rainFx, sfx, camera,
     growAllSaplings: () => { for (const k of saplings.keys()) saplings.set(k, 0); },
     growAllCrops: () => { for (const k of crops.keys()) crops.set(k, 0); },
     getGrowthSeconds: () => growthSeconds,

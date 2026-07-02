@@ -137,6 +137,14 @@ export class Sfx {
 
   mobHurt() { this._noiseBurst(700, 0.12, 0.16); }
 
+  // a falling crit landing true: the ordinary thud with a bright snap on
+  // top — sharper attack, quicker decay, unmistakably not a normal hit
+  critHit() {
+    this._noiseBurst(1600, 0.05, 0.16);
+    this._noiseBurst(700, 0.1, 0.12);
+    setTimeout(() => this._noiseBurst(2400, 0.04, 0.09), 35);
+  }
+
   // eating: soft mushy chew ticks while holding, a low gulp on the swallow
   eat(kind) {
     if (kind === "swallow") {

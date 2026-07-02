@@ -383,7 +383,16 @@ export class Interaction {
       // a shiv in hand raises the kick from 1 to its tier's damage; other
       // tools swing like a bare foot. Any landed tool hit costs 1 use.
       const tool = this._heldTool();
-      const dmg = tool && tool.kind === "blade" ? tool.damage : 1;
+      let dmg = tool && tool.kind === "blade" ? tool.damage : 1;
+      // falling crit: airborne AND dropping — a hit that carries the whole
+      // Wanderling behind it lands half again as hard (fists and blades
+      // alike; ladders, water, and wings don't count as falling)
+      const p = this.player;
+      const crit = !p.onGround && p.vel.y < 0 && !p.onLadder && !p.inWater &&
+        !p.flying && !p.riding;
+      if (crit) dmg = Math.ceil(dmg * 1.5);
+      // a sprint hit transfers the momentum: the shove lands ~1.8x harder
+      const knock = p.sprintActive ? 1.8 : 1;
       if (this.boats) {
         const b = this.boats.rayHit(eye, dir, lim);
         if (b) { // two kicks break it
@@ -392,7 +401,7 @@ export class Interaction {
           return;
         }
       }
-      if (this.mobs && this.mobs.punch(eye, dir, lim, this.player.pos, dmg)) {
+      if (this.mobs && this.mobs.punch(eye, dir, lim, this.player.pos, dmg, { crit, knock })) {
         if (tool && this.onToolUse) this.onToolUse("hit");
         return;
       }

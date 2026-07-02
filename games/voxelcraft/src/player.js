@@ -11,7 +11,7 @@ const GRAVITY = 32;
 const TERMINAL_VELOCITY = 78;
 const JUMP_SPEED = 8.95;          // ~1.25 block jump
 const WALK_SPEED = 4.32;
-const SPRINT_SPEED = 5.6;
+const SPRINT_SPEED = 6.7;         // 1.55x walk — a real commitment of hunger
 const SNEAK_SPEED = 1.31;
 const FLY_SPEED = 11;
 const FLY_SPRINT_SPEED = 22;
@@ -35,8 +35,10 @@ const REGEN_RATE = 0.5;           // HP per second, gated on a well-fed satchel
 const REGEN_MIN_HUNGER = 18;      // regen only while this fed or better
 const REGEN_HUNGER_COST = 0.4;    // hunger spent per HP healed
 const HUNGER_PASSIVE = 0.02;      // hunger per second while doing anything
-const HUNGER_SPRINT = 0.06;       // extra hunger per second while sprinting
+const HUNGER_SPRINT = 0.06;       // extra while sprinting (total 0.08 = 4x walking)
 const HUNGER_JUMP = 0.12;         // hunger per jump
+const SPRINT_JUMP_EXTRA = 0.2;    // additional cost of a jump taken at a sprint
+const SPRINT_MIN_HUNGER = 3;      // too hungry to run: sprint needs hunger > this
 const STARVE_INTERVAL = 2.5;      // seconds between starvation ticks at 0 hunger
 
 // horizontal acceleration (blocks/s²): crisp starts, crisper stops on ground,
@@ -59,7 +61,8 @@ export class Player {
     this.pitch = 0;
     this.onGround = false;
     this.flying = false;
-    this.sprinting = false;
+    this.sprinting = false;   // the double-tap latch (hold keys bypass it)
+    this.isEating = null;     // () => bool hook — main.js wires interact.eating
     this.inWater = false;
     this.eyeInWater = false;
     this.onLadder = false;
@@ -206,6 +209,7 @@ export class Player {
     // fall — a seated Wanderling exerts nothing. Space does nothing here.
     if (this.riding) {
       this._sneaking = this.keys.has("ShiftLeft") || this.keys.has("ShiftRight");
+      this.sprintActive = false; // no pounding down the bench — FOV settles
       this.vel.x = this.vel.y = this.vel.z = 0;
       this.onGround = false;
       this._peakY = this.pos.y;
@@ -241,14 +245,24 @@ export class Player {
     // direction in static mode
     const sprintInput = this.moveMode === "static"
       ? (forward !== 0 || strafe !== 0) : forward > 0;
+    // sprint intent: the double-tap latch OR a held sprint key. A too-empty
+    // satchel (hunger <= 3, survival) both blocks it and drops the latch, so
+    // running yourself hungry ends the sprint until you eat back over the line
+    const holdSprint = this.keys.has("CapsLock") || this.keys.has("ControlLeft");
+    const starvedOut = this.mode === "survival" && this.hunger <= SPRINT_MIN_HUNGER;
+    if (starvedOut) this.sprinting = false;
+    // sneaking and eating suppress the sprint without dropping the latch —
+    // release the crouch mid-run and the stride picks right back up
+    const wantSprint = (this.sprinting || holdSprint) && !starvedOut &&
+      !sneaking && !(this.isEating && this.isEating());
     let speed;
-    if (this.flying) speed = this.sprinting ? FLY_SPRINT_SPEED : FLY_SPEED;
-    else if (this.inWater) speed = this.sprinting && sprintInput ? SWIM_SPRINT_SPEED : SWIM_SPEED;
+    if (this.flying) speed = wantSprint ? FLY_SPRINT_SPEED : FLY_SPEED;
+    else if (this.inWater) speed = wantSprint && sprintInput ? SWIM_SPRINT_SPEED : SWIM_SPEED;
     else if (sneaking) speed = SNEAK_SPEED;
-    else if (this.sprinting && sprintInput) speed = SPRINT_SPEED;
+    else if (wantSprint && sprintInput) speed = SPRINT_SPEED;
     else speed = WALK_SPEED;
     this.sprintActive = speed === SPRINT_SPEED || speed === SWIM_SPRINT_SPEED ||
-      (this.flying && this.sprinting);
+      (this.flying && wantSprint);
 
     // linear acceleration toward the wanted velocity, applied as a VECTOR
     // approach (not per-axis): a rotating camera swings the target around
@@ -350,7 +364,10 @@ export class Player {
         this.vel.y = JUMP_SPEED;
         this.onGround = false;
         if (this.mode === "survival") {
-          this.hunger = Math.max(0, this.hunger - HUNGER_JUMP);
+          // a jump taken at a sprint costs extra — bunny-hopping is fast
+          // but it eats
+          this.hunger = Math.max(0, this.hunger -
+            (HUNGER_JUMP + (this.sprintActive ? SPRINT_JUMP_EXTRA : 0)));
         }
       }
     }

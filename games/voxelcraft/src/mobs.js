@@ -356,6 +356,7 @@ export class Mobs {
       walkPhase: 0,
       hp: spec.hp,
       hurtT: 0,
+      critT: 0,            // falling-crit pop timer (drives the scale burst)
       attackCd: 0,
       contactCd: 0,
       angryT: 0,           // neutral retaliation window
@@ -484,6 +485,7 @@ export class Mobs {
       if (night && spec.habitat === "day") { this._remove(i); continue; }
       if (!world.isGenerated(Math.floor(m.x) >> 4, Math.floor(m.z) >> 4)) continue;
       m.hurtT = Math.max(0, m.hurtT - dt);
+      m.critT = Math.max(0, m.critT - dt);
       m.attackCd = Math.max(0, m.attackCd - dt);
       m.contactCd = Math.max(0, m.contactCd - dt);
       m.angryT = Math.max(0, m.angryT - dt);
@@ -585,7 +587,9 @@ export class Mobs {
       }
       m.group.position.set(m.x, m.y, m.z);
       m.group.rotation.y = m.yaw;
-      m.group.scale.setScalar(1 + (m.hurtT > 0 ? 0.06 : 0));
+      // hurt flinch is a subtle swell; a falling crit lands with a real pop
+      // that collapses over ~0.2s
+      m.group.scale.setScalar(1 + (m.hurtT > 0 ? 0.06 : 0) + m.critT * 1.1);
     }
   }
 
@@ -676,24 +680,28 @@ export class Mobs {
   }
 
   // dmg defaults to the bare-foot kick (1); a held Shiv passes its tier's
-  // damage through from interact.js
-  punch(origin, dir, maxDist, fromPos, dmg = 1) {
+  // damage through from interact.js. opts: { crit, knock } — a falling crit
+  // pops the mob and sharpens the hurt sound; knock scales the shove
+  // (sprint hits pass ~1.8).
+  punch(origin, dir, maxDist, fromPos, dmg = 1, opts) {
     const m = this.rayHit(origin, dir, maxDist);
     if (!m) return false;
-    this.strike(m, dmg, fromPos);
+    this.strike(m, dmg, fromPos, opts);
     return true;
   }
 
   // land a hit on a mob: damage, knockback away from fromPos, and the full
   // reaction suite. Shared by punches and thrown sling-stones.
-  strike(m, dmg, fromPos) {
+  strike(m, dmg, fromPos, opts = {}) {
     m.hp -= dmg;
     m.hurtT = 0.3;
+    if (opts.crit) m.critT = 0.22; // the burst cue: a quick scale-pop
     const resist = 1 - (m.spec.knockResist || 0);
+    const knock = 6 * (opts.knock || 1);
     const dx = m.x - fromPos.x, dz = m.z - fromPos.z;
     const len = Math.max(0.2, Math.hypot(dx, dz));
-    m.vx += (dx / len) * 6 * resist;
-    m.vz += (dz / len) * 6 * resist;
+    m.vx += (dx / len) * knock * resist;
+    m.vz += (dz / len) * knock * resist;
     m.vy = 5 * resist;
     // reactions: passives flee, neutrals get angry, ambushers wake up,
     // hostiles hold a grudge (a stone from beyond aggro range still counts)
@@ -702,7 +710,7 @@ export class Mobs {
     if (m.spec.grudge) m.grudgeT = m.spec.grudge;
     if (m.spec.behavior === "neutral" || m.spec.behavior === "hostile") m.angryT = 8;
     if (m.spec.behavior === "ambush") m.state = "hunt";
-    this.onMobHurt?.();
+    this.onMobHurt?.(!!opts.crit);
   }
 
   _remove(i) {
