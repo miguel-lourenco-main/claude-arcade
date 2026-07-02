@@ -25,7 +25,7 @@ const LIGHT_FALLOFF = 0.14;
 const LIGHT_FLOOR = 0.3;
 
 // --- voxel shader -----------------------------------------------------------
-// Minecraft-style two-channel lighting: the `color` attribute carries
+// Classic voxel two-channel lighting: the `color` attribute carries
 // sky light (shade × AO × column depth) and is scaled by the day/night
 // uniform; `blocklight` carries torch light, which ignores the sun.
 // final = texture × max(sky × uDayLight × uSkyTint, blocklight × warmTint)
@@ -33,6 +33,7 @@ const LIGHT_FLOOR = 0.3;
 const VOXEL_VERT = /* glsl */ `
 attribute float blocklight;
 uniform vec2 uUvOffset;
+uniform float uTime;
 varying vec2 vUv;
 varying vec3 vColor;
 varying float vBlock;
@@ -42,7 +43,15 @@ void main() {
   vUv = uv + uUvOffset;
   vColor = color;
   vBlock = blocklight;
-  vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+  vec4 mvPosition;
+  #ifdef VOX_WAVE
+  // gentle water swell, phased by world position
+  vec4 wp = modelMatrix * vec4(position, 1.0);
+  wp.y += sin(uTime * 1.5 + wp.x * 0.9 + wp.z * 0.7) * 0.05;
+  mvPosition = viewMatrix * wp;
+  #else
+  mvPosition = modelViewMatrix * vec4(position, 1.0);
+  #endif
   gl_Position = projectionMatrix * mvPosition;
   #include <fog_vertex>
 }`;
@@ -78,6 +87,7 @@ function voxelMaterial(map, opts = {}) {
       {
         map: { value: null },
         uUvOffset: { value: new THREE.Vector2(0, 0) },
+        uTime: { value: 0 },
         uDayLight: { value: 1 },
         uSkyTint: { value: new THREE.Color(1, 1, 1) },
         uOpacity: { value: opts.opacity ?? 1 },
@@ -91,20 +101,23 @@ function voxelMaterial(map, opts = {}) {
     depthWrite: opts.depthWrite ?? true,
     side: opts.side ?? THREE.FrontSide,
   });
-  if (opts.alphaTest) mat.defines = { VOX_ALPHATEST: opts.alphaTest.toFixed(2) };
+  mat.defines = {};
+  if (opts.alphaTest) mat.defines.VOX_ALPHATEST = opts.alphaTest.toFixed(2);
+  if (opts.wave) mat.defines.VOX_WAVE = 1;
   mat.uniforms.map.value = map;
   return mat;
 }
 
 export function buildMaterials(atlasTexture, waterTexture) {
-  // cutout so sprite items (torch, plants) keep their transparent pixels
+  // cutout so sprite items (torch, plants) keep their transparent pixels.
+  // The hand renders in its own depth-cleared pass, so no depth hacks here.
   const held = voxelMaterial(atlasTexture, { alphaTest: 0.4, side: THREE.DoubleSide });
-  held.depthTest = false; // the hand never clips into walls
   return {
     opaque: voxelMaterial(atlasTexture),
     cutout: voxelMaterial(atlasTexture, { alphaTest: 0.4, side: THREE.DoubleSide }),
     water: voxelMaterial(waterTexture, {
       transparent: true, opacity: 0.72, depthWrite: false, side: THREE.DoubleSide,
+      wave: true,
     }),
     held,
   };
