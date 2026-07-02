@@ -6,7 +6,7 @@ window.GAMES = [
     title: "Voxelcraft",
     genre: "Sandbox / Voxel",
     description:
-      "A Minecraft-style voxel sandbox: infinite procedural terrain, biomes, " +
+      "A voxel sandbox set in the Upturn: infinite procedural terrain, biomes, " +
       "day/night cycle, block building. All code and textures generated from scratch.",
   },
 ];

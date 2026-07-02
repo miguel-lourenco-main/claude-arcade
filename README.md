@@ -24,7 +24,7 @@ directly via `file://` only works for the arcade shell itself.)
 
 | Game | Genre | Notes |
 | --- | --- | --- |
-| [Voxelcraft](games/voxelcraft/) | Sandbox / voxel | Minecraft-style: infinite procedural terrain, biomes, caves, trees, day/night, block building, saving. Three.js via CDN. |
+| [Voxelcraft](games/voxelcraft/) | Sandbox / voxel | A voxel sandbox in the Upturn: infinite procedural terrain, biomes, caves, trees, day/night, block building, saving. Three.js via CDN. |
 
 ## Structure
 

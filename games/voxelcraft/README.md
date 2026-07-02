@@ -1,6 +1,13 @@
 # Voxelcraft
 
-A Minecraft-style voxel sandbox, written from scratch as static ES modules.
+A voxel sandbox set in **the Upturn** (see [LORE.md](LORE.md)), written from
+scratch as static ES modules and inspired by classic block-building sandboxes
+such as Minecraft.
+
+> **Disclaimer:** Voxelcraft is an original hobby work. It is not affiliated
+> with, endorsed by, or connected to Mojang or Microsoft. All code, textures,
+> sounds, names, and fiction in this project are original — nothing was
+> extracted from or copied out of any other game.
 The only dependency is Three.js, pinned from a CDN via an import map — there is
 no build step and no assets: every texture is painted pixel-by-pixel onto a
 canvas atlas at boot, and every sound is synthesized with WebAudio.
@@ -12,7 +19,7 @@ canvas atlas at boot, and every sound is synthesized with WebAudio.
   sea level, spaghetti + cavern caves (guarded so they never breach standing
   water), coal/iron ore veins, deterministic grid-jittered cross-chunk trees,
   cacti, flowers and tall grass.
-- **Minecraft-style rendering** — chunked meshing (16×96×16) with hidden-face
+- **Classic voxel rendering** — chunked meshing (16×96×16) with hidden-face
   culling, per-face directional shade, classic 3-sample vertex ambient
   occlusion (with quad-diagonal flip), cheap column sky-light so caves and
   interiors actually get dark, cutout bucket for plants/glass and a
