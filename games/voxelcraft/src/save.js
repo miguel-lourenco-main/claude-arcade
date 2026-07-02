@@ -41,6 +41,14 @@ export function writeSave(world, player, sky, hud, inventory, extra = {}) {
       // additive: the Moss Cot respawn anchor (absent/null = world spawn)
       spawnPoint: player.spawnPoint || undefined,
       inventory: inventory ? inventory.serialize() : [],
+      // additive: the stack held on the drag cursor mid-window — it lives in
+      // no slot, so without this field a save written mid-drag deletes it
+      cursor: hud.slotUI && hud.slotUI.cursor
+        ? [hud.slotUI.cursor.id, hud.slotUI.cursor.count]
+        : undefined,
+      // additive: stacks awaiting satchel room (v1 migration overflow) —
+      // persisted until drained so a reload can never destroy them
+      overflowStacks: extra.overflowStacks || [],
       selected: hud.selected,
       edits: world.serializeEdits(),
     }));

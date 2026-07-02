@@ -58,7 +58,11 @@ export class SlotUI {
     this.el = document.getElementById("cursor-stack");
     this.elCanvas = this.el.querySelector("canvas");
     this.elCount = this.el.querySelector(".n");
+    // track the pointer unconditionally: a stack picked up before any drag
+    // must appear AT the pointer, not wherever the element last sat
+    this._mouse = null;
     document.addEventListener("mousemove", (e) => {
+      this._mouse = { x: e.clientX, y: e.clientY };
       if (!this.cursor) return;
       this.el.style.left = `${e.clientX + 4}px`;
       this.el.style.top = `${e.clientY + 4}px`;
@@ -136,6 +140,10 @@ export class SlotUI {
 
   _renderCursor() {
     if (this.cursor) {
+      if (this._mouse) {
+        this.el.style.left = `${this._mouse.x + 4}px`;
+        this.el.style.top = `${this._mouse.y + 4}px`;
+      }
       const ctx = this.elCanvas.getContext("2d");
       ctx.clearRect(0, 0, 40, 40);
       this.drawIcon(ctx, this.cursor.id);
@@ -149,8 +157,11 @@ export class SlotUI {
   // ---- click semantics ----
 
   click(region, i, button, shift) {
-    if (region.palette) this._clickPalette(region, i);
-    else if (shift) this._quickMoveFrom(region, i);
+    // shift beats palette: the quick-move table declares where a palette
+    // stack goes (e.g. straight to the belt), and a held cursor stack must
+    // never be voided by a shift-click that only meant to quick-move
+    if (shift) this._quickMoveFrom(region, i);
+    else if (region.palette) this._clickPalette(region, i);
     else if (region.takeOnly) this._clickTakeOnly(region, i, button);
     else if (button === 2) this._rightClick(region, i);
     else this._leftClick(region, i);
@@ -247,6 +258,7 @@ export class SlotUI {
         }
       }
     }
-    region.set(i, left > 0 ? { id: s.id, count: left } : null);
+    // a palette stack is conjured, not stored — nothing to write back
+    if (!region.palette) region.set(i, left > 0 ? { id: s.id, count: left } : null);
   }
 }

@@ -129,6 +129,12 @@ export class Hud {
       drawIcon: (ctx, id) => drawBlockIcon(ctx, this.atlas, id),
       onChange: () => {
         this.refreshHotbarRow();
+        // craftability depends on slot counts (a stack on the cursor doesn't
+        // count) — keep the lists live, with their per-visit order frozen
+        if (this.pickerOpen) this._renderFieldRecipes();
+        if (this.benchOpen) {
+          this._renderCraftList(document.getElementById("craft-list"), this._benchOrder);
+        }
         if (this.onSlotsChanged) this.onSlotsChanged();
         if (this._chestChanged) this._chestChanged();
       },
@@ -256,17 +262,6 @@ export class Hud {
 
   hideDeath() { this.deathEl.classList.add("hidden"); }
   get deathOpen() { return !this.deathEl.classList.contains("hidden"); }
-
-  // hotbar count badges (survival only); empty slots hide their icon entirely
-  refreshCounts() {
-    const survival = this.gameMode === "survival";
-    for (let i = 0; i < 9; i++) {
-      const { slot, count } = this.slotEls[i];
-      const n = survival ? this.inventory.count(this.slots[i]) : 0;
-      count.textContent = survival && n > 0 ? String(n) : "";
-      slot.classList.toggle("empty", survival && n === 0);
-    }
-  }
 
   setMovementLabel(mode) {
     this.movementBtn.textContent =

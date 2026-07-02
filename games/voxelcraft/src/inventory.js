@@ -106,8 +106,10 @@ export class Inventory {
 
   // Migrate a v1 save (inventory as [id,count] pairs with unbounded counts +
   // a 9-entry hotbar of block ids). Returns overflow stacks that didn't fit —
-  // the caller spills them as ground drops. Creative saves get their old
-  // hotbar seeded with full stacks (creative items are free).
+  // the caller persists them as pending stacks and drains them later. The
+  // real item pool is packed losslessly regardless of gameMode: v1 always
+  // saved the full survival pool even in creative, and the game itself never
+  // clears the inventory on mode toggles, so the migration must not either.
   static migrateV1(pairs, hotbarIds, gameMode) {
     const inv = new Inventory();
     const pool = new Map();
@@ -122,18 +124,7 @@ export class Inventory {
     }
     const hotbar = Array.isArray(hotbarIds) ? hotbarIds : [];
 
-    if (gameMode !== "survival") {
-      // creative: preserve the layout with free full stacks
-      for (let i = 0; i < HOTBAR_SIZE; i++) {
-        const id = hotbar[i];
-        if (Number.isInteger(id) && id !== AIR && BLOCKS[id]) {
-          inv.slots[i] = { id, count: MAX_STACK };
-        }
-      }
-      return { inv, overflow: [] };
-    }
-
-    // survival: keep the player's hotbar layout wherever real items exist
+    // keep the player's hotbar layout wherever real items exist
     for (let i = 0; i < HOTBAR_SIZE; i++) {
       const id = hotbar[i];
       if (!Number.isInteger(id) || !BLOCKS[id] || !pool.get(id)) continue;
@@ -150,6 +141,19 @@ export class Inventory {
         left -= take;
         const rejected = inv.add(id, take); // returns what did NOT fit
         if (rejected > 0) overflow.push({ id, count: rejected });
+      }
+    }
+
+    if (gameMode !== "survival") {
+      // creative: additionally top the old hotbar layout up to free full
+      // stacks (creative items are free) — but never at the cost of real
+      // items: a pool stack displaced from a belt slot joins the overflow.
+      for (let i = 0; i < HOTBAR_SIZE; i++) {
+        const id = hotbar[i];
+        if (!Number.isInteger(id) || id === AIR || !BLOCKS[id]) continue;
+        const s = inv.slots[i];
+        if (s && s.id !== id) overflow.push({ id: s.id, count: s.count });
+        inv.slots[i] = { id, count: MAX_STACK };
       }
     }
     return { inv, overflow };

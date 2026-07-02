@@ -103,24 +103,55 @@ if (save && validPos(save.spawnPoint)) {
 }
 
 const inventory = new Inventory();
-let migrationOverflow = [];
+// stacks that couldn't fit in the satchel (v1 migration overflow, a restored
+// cursor stack with no room). Persisted in every save and drained back into
+// the inventory as room appears — never spilled as unsaved ground drops.
+let pendingOverflow = [];
+const validSaveStack = (e) => Array.isArray(e) &&
+  Number.isInteger(e[0]) && e[0] !== AIR && !!BLOCKS[e[0]] &&
+  Number.isInteger(e[1]) && e[1] > 0;
 if (save) {
   if (save.v === 2) {
     inventory.load(save.inventory);
+    // additive field: pending overflow stacks from an earlier session
+    if (Array.isArray(save.overflowStacks)) {
+      for (const e of save.overflowStacks) {
+        if (validSaveStack(e)) pendingOverflow.push({ id: e[0], count: e[1] });
+      }
+    }
+    // additive field: the stack that was held on the drag cursor when the
+    // save was written — return it to the satchel, or queue it if full
+    if (validSaveStack(save.cursor)) {
+      const count = Math.min(64, save.cursor[1]);
+      const left = inventory.add(save.cursor[0], count);
+      if (left > 0) pendingOverflow.push({ id: save.cursor[0], count: left });
+    }
   } else {
     // v1 save: pool counts + a 9-id hotbar -> 64-stacks in slots, layout kept
     const migrated = Inventory.migrateV1(
       save.inventory, save.hotbar,
       save.gameMode === "survival" ? "survival" : "creative");
     inventory.slots = migrated.inv.slots;
-    migrationOverflow = migrated.overflow;
+    pendingOverflow = migrated.overflow;
   }
 }
 const drops = new ItemDrops(scene, materials);
-// anything that didn't fit during migration lands at the player's feet
-for (const stack of migrationOverflow) {
-  drops.spawn(player.pos.x, player.pos.y + 1, player.pos.z, stack.id, stack.count,
-    { pickupDelay: 0 });
+
+// retry pendingOverflow against the satchel; called on a slow timer from the
+// game loop, so freed slots gradually recover everything that once overflowed
+function drainOverflow() {
+  if (pendingOverflow.length === 0) return;
+  let changed = false;
+  pendingOverflow = pendingOverflow.filter((stack) => {
+    const left = inventory.add(stack.id, stack.count);
+    if (left !== stack.count) changed = true;
+    stack.count = left;
+    return left > 0;
+  });
+  if (changed) {
+    hud.refreshHotbarRow();
+    if (hud.anyWindowOpen()) hud.slotUI.renderAll();
+  }
 }
 const mobs = new Mobs(scene);
 if (save && save.chests) world.loadChests(save.chests);
@@ -303,7 +334,7 @@ const hud = new Hud(atlas.canvas, {
     if (crafted) sfx.craft();
   },
   onSpillCursor: (stack) => spillStack(stack),
-  onSlotsChanged: () => sfx.click(),
+  onSlotsChanged: () => { sfx.click(); drainOverflow(); },
   inventory,
   playerViewer: new PlayerViewer(document.getElementById("player-view"), 1337),
 });
@@ -436,6 +467,7 @@ const stopAutosave = startAutosave(() => writeSave(world, player, sky, hud, inve
     const [x, y, z] = key.split(",").map(Number);
     return [x, y, z, Math.max(1, due - worldSeconds)];
   }),
+  overflowStacks: pendingOverflow.map((s) => [s.id, s.count]),
 }));
 
 // --- held item (first-person hand) — its own scene + depth-cleared pass ------
@@ -655,7 +687,7 @@ document.addEventListener("keydown", (e) => {
 document.addEventListener("keyup", (e) => player.onKeyUp(e.code));
 
 document.addEventListener("wheel", (e) => {
-  if (e.deltaY !== 0 && inputActive() && !hud.pickerOpen) { hud.scroll(e.deltaY); sfx.click(); }
+  if (e.deltaY !== 0 && inputActive() && !hud.anyWindowOpen()) { hud.scroll(e.deltaY); sfx.click(); }
 }, { passive: true });
 
 addEventListener("resize", () => {
@@ -724,6 +756,7 @@ function tick(now) {
     if (worldSeconds >= nextSaplingCheck) {
       nextSaplingCheck = worldSeconds + 1;
       updateSaplings();
+      drainOverflow();
     }
   }
   mobs.setLight(sky.lightLevel, sky.lightTint);
