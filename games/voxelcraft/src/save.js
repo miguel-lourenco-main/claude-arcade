@@ -44,6 +44,9 @@ export function writeSave(world, player, sky, hud, inventory, extra = {}) {
       // additive: the Field Chart's inked leaf {ax, az, png} — absent in
       // older saves (and worlds that never unrolled one): a fresh chart
       chart: extra.chart || undefined,
+      // additive: the Murmur's settings [on, volume] — absent in older
+      // saves, which simply get the defaults (on, modest volume)
+      music: extra.music || undefined,
       player: {
         x: player.pos.x, y: player.pos.y, z: player.pos.z,
         yaw: player.yaw, pitch: player.pitch, flying: player.flying,

@@ -178,6 +178,8 @@ export class Hud {
     this.onTeleport = opts.onTeleport;             // (kind) => {ok, message}
     this.onToggleMovement = opts.onToggleMovement; // () => new mode string
     this.onSensitivity = opts.onSensitivity;       // (multiplier) => void
+    this.onMusicVolume = opts.onMusicVolume;       // (0..1) => void
+    this.onMusicToggle = opts.onMusicToggle;       // () => new enabled bool
     this.onToggleMode = opts.onToggleMode;         // () => new game mode string
     this.onRespawn = opts.onRespawn;               // () => void
     this.onCraft = opts.onCraft;                   // (recipe, max) => void
@@ -249,6 +251,19 @@ export class Hud {
 
     this.modeBtn = document.getElementById("mode-toggle");
     this.modeBtn.addEventListener("click", () => this.setMode(this.onToggleMode()));
+
+    // the Murmur's controls: a volume slider + on/off, mirroring the mouse
+    // slider's wiring (main.js persists both in the save)
+    this.musicEl = document.getElementById("music-volume");
+    this.musicValEl = document.getElementById("music-val");
+    this.musicEl.addEventListener("input", () => {
+      const v = parseFloat(this.musicEl.value);
+      this.musicValEl.textContent = Math.round(v * 100) + "%";
+      this.onMusicVolume(v);
+    });
+    this.musicBtn = document.getElementById("music-toggle");
+    this.musicBtn.addEventListener("click", () =>
+      this.setMusicToggle(this.onMusicToggle()));
 
     this._buildTeleports();
     this._buildStatus();
@@ -401,6 +416,16 @@ export class Hud {
   setSensitivity(v) {
     this.sensEl.value = String(v);
     this.sensValEl.textContent = v.toFixed(2) + "×";
+  }
+
+  setMusic(volume, on) {
+    this.musicEl.value = String(volume);
+    this.musicValEl.textContent = Math.round(volume * 100) + "%";
+    this.setMusicToggle(on);
+  }
+
+  setMusicToggle(on) {
+    this.musicBtn.textContent = on ? "Music: On" : "Music: Off";
   }
 
   _buildTeleports() {

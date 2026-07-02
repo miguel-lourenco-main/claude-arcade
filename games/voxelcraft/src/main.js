@@ -38,6 +38,7 @@ import { Hud } from "./hud.js";
 import { Sky } from "./sky.js";
 import { Rain } from "./rain.js";
 import { Sfx } from "./audio.js";
+import { Music } from "./music.js";
 import { loadSave, writeSave, clearSave, startAutosave } from "./save.js";
 
 const MESH_RADIUS = 5;
@@ -349,6 +350,20 @@ const rainFx = new Rain(scene, world);
 const sfx = new Sfx();
 player.onStep = (blockId) => { if (blockId !== AIR) sfx.step(blockId); };
 
+// the Murmur: generative ambient music on the Sfx's AudioContext (shared so
+// one gesture unlocks both). start() is only reached from requestLock — a
+// user-gesture path — per the browser autoplay policy.
+const music = new Music(seed, {
+  getContext: () => (sfx._ensure() ? sfx.ctx : null),
+});
+// additive v2 field: [on, volume] — absent in older saves, which simply get
+// the defaults (on, modest volume)
+if (save && Array.isArray(save.music)) {
+  const [on, vol] = save.music;
+  music.enabled = on !== 0 && on !== false;
+  if (Number.isFinite(vol)) music.volume = Math.max(0, Math.min(1, vol));
+}
+
 function teleportTo(kind) {
   const dest = kind === "spawn"
     ? spawnPoint
@@ -397,6 +412,8 @@ const hud = new Hud(atlas.canvas, {
     return player.moveMode;
   },
   onSensitivity: (v) => { player.sensitivity = v; },
+  onMusicVolume: (v) => music.setVolume(v),
+  onMusicToggle: () => { music.setEnabled(!music.enabled); return music.enabled; },
   onToggleMode: () => {
     hud.closeAllWindows(); // defensively spill/close before switching rules
     player.mode = player.mode === "survival" ? "creative" : "survival";
@@ -431,6 +448,7 @@ const hud = new Hud(atlas.canvas, {
 });
 hud.setMovementLabel(player.moveMode);
 hud.setSensitivity(player.sensitivity);
+hud.setMusic(music.volume, music.enabled);
 hud.setMode(player.mode);
 if (save && Number.isInteger(save.selected) && save.selected >= 0 && save.selected < 9) {
   hud.select(save.selected);
@@ -712,6 +730,8 @@ const stopAutosave = startAutosave(() => writeSave(world, player, sky, hud, inve
     Math.round(sky.rain * 100) / 100,
   ],
   chart: wayfinder.serializeChart(), // additive: the Field Chart's inked leaf
+  // additive: the Murmur's settings [on, volume] — defaults on absence
+  music: [music.enabled ? 1 : 0, Math.round(music.volume * 100) / 100],
 }));
 
 // --- held item (first-person hand) — its own scene + depth-cleared pass ------
@@ -892,6 +912,7 @@ const canvas = renderer.domElement;
 let started = false;
 
 function requestLock() {
+  music.start(); // every path here is a user gesture — safe to arm audio
   hud.closeAllWindows(); // spills any held cursor stack
   if (NO_LOCK) { hud.hidePause(); started = true; return; }
   // the promise rejects during the browser's post-Escape cooldown — swallow
@@ -1165,10 +1186,18 @@ function tick(now) {
   rainFx.update(frameDt, camera, sky.rain);
   // the rain bed is silent under cover, underground, and underwater — gated
   // on the same open-column test the streaks use, at the player's eye
-  sfx.setRain(
-    sky.rain > 0.001 && !player.eyeInWater &&
-      rainFx.isOpen(player.pos.x, player.eyeY, player.pos.z)
-      ? sky.rain : 0);
+  const skyOpen = rainFx.isOpen(player.pos.x, player.eyeY, player.pos.z);
+  const rainAudible =
+    sky.rain > 0.001 && !player.eyeInWater && skyOpen ? sky.rain : 0;
+  sfx.setRain(rainAudible);
+  // the Murmur reads the same world state each frame: night by the sky's
+  // light, the delve by depth or a roofed-over head (the column test stands
+  // in for "no sky light here"), rain via the shared audibility gate
+  music.update({
+    night: sky.lightLevel < 0.45,
+    delve: player.pos.y < 24 || !skyOpen,
+    rain: rainAudible,
+  });
   setDayLight(materials, sky.lightLevel, sky.lightTint);
   setHeldSkinLight(sky.lightLevel, sky.lightTint);
   hud.setUnderwater(viewInWater);
@@ -1206,7 +1235,7 @@ if (NO_LOCK) {
   window.voxelcraft = {
     player, world, hud, sky, terrain, interaction, mobs, drops, saplings, crops,
     inventory, kegs, stones, boats, fishing, signBoards, wayfinder,
-    rain: rainFx, sfx, camera,
+    rain: rainFx, sfx, music, camera,
     spawnTarget: () => player.spawnPoint || spawnPoint,
     growAllSaplings: () => { for (const k of saplings.keys()) saplings.set(k, 0); },
     growAllCrops: () => { for (const k of crops.keys()) crops.set(k, 0); },
