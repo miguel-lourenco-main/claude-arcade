@@ -977,8 +977,9 @@ document.addEventListener("keydown", (e) => {
   // Q tosses one item from the selected slot
   if (e.code === "KeyQ" && inputActive() && !hud.anyWindowOpen()) {
     const s = inventory.get(hud.selected);
+    const dur = s ? s.dur : undefined;
     if (s && inventory.takeFromSlot(hud.selected, 1)) {
-      spillStack({ id: s.id, count: 1 });
+      spillStack({ id: s.id, count: 1, dur });
       hud.refreshHotbarRow();
     }
     return;

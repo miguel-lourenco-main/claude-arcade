@@ -69,7 +69,8 @@ canvas atlas at boot, and every sound is synthesized with WebAudio.
 - **The Kiln — smelting** — craft one from 8 river rubble and right-click it:
   three slots (input over fuel, take-only output) with a live smelt-progress
   arrow and an ember that lights while the fire burns. Smelts: sand → glass,
-  river rubble → stone, sky-iron ore → sky-iron block, snuffet loin → roast loin
+  river rubble → stone, sky-iron ore → sky-iron ingot (4 ingots fold into a
+  sky-iron block at the workbench), snuffet loin → roast loin
   (10 s each). Fuel: coal ore (80 s), log (15 s), planks (8 s) — once lit, the
   fire keeps burning even with nothing on it. Kilns keep working while the
   window is open, persist their contents (and remaining burn) in the save,
