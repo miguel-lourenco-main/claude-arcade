@@ -9,11 +9,14 @@ import { Inventory } from "./inventory.js";
 import { ItemDrops } from "./entities.js";
 import { Mobs } from "./mobs.js";
 import { craft } from "./craft.js";
+import { PlayerModel, buildHeldFoot, setHeldSkinLight } from "./player-model.js";
+import { PlayerViewer } from "./player-viewer.js";
 import { SAPLING, LOG, LEAVES, LEAVES_COLD, dropFor } from "./blocks.js";
 import { makeGenerator, findSpawn, findBiomeLocation } from "./terrain.js";
 import {
   buildMaterials, meshChunk, disposeChunkMeshes, setDayLight, buildBlockGeometry,
 } from "./mesher.js";
+import { raycast } from "./interact.js";
 import { Player } from "./player.js";
 import { Interaction } from "./interact.js";
 import { Hud } from "./hud.js";
@@ -49,6 +52,10 @@ camera.rotation.order = "YXZ";
 const renderer = new THREE.WebGLRenderer({ antialias: false });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
 renderer.setSize(innerWidth, innerHeight);
+// two-pass rendering: world, then the first-person hand over a cleared depth
+// buffer (self-occludes correctly, never hidden by water or walls)
+renderer.autoClear = false;
+renderer.info.autoReset = false;
 document.getElementById("app").appendChild(renderer.domElement);
 
 const spawnPoint = findSpawn(terrain);
@@ -240,6 +247,7 @@ const hud = new Hud(atlas.canvas, {
   },
   onCraft: (recipe) => { if (craft(recipe, inventory)) sfx.craft(); },
   inventory,
+  playerViewer: new PlayerViewer(document.getElementById("player-view"), 1337),
 });
 hud.setMovementLabel(player.moveMode);
 hud.setSensitivity(player.sensitivity);
@@ -272,7 +280,7 @@ const interaction = new Interaction(world, player, scene, hud, {
   },
   onSound: (kind, id) => sfx.block(kind, id),
   onPick: (id) => hud.setSlot(id),
-  onSwing: () => { swingT = 0; },
+  onSwing: () => { swingT = 0; playerModel.swing(); },
   canConsume: (id) => {
     const ok = inventory.take(id);
     if (ok) hud.refreshCounts();
@@ -299,6 +307,8 @@ const interaction = new Interaction(world, player, scene, hud, {
   avgColor: atlas.avgColor,
 });
 mobs.onMobHurt = () => sfx.mobHurt();
+mobs.onSound = (kind) => sfx.creature(kind);
+mobs.onDrop = (x, y, z, id, n) => drops.spawn(x, y, z, id, n);
 
 const stopAutosave = startAutosave(() => writeSave(world, player, sky, hud, inventory, {
   saplings: [...saplings].map(([key, due]) => {
@@ -307,33 +317,67 @@ const stopAutosave = startAutosave(() => writeSave(world, player, sky, hud, inve
   }),
 }));
 
-// --- held block (first-person hand) ------------------------------------------
+// --- held item (first-person hand) — its own scene + depth-cleared pass ------
 
-scene.add(camera); // children of the camera render only if it's in the scene
-const heldMesh = new THREE.Mesh(undefined, materials.held);
-heldMesh.frustumCulled = false;
-heldMesh.renderOrder = 20;
-heldMesh.scale.setScalar(0.32);
-camera.add(heldMesh);
-let heldBlockId = null;
+const handScene = new THREE.Scene(); // fog/background stay null, always
+const handCamera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.05, 10);
+
+const heldGroup = new THREE.Group();
+heldGroup.frustumCulled = false;
+handScene.add(heldGroup);
+
+const heldBlock = new THREE.Mesh(undefined, materials.held);
+heldBlock.frustumCulled = false;
+heldBlock.scale.setScalar(0.32);
+heldGroup.add(heldBlock);
+
+// the bare foot-hand, shown when the selected survival slot is empty
+const heldFoot = buildHeldFoot(1337);
+heldFoot.visible = false;
+heldFoot.scale.setScalar(0.75);
+heldFoot.rotation.set(0.5, 0.35, 0.1); // toes forward, sole toward the world
+heldFoot.traverse((o) => { o.frustumCulled = false; });
+heldGroup.add(heldFoot);
+
+// third-person body (visible only in third person)
+const playerModel = new PlayerModel(1337);
+playerModel.group.visible = false;
+playerModel.group.rotation.order = "YXZ"; // yaw first, then the swim lean
+scene.add(playerModel.group);
+let thirdPerson = false;
+
+function toggleThirdPerson() {
+  thirdPerson = !thirdPerson;
+  playerModel.group.visible = thirdPerson;
+}
+
+let heldKey = null;
 let swingT = 1; // 0..1 swing animation progress (1 = at rest)
 
 function refreshHeldMesh() {
+  // emptiness can change without the id changing (placed the last block,
+  // picked one up) — recompute every frame, it's a Map lookup
   const id = hud.selectedId();
-  if (id === heldBlockId) return;
-  heldBlockId = id;
-  if (heldMesh.geometry) heldMesh.geometry.dispose();
-  const geo = buildBlockGeometry(id);
-  geo.translate(-0.5, -0.5, -0.5); // rotate around the block center
-  heldMesh.geometry = geo;
+  const empty = player.mode === "survival" && inventory.count(id) === 0;
+  const key = empty ? "foot" : id;
+  if (key === heldKey) return;
+  heldKey = key;
+  heldFoot.visible = empty;
+  heldBlock.visible = !empty;
+  if (!empty) {
+    if (heldBlock.geometry) heldBlock.geometry.dispose();
+    const geo = buildBlockGeometry(id);
+    geo.translate(-0.5, -0.5, -0.5); // rotate around the block center
+    heldBlock.geometry = geo;
+  }
 }
 
 function animateHeld(frameDt, bobY) {
   refreshHeldMesh();
   swingT = Math.min(1, swingT + frameDt / 0.22);
   const s = Math.sin(Math.PI * swingT); // 0 -> 1 -> 0 dip
-  heldMesh.position.set(0.42, -0.38 + bobY * 0.6 - s * 0.16, -0.65 - s * 0.08);
-  heldMesh.rotation.set(0.18 - s * 1.1, -0.4 + s * 0.25, 0);
+  heldGroup.position.set(0.42, -0.38 + bobY * 0.6 - s * 0.25, -0.65 - s * 0.1);
+  heldGroup.rotation.set(0.18 - s * 1.4, -0.4 + s * 0.3, s * 0.12);
 }
 
 // --- chunk streaming --------------------------------------------------------
@@ -460,6 +504,7 @@ let debugVisible = false;
 document.addEventListener("keydown", (e) => {
   if (e.repeat) return;
   if (e.code === "F3") { e.preventDefault(); debugVisible = !debugVisible; return; }
+  if (e.code === "F5") { e.preventDefault(); toggleThirdPerson(); return; }
   if (e.code === "KeyE") {
     if (hud.chestOpen) { hud.closeChest(); requestLock(); }
     else if (hud.pickerOpen) { hud.closePicker(); requestLock(); }
@@ -493,6 +538,8 @@ document.addEventListener("wheel", (e) => {
 addEventListener("resize", () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
+  handCamera.aspect = innerWidth / innerHeight;
+  handCamera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
 });
 
@@ -544,7 +591,7 @@ function tick(now) {
       sfx.pickup();
       hud.refreshCounts();
     });
-    mobs.update(frameDt, world, player, sfx);
+    mobs.update(frameDt, { world, player, terrain, night: sky.lightLevel < 0.45 });
     worldSeconds += frameDt;
     if (worldSeconds >= nextSaplingCheck) {
       nextSaplingCheck = worldSeconds + 1;
@@ -583,8 +630,25 @@ function tick(now) {
   camera.rotation.x = player.pitch;
   camera.rotation.z = Math.sin(bobPhase) * 0.004 * bobAmp;
 
-  // scrolling water (uv-offset uniform — ShaderMaterial ignores texture.offset)
-  materials.water.uniforms.uUvOffset.value.set((now * 0.000021) % 1, (now * 0.000013) % 1);
+  // third person: boom the camera back along the look ray, clamped by terrain
+  if (thirdPerson) {
+    const look = player.lookDir();
+    const eye = { x: player.pos.x, y: player.eyeY, z: player.pos.z };
+    const back = { x: -look.x, y: -look.y, z: -look.z };
+    const hit = raycast(world, eye, back, 4);
+    const boom = hit ? Math.max(0.4, hit.dist - 0.3) : 4;
+    camera.position.set(eye.x + back.x * boom, eye.y + back.y * boom, eye.z + back.z * boom);
+  }
+  playerModel.group.position.set(player.pos.x, player.pos.y, player.pos.z);
+  playerModel.group.rotation.y = player.yaw + Math.PI;
+  playerModel.update(frameDt, {
+    speed: horizSpeed,
+    swimming: player.inWater,
+  });
+
+  // moving water: visible surface drift + a gentle vertex swell
+  materials.water.uniforms.uUvOffset.value.set((now * 0.0003) % 1, (now * 0.00019) % 1);
+  materials.water.uniforms.uTime.value = (now / 1000) % 4188.790204786391; // 2π/1.5 × 1000
 
   animateHeld(frameDt, bobY);
 
@@ -598,6 +662,8 @@ function tick(now) {
   interaction.update(frameDt);
   sky.update(frameDt, camera, player.eyeInWater);
   setDayLight(materials, sky.lightLevel, sky.lightTint);
+  setHeldSkinLight(sky.lightLevel, sky.lightTint);
+  playerModel.setLight?.(sky.lightLevel, sky.lightTint);
   hud.setUnderwater(player.eyeInWater);
 
   if (debugVisible) {
@@ -617,7 +683,13 @@ function tick(now) {
     hud.updateDebug([], false);
   }
 
+  renderer.info.reset();
+  renderer.clear();
   renderer.render(scene, camera);
+  if (!thirdPerson) {
+    renderer.clearDepth();
+    renderer.render(handScene, handCamera);
+  }
 }
 
 requestAnimationFrame(tick);
