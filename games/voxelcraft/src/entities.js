@@ -82,9 +82,12 @@ export class ItemDrops {
       let grounded = false;
       for (let s = 0; s < steps; s++) {
         const ny = d.y + d.vy * sdt;
-        const yCell = Math.floor(d.vy < 0 ? ny - 0.12 : ny + 0.12);
-        if (isSolid(world.getBlock(Math.floor(d.x), yCell, Math.floor(d.z)))) {
-          if (d.vy < 0) { d.y = yCell + 1.12; grounded = true; }
+        const sampleY = d.vy < 0 ? ny - 0.12 : ny + 0.12;
+        const yCell = Math.floor(sampleY);
+        const yDef = BLOCKS[world.getBlock(Math.floor(d.x), yCell, Math.floor(d.z))];
+        // partial-height blocks (slabs) only catch below their actual top
+        if (yDef.solid && sampleY < yCell + yDef.colHeight) {
+          if (d.vy < 0) { d.y = yCell + yDef.colHeight + 0.12; grounded = true; }
           d.vy = 0;
         } else {
           d.y = ny;

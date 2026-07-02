@@ -1,7 +1,7 @@
 // First-person player: pointer-lock look, AABB voxel collision, walking /
 // sprinting / sneaking / jumping / swimming / creative flight.
 
-import { isSolid, WATER, CACTUS, LADDER } from "./blocks.js";
+import { BLOCKS, isSolid, WATER, CACTUS, LADDER } from "./blocks.js";
 
 const HALF_W = 0.3;
 const PLAYER_HEIGHT = 1.8;
@@ -524,20 +524,36 @@ export class Player {
     for (let by = y0; by <= y1; by++) {
       for (let bz = z0; bz <= z1; bz++) {
         for (let bx = x0; bx <= x1; bx++) {
-          if (!isSolid(this.world.getBlock(bx, by, bz))) continue;
-          if (axis === "x") {
-            p.x = disp > 0 ? bx - HALF_W - eps : bx + 1 + HALF_W + eps;
-            this.vel.x = 0;
-            this._hitWall = true;
-          } else if (axis === "z") {
-            p.z = disp > 0 ? bz - HALF_W - eps : bz + 1 + HALF_W + eps;
-            this.vel.z = 0;
+          const bDef = BLOCKS[this.world.getBlock(bx, by, bz)];
+          if (!bDef.solid) continue;
+          // partial-height blocks (slabs) only collide up to their colHeight:
+          // feet at or above the block top means no overlap at all
+          const top = by + bDef.colHeight;
+          if (minY >= top - eps) continue;
+          if (axis === "x" || axis === "z") {
+            // auto-step onto low blocks (colHeight <= 0.5): a slab's half rise
+            // is walked, not jumped — but only from the ground, moving level
+            // or down, and only when the lifted AABB is fully clear
+            if (wasOnGround && !this.flying && bDef.colHeight <= 0.5 &&
+                this.vel.y <= 0.01 && top - p.y <= 0.5 + eps &&
+                !this._boxCollides(p.x, top + eps, p.z)) {
+              p.y = top + eps;
+              this.onGround = true;
+              return;
+            }
+            if (axis === "x") {
+              p.x = disp > 0 ? bx - HALF_W - eps : bx + 1 + HALF_W + eps;
+              this.vel.x = 0;
+            } else {
+              p.z = disp > 0 ? bz - HALF_W - eps : bz + 1 + HALF_W + eps;
+              this.vel.z = 0;
+            }
             this._hitWall = true;
           } else {
             if (disp > 0) {
               p.y = by - PLAYER_HEIGHT - eps;
             } else {
-              p.y = by + 1 + eps;
+              p.y = top + eps; // stand ON the block's real top (slab: +0.5)
               this.onGround = true;
             }
             this.vel.y = 0;
@@ -546,6 +562,20 @@ export class Player {
         }
       }
     }
+  }
+
+  // does the player AABB, moved to (px, py, pz), intersect any solid block?
+  // Uses per-block colHeight — the auto-step clearance test.
+  _boxCollides(px, py, pz) {
+    const eps = 0.001;
+    const x0 = Math.floor(px - HALF_W), x1 = Math.floor(px + HALF_W - eps);
+    const y0 = Math.floor(py), y1 = Math.floor(py + PLAYER_HEIGHT - eps);
+    const z0 = Math.floor(pz - HALF_W), z1 = Math.floor(pz + HALF_W - eps);
+    for (let by = y0; by <= y1; by++) for (let bz = z0; bz <= z1; bz++) for (let bx = x0; bx <= x1; bx++) {
+      const d = BLOCKS[this.world.getBlock(bx, by, bz)];
+      if (d.solid && py < by + d.colHeight - eps) return true;
+    }
+    return false;
   }
 
   // AABB used to block placing solid blocks inside the player

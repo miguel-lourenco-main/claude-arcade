@@ -45,6 +45,24 @@ export const DOOR_TOP = 37;
 export const DOOR_OPEN = 38;
 export const DOOR_TOP_OPEN = 39;
 export const BLAST_KEG = 40;
+// shaped builder blocks (the Upturn rose in terraces — Wanderlings copy it).
+// Slabs are one id; stairs are FOUR ids (one per facing), with the
+// north-facing one as the only user-visible/craftable/droppable id.
+export const PLANK_SLAB = 41;
+export const STONE_SLAB = 42;
+export const COBBLE_SLAB = 43;
+export const PLANK_STAIRS = 44;   // north — the canonical stair id
+export const PLANK_STAIRS_E = 45;
+export const PLANK_STAIRS_S = 46;
+export const PLANK_STAIRS_W = 47;
+export const STONE_STAIRS = 48;
+export const STONE_STAIRS_E = 49;
+export const STONE_STAIRS_S = 50;
+export const STONE_STAIRS_W = 51;
+export const COBBLE_STAIRS = 52;
+export const COBBLE_STAIRS_E = 53;
+export const COBBLE_STAIRS_S = 54;
+export const COBBLE_STAIRS_W = 55;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -68,6 +86,11 @@ const def = (name, opts) => ({
   sturdy: false,     // cross-kind that is NOT a plant: never replaced in place,
                      // never popped when the block under it breaks (ladder, door)
   hidden: false,     // internal id: kept out of the creative palette
+  shape: null,       // null (full cube/cross) | "slab" | "stairs" (see mesher.js)
+  facing: 0,         // stairs: 0 north(-z) | 1 east(+x) | 2 south(+z) | 3 west(-x)
+  facings: null,     // stairs: [northId, eastId, southId, westId] of this material
+  base: null,        // facing variants: the canonical id (pick-block routes here)
+  colHeight: 1,      // collision height within the cell (slab 0.5); solid only
   ...opts,
 });
 
@@ -297,6 +320,57 @@ BLOCKS[BLAST_KEG] = def("Blast Keg", { hardness: 0.6,
   tiles: cube({ top: TILE.KEG_TOP, side: TILE.KEG_SIDE, bottom: TILE.KEG_SIDE }),
   sound: "wood",
 });
+
+// --- shaped blocks: slabs + stairs ------------------------------------------
+// Shaped blocks are solid but NOT opaque: they never cull a neighbor's face
+// and the skylight column treats their cell as passable (light spills over
+// a slab instead of pretending it's a full roof).
+
+const defSlab = (id, name, tiles, opts) => {
+  BLOCKS[id] = def(name, {
+    tiles: cube(tiles),
+    shape: "slab",
+    opaque: false,
+    colHeight: 0.5,
+    ...opts,
+  });
+};
+
+// four ids per stair material; the north one is canonical, the rest are
+// internal placement states that drop/pick as the canonical id
+const FACING_SUFFIX = ["", " (east)", " (south)", " (west)"];
+const defStairs = (ids, name, tiles, opts) => {
+  ids.forEach((id, f) => {
+    BLOCKS[id] = def(name + FACING_SUFFIX[f], {
+      tiles: cube(tiles),
+      shape: "stairs",
+      facing: f,
+      facings: ids,
+      base: ids[0],
+      opaque: false,
+      ...opts,
+      ...(f === 0 ? {} : { hidden: true, placeable: false, drops: ids[0] }),
+    });
+  });
+};
+
+defSlab(PLANK_SLAB, "Plank Slab", TILE.PLANKS, { hardness: 1.4, sound: "wood" });
+defSlab(STONE_SLAB, "Stone Slab", TILE.STONE, { hardness: 1.9 });
+defSlab(COBBLE_SLAB, "Cobblestone Slab", TILE.COBBLE, { hardness: 2.0 });
+defStairs([PLANK_STAIRS, PLANK_STAIRS_E, PLANK_STAIRS_S, PLANK_STAIRS_W],
+  "Plank Stairs", TILE.PLANKS, { hardness: 1.4, sound: "wood" });
+defStairs([STONE_STAIRS, STONE_STAIRS_E, STONE_STAIRS_S, STONE_STAIRS_W],
+  "Stone Stairs", TILE.STONE, { hardness: 1.9 });
+defStairs([COBBLE_STAIRS, COBBLE_STAIRS_E, COBBLE_STAIRS_S, COBBLE_STAIRS_W],
+  "Cobblestone Stairs", TILE.COBBLE, { hardness: 2.0 });
+
+// yaw -> cardinal facing index (0 N(-z), 1 E(+x), 2 S(+z), 3 W(-x)).
+// Stairs place with their tall back in the look direction, so the steps
+// face the placer.
+export function yawToFacing(yaw) {
+  const a = ((-yaw % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+  return Math.round(a / (Math.PI / 2)) % 4;
+}
 
 // door-family helpers: which ids are door halves, which half is the lower,
 // and the open/closed swap for each half

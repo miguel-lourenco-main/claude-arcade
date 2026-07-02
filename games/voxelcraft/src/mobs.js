@@ -4,7 +4,7 @@
 // and a rare shoreline bruiser. One shared physics/AI core.
 
 import * as THREE from "three";
-import { GRASS, SAND, WATER, COAL_ORE, TORCH, SNUFFET_LOIN, MOSS_CLUMP, AIR, isSolid } from "./blocks.js";
+import { BLOCKS, GRASS, SAND, WATER, COAL_ORE, TORCH, SNUFFET_LOIN, MOSS_CLUMP, AIR, isSolid } from "./blocks.js";
 import { mulberry32 } from "./noise.js";
 
 const SPAWN_INTERVAL = 4;   // seconds between spawn attempts
@@ -526,7 +526,11 @@ export class Mobs {
     const y0 = Math.floor(m.y), y1 = Math.floor(m.y + hh - eps);
     const z0 = Math.floor(m.z - hw), z1 = Math.floor(m.z + hw - eps);
     for (let by = y0; by <= y1; by++) for (let bz = z0; bz <= z1; bz++) for (let bx = x0; bx <= x1; bx++) {
-      if (!isSolid(world.getBlock(bx, by, bz))) continue;
+      const bDef = BLOCKS[world.getBlock(bx, by, bz)];
+      if (!bDef.solid) continue;
+      // partial-height blocks (slabs): no overlap when feet are above the top
+      const top = by + bDef.colHeight;
+      if (m.y >= top - eps) continue;
       if (axis === "x") {
         m.x = disp > 0 ? bx - hw - eps : bx + 1 + hw + eps;
         m.vx = 0; m.hitWall = true;
@@ -535,7 +539,7 @@ export class Mobs {
         m.vz = 0; m.hitWall = true;
       } else {
         if (disp > 0) m.y = by - hh - eps;
-        else { m.y = by + 1 + eps; m.onGround = true; }
+        else { m.y = top + eps; m.onGround = true; }
         m.vy = 0;
       }
       return;

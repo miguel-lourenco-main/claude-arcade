@@ -235,6 +235,99 @@ function computeBlockLight(world, chunk) {
   return light;
 }
 
+// --- shaped blocks (slabs, stairs, later fences) ------------------------------
+// A shape is a list of axis-aligned boxes in unit-cell coordinates. Faces that
+// lie exactly on the cell boundary cull against opaque full-cube neighbors;
+// interior faces (a slab's top, a stair's riser) are never culled. Shaped
+// blocks keep AO simple: flat face shade × the cell's column skylight.
+
+// stairs: a bottom slab plus a full-height back box on the `facing` side.
+// The back box rests on the slab, so its bottom face is never visible.
+const STAIR_BACK = [
+  { x0: 0, z0: 0, x1: 1, z1: 0.5 },   // 0 north (-z)
+  { x0: 0.5, z0: 0, x1: 1, z1: 1 },   // 1 east (+x)
+  { x0: 0, z0: 0.5, x1: 1, z1: 1 },   // 2 south (+z)
+  { x0: 0, z0: 0, x1: 0.5, z1: 1 },   // 3 west (-x)
+];
+
+const SLAB_BOX = { x0: 0, y0: 0, z0: 0, x1: 1, y1: 0.5, z1: 1 };
+
+// def -> [{x0,y0,z0,x1,y1,z1,skipBottom?}], cached per block def
+const shapeBoxCache = new Map();
+export function shapeBoxes(def) {
+  let boxes = shapeBoxCache.get(def);
+  if (boxes) return boxes;
+  if (def.shape === "slab") {
+    boxes = [SLAB_BOX];
+  } else if (def.shape === "stairs") {
+    const b = STAIR_BACK[def.facing];
+    boxes = [SLAB_BOX, { ...b, y0: 0.5, y1: 1, skipBottom: true }];
+  } else {
+    boxes = [];
+  }
+  shapeBoxCache.set(def, boxes);
+  return boxes;
+}
+
+// is this box face flush with the cell boundary in the face direction?
+function boxFaceOnBoundary(box, dir) {
+  const [dx, dy, dz] = dir;
+  if (dx !== 0) return dx > 0 ? box.x1 === 1 : box.x0 === 0;
+  if (dy !== 0) return dy > 0 ? box.y1 === 1 : box.y0 === 0;
+  return dz > 0 ? box.z1 === 1 : box.z0 === 0;
+}
+
+// sub-rect of the tile matching the box extents on this face, so half-height
+// sides sample only the bottom half of the texture (no squashing)
+function boxFaceUV(tile, box, dir) {
+  const { u0, u1, v0, v1 } = tileUV(tile);
+  const u = (a, b) => [u0 + (u1 - u0) * a, u0 + (u1 - u0) * b];
+  const v = (a, b) => [v0 + (v1 - v0) * a, v0 + (v1 - v0) * b];
+  let ur, vr;
+  const [dx, dy, dz] = dir;
+  if (dy > 0) { ur = u(box.x0, box.x1); vr = v(1 - box.z1, 1 - box.z0); }
+  else if (dy < 0) { ur = u(box.x0, box.x1); vr = v(box.z0, box.z1); }
+  else if (dx > 0) { ur = u(1 - box.z1, 1 - box.z0); vr = v(box.y0, box.y1); }
+  else if (dx < 0) { ur = u(box.z0, box.z1); vr = v(box.y0, box.y1); }
+  else if (dz > 0) { ur = u(box.x0, box.x1); vr = v(box.y0, box.y1); }
+  else { ur = u(1 - box.x1, 1 - box.x0); vr = v(box.y0, box.y1); }
+  return { u0: ur[0], u1: ur[1], v0: vr[0], v1: vr[1] };
+}
+
+// corner of a face scaled to the box extents (FACES corners are 0/1 flags)
+function boxCorner(box, p) {
+  return [
+    p[0] ? box.x1 : box.x0,
+    p[1] ? box.y1 : box.y0,
+    p[2] ? box.z1 : box.z0,
+  ];
+}
+
+function addShapedBlock(bucket, def, lx, y, lz, get, wx, wz, lightAt, blockLightAt) {
+  for (const box of shapeBoxes(def)) {
+    for (const face of FACES) {
+      const [dx, dy, dz] = face.dir;
+      if (dy < 0 && box.skipBottom) continue;
+      const boundary = boxFaceOnBoundary(box, face.dir);
+      if (boundary && BLOCKS[get(wx + dx, y + dy, wz + dz)].opaque) continue;
+      // boundary faces are lit by the neighbor cell; interior faces by the
+      // block's own (light-passable) cell
+      const sx = boundary ? dx : 0, sy = boundary ? dy : 0, sz = boundary ? dz : 0;
+      const light = lightAt(lx + sx, Math.max(0, y + sy), lz + sz);
+      const torch = blockLightAt(lx + sx, y + sy, lz + sz);
+      const tile = dy > 0 ? def.tiles.top : dy < 0 ? def.tiles.bottom : def.tiles.side;
+      const corners = face.corners.map((p) => {
+        const c = boxCorner(box, p);
+        return [lx + c[0], y + c[1], lz + c[2]];
+      });
+      const b = face.shade * light;
+      const t = face.shade * torch;
+      bucket.quad(corners, tile, [b, b, b, b], [t, t, t, t], false,
+        boxFaceUV(tile, box, face.dir));
+    }
+  }
+}
+
 function faceVisible(id, def, neighborId) {
   const n = BLOCKS[neighborId];
   // water only shows faces against air and plants — any cube (glass included)
@@ -295,6 +388,12 @@ export function meshChunk(world, chunk, materials, scene) {
           addCross(buckets.cutout, def, lx, y, lz, wx, wz,
             glow ? 1 : lightAt(lx, y, lz),
             glow ? 1 : blockLightAt(lx, y, lz));
+          continue;
+        }
+
+        if (def.shape) {
+          addShapedBlock(buckets[def.bucket], def, lx, y, lz, get, wx, wz,
+            lightAt, blockLightAt);
           continue;
         }
 
@@ -392,6 +491,16 @@ export function buildBlockGeometry(blockId, blockLight = 0.25) {
   if (def.kind === "cross") {
     b.quad([[0, 0, 0.5], [1, 0, 0.5], [1, 1, 0.5], [0, 1, 0.5]],
       def.tiles.side, [1, 1, 1, 1], def.lightEmit > 0 ? [1, 1, 1, 1] : bl);
+  } else if (def.shape) {
+    for (const box of shapeBoxes(def)) {
+      for (const face of FACES) {
+        if (face.dir[1] < 0 && box.skipBottom) continue;
+        const tile = face.dir[1] > 0 ? def.tiles.top : face.dir[1] < 0 ? def.tiles.bottom : def.tiles.side;
+        const s = face.shade;
+        b.quad(face.corners.map((p) => boxCorner(box, p)), tile, [s, s, s, s], bl,
+          false, boxFaceUV(tile, box, face.dir));
+      }
+    }
   } else {
     for (const face of FACES) {
       const tile = face.dir[1] > 0 ? def.tiles.top : face.dir[1] < 0 ? def.tiles.bottom : def.tiles.side;

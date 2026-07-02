@@ -6,6 +6,7 @@
 import {
   LOG, PLANKS, SAND, COBBLE, STONE, BRICKS, SANDSTONE, COAL_ORE,
   TORCH, CHEST, WORKBENCH, KILN, MOSS_CLUMP, BED, LADDER, DOOR, BLAST_KEG,
+  PLANK_SLAB, STONE_SLAB, COBBLE_SLAB, PLANK_STAIRS, STONE_STAIRS, COBBLE_STAIRS,
 } from "./blocks.js";
 
 // in: [[blockId, count], ...]  out: [blockId, count]
@@ -22,6 +23,13 @@ export const RECIPES = [
   { in: [[COAL_ORE, 4], [SAND, 5]], out: [BLAST_KEG, 1] },
   { in: [[SAND, 4]], out: [SANDSTONE, 1] },
   { in: [[STONE, 4]], out: [BRICKS, 4] },
+  // shaped blocks: 3 blocks -> 6 slabs, 6 blocks -> 4 stairs (workbench)
+  { in: [[PLANKS, 3]], out: [PLANK_SLAB, 6] },
+  { in: [[STONE, 3]], out: [STONE_SLAB, 6] },
+  { in: [[COBBLE, 3]], out: [COBBLE_SLAB, 6] },
+  { in: [[PLANKS, 6]], out: [PLANK_STAIRS, 4] },
+  { in: [[STONE, 6]], out: [STONE_STAIRS, 4] },
+  { in: [[COBBLE, 6]], out: [COBBLE_STAIRS, 4] },
 ];
 
 export const BASIC_RECIPES = RECIPES.filter((r) => r.basic);

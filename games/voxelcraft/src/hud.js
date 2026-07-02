@@ -2,6 +2,7 @@
 // overlay, pause overlay, underwater tint.
 
 import { BLOCKS, PLACEABLE, AIR } from "./blocks.js";
+import { shapeBoxes } from "./mesher.js";
 import { ATLAS_TILES, TILE_PX } from "./textures.js";
 import { RECIPES, BASIC_RECIPES, canCraft } from "./craft.js";
 import { SMELTS, FUEL_SECONDS, SMELT_SECONDS } from "./kiln.js";
@@ -22,6 +23,12 @@ function drawBlockIcon(ctx, atlas, blockId) {
   if (def.kind === "cross") {
     const { sx, sy } = src(def.tiles.side);
     ctx.drawImage(atlas, sx, sy, TILE_PX, TILE_PX, 4, 4, ICON - 8, ICON - 8);
+    return;
+  }
+
+  // shaped blocks (slabs, stairs) draw their real silhouette
+  if (def.shape) {
+    drawShapedIcon(ctx, atlas, def, src);
     return;
   }
 
@@ -57,6 +64,54 @@ function drawBlockIcon(ctx, atlas, blockId) {
   ctx.fillStyle = "rgba(0,0,0,0.4)";
   ctx.fillRect(0, 0, w / 2, w * 0.62);
   ctx.restore();
+}
+
+// A small consistent iso projector for shaped blocks: each collision/mesh box
+// is drawn back-to-front as top + left(+z) + right(+x) faces, with texture
+// crops matching the box extents. P(x,y,z) = [(x-z)K, (x+z)K/2 + (1-y)H].
+function drawShapedIcon(ctx, atlas, def, src) {
+  const boxes = shapeBoxes(def);
+  if (boxes.length === 0) return;
+  const K = 15, H = 10;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const b of boxes) {
+    minX = Math.min(minX, (b.x0 - b.z1) * K);
+    maxX = Math.max(maxX, (b.x1 - b.z0) * K);
+    minY = Math.min(minY, (b.x0 + b.z0) * K * 0.5 + (1 - b.y1) * H);
+    maxY = Math.max(maxY, (b.x1 + b.z1) * K * 0.5 + (1 - b.y0) * H);
+  }
+  const ox = ICON / 2 - (minX + maxX) / 2;
+  const oy = ICON / 2 - (minY + maxY) / 2;
+  const P = (x, y, z) => [ox + (x - z) * K, oy + (x + z) * K * 0.5 + (1 - y) * H];
+
+  const face = (tile, origin, uAxis, vAxis, crop, shade) => {
+    const { sx, sy } = src(tile);
+    ctx.save();
+    ctx.setTransform(uAxis[0], uAxis[1], vAxis[0], vAxis[1], origin[0], origin[1]);
+    ctx.drawImage(atlas, sx + crop[0] * TILE_PX, sy + crop[1] * TILE_PX,
+      crop[2] * TILE_PX, crop[3] * TILE_PX, 0, 0, 1, 1);
+    if (shade > 0) {
+      ctx.fillStyle = `rgba(0,0,0,${shade})`;
+      ctx.fillRect(0, 0, 1, 1);
+    }
+    ctx.restore();
+  };
+
+  for (const b of boxes) {
+    const dx = b.x1 - b.x0, dy = b.y1 - b.y0, dz = b.z1 - b.z0;
+    // top face (y = y1)
+    face(def.tiles.top, P(b.x0, b.y1, b.z0),
+      [dx * K, dx * K * 0.5], [-dz * K, dz * K * 0.5],
+      [b.x0, b.z0, dx, dz], 0);
+    // left face (z = z1)
+    face(def.tiles.side, P(b.x0, b.y1, b.z1),
+      [dx * K, dx * K * 0.5], [0, dy * H],
+      [b.x0, 1 - b.y1, dx, dy], 0.22);
+    // right face (x = x1)
+    face(def.tiles.side, P(b.x1, b.y1, b.z1),
+      [dz * K, -dz * K * 0.5], [0, dy * H],
+      [b.z0, 1 - b.y1, dz, dy], 0.4);
+  }
 }
 
 const TELEPORTS = ["spawn", "forest", "plains", "desert", "snow", "mountain", "ocean"];

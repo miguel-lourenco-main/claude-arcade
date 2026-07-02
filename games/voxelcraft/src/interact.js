@@ -4,7 +4,7 @@
 import * as THREE from "three";
 import {
   AIR, BEDROCK, CHEST, WORKBENCH, KILN, BED, LADDER, DOOR, DOOR_TOP, BLAST_KEG,
-  BLOCKS, isSolid, isPlant, isDoor, isDoorLower, DOOR_TOGGLE, dropFor,
+  BLOCKS, isSolid, isPlant, isDoor, isDoorLower, DOOR_TOGGLE, dropFor, yawToFacing,
 } from "./blocks.js";
 import { HEIGHT } from "./world.js";
 import { EYE_HEIGHT, MAX_HUNGER } from "./player.js";
@@ -300,8 +300,10 @@ export class Interaction {
     // survival LMB is handled by the mining loop, not instant breaking
     if (button === 0 && this.player.mode !== "survival") this._break();
     else if (button === 1 && this.target) {
-      // any door half picks as the one user-visible door item
-      this.onPick(isDoor(this.target.id) ? DOOR : this.target.id);
+      // any door half picks as the one user-visible door item; stair facing
+      // variants pick as their canonical (north) id
+      const tid = this.target.id;
+      this.onPick(isDoor(tid) ? DOOR : (BLOCKS[tid].base ?? tid));
     }
     else if (button === 2) this._place();
   }
@@ -458,10 +460,16 @@ export class Interaction {
     // silently destroying it
     this._popReplacedPlant(existing, px, py, pz);
 
-    const affected = this.world.setBlock(px, py, pz, id);
+    // stairs bake their facing into the block id: the tall back goes in the
+    // player's look direction, so the steps face the placer
+    let placeId = id;
+    if (def.shape === "stairs" && def.facings) {
+      placeId = def.facings[yawToFacing(this.player.yaw)];
+    }
+    const affected = this.world.setBlock(px, py, pz, placeId);
     if (affected.length === 0) return;
     // include the replaced block: overwriting a torch must clear its light
-    this.onEdit(affected, { ids: [id, existing], x: px, y: py, z: pz, placed: id });
+    this.onEdit(affected, { ids: [placeId, existing], x: px, y: py, z: pz, placed: placeId });
     this.onSound("place", id);
   }
 
