@@ -13,7 +13,11 @@ import { SlotUI, invRegion, arrayRegion, paletteRegion, slotRegion } from "./slo
 const ICON = 40;
 
 // Draw a fake-iso cube (top + two sides) from atlas tiles onto a 2D canvas.
-function drawBlockIcon(ctx, atlas, blockId) {
+// Accepts a bare block id OR a stack ({id, count, dur?}) — a worn tool stack
+// gets a slim green->yellow->red durability bar along the icon's bottom.
+function drawBlockIcon(ctx, atlas, stackOrId) {
+  const stack = typeof stackOrId === "number" ? { id: stackOrId } : stackOrId;
+  const blockId = stack.id;
   ctx.clearRect(0, 0, ICON, ICON);
   ctx.imageSmoothingEnabled = false;
   const def = BLOCKS[blockId];
@@ -25,6 +29,7 @@ function drawBlockIcon(ctx, atlas, blockId) {
   if (def.kind === "cross") {
     const { sx, sy } = src(def.tiles.side);
     ctx.drawImage(atlas, sx, sy, TILE_PX, TILE_PX, 4, 4, ICON - 8, ICON - 8);
+    drawDurabilityBar(ctx, def, stack);
     return;
   }
 
@@ -116,6 +121,17 @@ function drawShapedIcon(ctx, atlas, def, src) {
   }
 }
 
+// the wear bar: only on tools, only once worn (absent dur = factory-fresh)
+function drawDurabilityBar(ctx, def, stack) {
+  if (!def.tool || !Number.isInteger(stack.dur) || stack.dur >= def.tool.maxDur) return;
+  const ratio = Math.max(0, Math.min(1, stack.dur / def.tool.maxDur));
+  ctx.fillStyle = "rgba(12,12,16,0.85)";
+  ctx.fillRect(4, ICON - 5, ICON - 8, 4);
+  // green -> yellow -> red as the uses run out
+  ctx.fillStyle = `hsl(${Math.round(ratio * 110)}, 75%, 48%)`;
+  ctx.fillRect(5, ICON - 4, Math.max(1, Math.round((ICON - 10) * ratio)), 2);
+}
+
 const TELEPORTS = ["spawn", "forest", "plains", "desert", "snow", "mountain", "ocean"];
 
 // tiny pixel-art status icons, drawn once and reused as data URLs
@@ -188,7 +204,7 @@ export class Hud {
 
     // one cursor-stack engine powers the inventory/chest/workbench windows
     this.slotUI = new SlotUI({
-      drawIcon: (ctx, id) => drawBlockIcon(ctx, this.atlas, id),
+      drawIcon: (ctx, stack) => drawBlockIcon(ctx, this.atlas, stack),
       onChange: () => {
         this.refreshHotbarRow();
         // craftability depends on slot counts (a stack on the cursor doesn't
@@ -413,6 +429,11 @@ export class Hud {
     return s ? s.id : AIR;
   }
 
+  // the full selected stack ({id, count, dur?}) — the held-tool read
+  selectedStack() {
+    return this.inventory.get(this.selected);
+  }
+
   select(i) {
     this.selected = ((i % 9) + 9) % 9;
     this.refreshHotbarRow();
@@ -488,7 +509,7 @@ export class Hud {
       slot.classList.toggle("empty", !s);
       const ctx = canvas.getContext("2d");
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      if (s) drawBlockIcon(ctx, this.atlas, s.id);
+      if (s) drawBlockIcon(ctx, this.atlas, s);
       count.textContent = s && s.count > 1 ? String(s.count) : "";
     }
   }
@@ -526,8 +547,9 @@ export class Hud {
       const ins = recipe.in
         .map(([id, n]) => `${n}× ${BLOCKS[id].name}`)
         .join(" + ");
+      const note = recipe.note ? ` — ${recipe.note}` : "";
       label.innerHTML =
-        `<b>${recipe.out[1]}× ${BLOCKS[recipe.out[0]].name}</b><small>${ins}</small>`;
+        `<b>${recipe.out[1]}× ${BLOCKS[recipe.out[0]].name}</b><small>${ins}${note}</small>`;
       row.appendChild(label);
 
       if (ok) {

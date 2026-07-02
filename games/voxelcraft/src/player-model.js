@@ -241,3 +241,73 @@ export function buildHeldFoot(seed = 0x5eed) {
   g.add(wrist);
   return g;
 }
+
+// --- held tools -----------------------------------------------------------------
+// Box-built first-person tool models: a plank haft along +y with a head
+// silhouette per kind at the top; the tier only changes the head palette
+// (plank wood, knapped stone, pale sky-iron). Registered for the day/night
+// skin tint like the foot.
+
+const HELD_HAFT = [148, 112, 62];
+const HELD_TIER_HEAD = {
+  1: [186, 152, 96],  // plank
+  2: [138, 140, 148], // stone
+  3: [200, 208, 222], // sky-iron
+};
+
+export function buildHeldTool(kind, tier, seed = 0x5eed) {
+  const haftMat = mat(paintTexture(seed ^ (0x700 + tier), HELD_HAFT));
+  const headMat = mat(paintTexture(seed ^ (0x770 + tier * 4), HELD_TIER_HEAD[tier] || HELD_TIER_HEAD[1]));
+  const g = new THREE.Group();
+
+  const haft = box(0.07, kind === "blade" ? 0.34 : 0.72, 0.07, haftMat);
+  haft.position.y = kind === "blade" ? -0.22 : 0;
+  g.add(haft);
+
+  if (kind === "pick") {
+    // the Cracker: a center boss with two arms curving down fore and aft
+    const bossY = 0.34;
+    const boss = box(0.09, 0.1, 0.16, headMat);
+    boss.position.y = bossY;
+    g.add(boss);
+    for (const side of [-1, 1]) {
+      const arm = box(0.07, 0.07, 0.26, headMat);
+      arm.position.set(0, bossY - 0.03, side * 0.19);
+      arm.rotation.x = side * 0.55; // horns dipping toward the work
+      g.add(arm);
+      const tip = box(0.055, 0.055, 0.12, headMat);
+      tip.position.set(0, bossY - 0.13, side * 0.32);
+      tip.rotation.x = side * 0.9;
+      g.add(tip);
+    }
+  } else if (kind === "axe") {
+    // the Hewer: a heavy bit hanging off one side of the haft top
+    const cheek = box(0.08, 0.2, 0.14, headMat);
+    cheek.position.set(0, 0.3, 0.09);
+    g.add(cheek);
+    const bit = box(0.06, 0.26, 0.12, headMat);
+    bit.position.set(0, 0.26, 0.21);
+    g.add(bit);
+  } else if (kind === "shovel") {
+    // the Scoop: a rounded pan capping the haft
+    const pan = box(0.14, 0.24, 0.06, headMat);
+    pan.position.set(0, 0.42, 0.02);
+    pan.rotation.x = 0.15;
+    g.add(pan);
+    const lip = box(0.1, 0.08, 0.05, headMat);
+    lip.position.set(0, 0.55, 0.04);
+    g.add(lip);
+  } else {
+    // the Shiv: cross-guard over the grip, then a long tapering sliver
+    const guard = box(0.2, 0.045, 0.1, haftMat);
+    guard.position.y = -0.04;
+    g.add(guard);
+    const flat = box(0.045, 0.5, 0.1, headMat);
+    flat.position.y = 0.24;
+    g.add(flat);
+    const point = box(0.04, 0.1, 0.06, headMat);
+    point.position.y = 0.53;
+    g.add(point);
+  }
+  return g;
+}

@@ -1,6 +1,21 @@
 // Chunked voxel world: storage, block get/set, edit overlay for persistence.
 
 import { AIR, BLOCKS } from "./blocks.js";
+import { validDur } from "./inventory.js";
+
+// container slot -> save entry: tools with wear keep a third element
+// [id, count, dur] (additive — older loaders ignore it)
+const saveSlot = (s) => (s ? (s.dur !== undefined ? [s.id, s.count, s.dur] : [s.id, s.count]) : 0);
+// save entry -> container slot, validating the optional dur
+function loadSlot(e) {
+  if (!Array.isArray(e)) return null;
+  const [id, n, dur] = e;
+  if (!Number.isInteger(id) || !BLOCKS[id] || !Number.isInteger(n) || n <= 0) return null;
+  const slot = { id, count: Math.min(64, n) };
+  const d = validDur(id, dur);
+  if (d !== undefined) slot.dur = d;
+  return slot;
+}
 
 export const CHUNK = 16;
 export const HEIGHT = 96;
@@ -61,7 +76,7 @@ export class World {
   // destroyed, and trailing empties beyond 27 are trimmed on save)
   serializeChests() {
     return [...this.chests].map(([key, slots]) => {
-      const out = slots.map((s) => (s ? [s.id, s.count] : 0));
+      const out = slots.map(saveSlot);
       while (out.length > 27 && out[out.length - 1] === 0) out.pop();
       return [key, { slots: out }];
     });
@@ -74,13 +89,8 @@ export class World {
       const payload = pair[1];
       let slots = null;
       if (payload && Array.isArray(payload.slots)) {
-        // v2 shape
-        slots = payload.slots.map((e) => {
-          if (!Array.isArray(e)) return null;
-          const [id, n] = e;
-          if (!Number.isInteger(id) || !BLOCKS[id] || !Number.isInteger(n) || n <= 0) return null;
-          return { id, count: Math.min(64, n) };
-        });
+        // v2 shape (with the additive per-slot dur for stored tools)
+        slots = payload.slots.map(loadSlot);
       } else if (Array.isArray(payload)) {
         // v1 shape: [id, count] pairs with unbounded counts — pack losslessly
         slots = [];
@@ -106,7 +116,7 @@ export class World {
   // burn: seconds of heat left, prog: smelt progress seconds}
   serializeKilns() {
     return [...this.kilns].map(([key, k]) => [key, {
-      slots: k.slots.map((s) => (s ? [s.id, s.count] : 0)),
+      slots: k.slots.map(saveSlot),
       burn: Math.max(0, k.burnLeft),
       prog: Math.max(0, k.progress),
     }]);
@@ -118,12 +128,7 @@ export class World {
       if (!Array.isArray(pair) || typeof pair[0] !== "string") continue;
       const payload = pair[1];
       if (!payload || !Array.isArray(payload.slots)) continue;
-      const slots = payload.slots.slice(0, 3).map((e) => {
-        if (!Array.isArray(e)) return null;
-        const [id, n] = e;
-        if (!Number.isInteger(id) || !BLOCKS[id] || !Number.isInteger(n) || n <= 0) return null;
-        return { id, count: Math.min(64, n) };
-      });
+      const slots = payload.slots.slice(0, 3).map(loadSlot);
       while (slots.length < 3) slots.push(null);
       const burnLeft = Number.isFinite(payload.burn) ? Math.max(0, payload.burn) : 0;
       const progress = Number.isFinite(payload.prog) ? Math.max(0, payload.prog) : 0;

@@ -8,7 +8,7 @@
 // the input is pulled out (heat doesn't wait for you).
 
 import {
-  SAND, GLASS, COBBLE, STONE, IRON_ORE, IRON_BLOCK, SNUFFET_LOIN, ROAST_LOIN,
+  SAND, GLASS, COBBLE, STONE, IRON_ORE, IRON_INGOT, SNUFFET_LOIN, ROAST_LOIN,
   MEAL_ROOT, BAKED_ROOT, SILVERFIN, SEARED_SILVERFIN, COAL_ORE, LOG, PLANKS,
 } from "./blocks.js";
 import { MAX_STACK } from "./inventory.js";
@@ -17,7 +17,9 @@ import { MAX_STACK } from "./inventory.js";
 export const SMELTS = {
   [SAND]: GLASS,
   [COBBLE]: STONE,
-  [IRON_ORE]: IRON_BLOCK,
+  // ore renders down to the Sky-Iron Ingot — the head material of the iron
+  // tool tier; four ingots fold back into an Iron Block at the workbench
+  [IRON_ORE]: IRON_INGOT,
   [SNUFFET_LOIN]: ROAST_LOIN,
   [MEAL_ROOT]: BAKED_ROOT,
   [SILVERFIN]: SEARED_SILVERFIN,

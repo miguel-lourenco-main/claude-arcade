@@ -675,10 +675,12 @@ export class Mobs {
     return best;
   }
 
-  punch(origin, dir, maxDist, fromPos) {
+  // dmg defaults to the bare-foot kick (1); a held Shiv passes its tier's
+  // damage through from interact.js
+  punch(origin, dir, maxDist, fromPos, dmg = 1) {
     const m = this.rayHit(origin, dir, maxDist);
     if (!m) return false;
-    this.strike(m, 1, fromPos);
+    this.strike(m, dmg, fromPos);
     return true;
   }
 

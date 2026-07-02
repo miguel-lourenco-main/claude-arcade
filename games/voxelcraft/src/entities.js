@@ -29,6 +29,8 @@ export class ItemDrops {
     return geo;
   }
 
+  // opts.dur: tool wear riding on the drop — handed back on pickup so a
+  // tossed half-worn Cracker comes back half-worn
   spawn(x, y, z, id, qty = 1, opts = {}) {
     if (!BLOCKS[id]) return;
     if (this.drops.length >= MAX_DROPS) {
@@ -52,6 +54,7 @@ export class ItemDrops {
     this.scene.add(mesh);
     this.drops.push({
       id, qty, mesh,
+      dur: opts.dur,
       x, y, z,
       vx: opts.vel ? opts.vel.x : (Math.random() - 0.5) * 2.2,
       vy: opts.vel ? opts.vel.y : 2.4 + Math.random() * 1.2,
@@ -112,7 +115,7 @@ export class ItemDrops {
         const px = player.pos.x - d.x, py = player.pos.y + 0.9 - d.y, pz = player.pos.z - d.z;
         const dist = Math.hypot(px, py, pz);
         if (dist < PICKUP_DIST && d.life >= d.retryAt) {
-          const accepted = onPickup(d.id, d.qty);
+          const accepted = onPickup(d.id, d.qty, d.dur);
           if (accepted >= d.qty) {
             this._remove(i);
             continue;

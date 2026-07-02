@@ -69,6 +69,20 @@ export const TILE = {
   SILVERFIN: 58,
   SEARED_SILVERFIN: 59,
   SIGN_BOARD: 60,
+  // tools: one side-view silhouette tile per kind × tier (icons + drops)
+  PICK_PLANK: 61,
+  PICK_STONE: 62,
+  PICK_IRON: 63,
+  AXE_PLANK: 64,
+  AXE_STONE: 65,
+  AXE_IRON: 66,
+  SHOVEL_PLANK: 67,
+  SHOVEL_STONE: 68,
+  SHOVEL_IRON: 69,
+  BLADE_PLANK: 70,
+  BLADE_STONE: 71,
+  BLADE_IRON: 72,
+  IRON_INGOT: 73,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -1040,6 +1054,110 @@ const painters = {
       p.px(x, y, 58 + d, 122 + d, 40 + d);
     }
   },
+};
+
+// --- tool tiles -----------------------------------------------------------------
+// Side-view tool silhouettes on transparent tiles, generated per kind × tier:
+// a plank haft running bottom-left to top-right with a tier-colored head at
+// the tip. Tiers read as material — plank wood, knapped gray stone, and the
+// pale blue-white of sky-iron (see LORE.md: the sky that fell).
+const TOOL_PALETTES = {
+  plank: { hi: [206, 170, 110], mid: [176, 142, 88], lo: [126, 98, 58] },
+  stone: { hi: [178, 180, 188], mid: [138, 140, 148], lo: [92, 94, 102] },
+  iron: { hi: [234, 240, 250], mid: [196, 204, 218], lo: [138, 146, 164] },
+};
+const HAFT_WOOD = { hi: [174, 138, 86], mid: [148, 112, 62], lo: [110, 82, 46] };
+
+function toolPainter(kind, pal) {
+  return (p) => {
+    p.clear();
+    // jittered pixel in a palette shade
+    const dot = (x, y, c, j = 7) => {
+      if (x < 0 || y < 0 || x >= TILE_PX || y >= TILE_PX) return;
+      const d = (p.rand() * 2 - 1) * j;
+      p.px(x, y, c[0] + d, c[1] + d, c[2] + d);
+    };
+    // the haft: a whittled plank rod, bottom-left toward the tip, with a
+    // shaded underside (blades swap it for a short grip below the guard)
+    const haftLen = kind === "blade" ? 3 : kind === "shovel" ? 9 : 8;
+    for (let i = 0; i < haftLen; i++) {
+      dot(2 + i, 14 - i, HAFT_WOOD.mid);
+      dot(3 + i, 14 - i, HAFT_WOOD.lo);
+    }
+    if (kind === "pick") {
+      // the Cracker: an arc perched across the tip, horns down both flanks
+      const arc = [
+        [5, 5], [5, 4], [6, 3], [7, 3], [8, 2], [9, 2], [10, 2],
+        [11, 3], [12, 3], [13, 4], [14, 5], [14, 6], [14, 7], [14, 8],
+      ];
+      for (const [x, y] of arc) dot(x, y, pal.mid);
+      for (const [x, y] of [[8, 1], [9, 1], [10, 1], [11, 2]]) dot(x, y, pal.hi);
+      for (const [x, y] of [[7, 4], [8, 3], [9, 3], [10, 3], [11, 4], [12, 4], [13, 5], [13, 6]]) {
+        dot(x, y, pal.lo);
+      }
+    } else if (kind === "axe") {
+      // the Hewer: a heavy bit atop the haft, edge sweeping down-left
+      for (const [x0, x1, y] of [[9, 12, 1], [8, 13, 2], [7, 13, 3], [7, 10, 4], [6, 8, 5]]) {
+        for (let x = x0; x <= x1; x++) dot(x, y, pal.mid);
+      }
+      for (const [x, y] of [[9, 1], [10, 1], [8, 2], [7, 3]]) dot(x, y, pal.hi);
+      for (const [x, y] of [[6, 5], [7, 5], [6, 6]]) dot(x, y, pal.hi); // the edge
+      for (const [x, y] of [[12, 2], [13, 2], [13, 3], [12, 3], [9, 4], [10, 4], [8, 5]]) {
+        dot(x, y, pal.lo);
+      }
+    } else if (kind === "shovel") {
+      // the Scoop: a rounded pan at the tip, dished toward the work
+      for (const [x0, x1, y] of [[10, 12, 2], [9, 13, 3], [9, 14, 4], [10, 14, 5], [11, 13, 6]]) {
+        for (let x = x0; x <= x1; x++) dot(x, y, pal.mid);
+      }
+      for (const [x, y] of [[10, 2], [11, 2], [9, 3], [9, 4]]) dot(x, y, pal.hi);
+      for (const [x, y] of [[13, 4], [14, 4], [13, 5], [14, 5], [12, 6], [13, 6]]) dot(x, y, pal.lo);
+    } else {
+      // the Shiv: grip, a short cross-guard, and a long whittled sliver
+      dot(1, 15, HAFT_WOOD.lo); // pommel knot
+      dot(3, 11, HAFT_WOOD.lo); dot(5, 13, HAFT_WOOD.lo); // the guard
+      dot(4, 12, HAFT_WOOD.mid);
+      for (let i = 0; i < 8; i++) {
+        dot(5 + i, 11 - i, pal.mid);       // the flat
+        dot(5 + i, 10 - i, pal.hi);        // the honed edge
+        if (i < 7) dot(6 + i, 11 - i, pal.lo); // the spine shadow
+      }
+      dot(13, 3, pal.hi); dot(13, 2, pal.hi); // the point
+    }
+  };
+}
+
+painters[TILE.PICK_PLANK] = toolPainter("pick", TOOL_PALETTES.plank);
+painters[TILE.PICK_STONE] = toolPainter("pick", TOOL_PALETTES.stone);
+painters[TILE.PICK_IRON] = toolPainter("pick", TOOL_PALETTES.iron);
+painters[TILE.AXE_PLANK] = toolPainter("axe", TOOL_PALETTES.plank);
+painters[TILE.AXE_STONE] = toolPainter("axe", TOOL_PALETTES.stone);
+painters[TILE.AXE_IRON] = toolPainter("axe", TOOL_PALETTES.iron);
+painters[TILE.SHOVEL_PLANK] = toolPainter("shovel", TOOL_PALETTES.plank);
+painters[TILE.SHOVEL_STONE] = toolPainter("shovel", TOOL_PALETTES.stone);
+painters[TILE.SHOVEL_IRON] = toolPainter("shovel", TOOL_PALETTES.iron);
+painters[TILE.BLADE_PLANK] = toolPainter("blade", TOOL_PALETTES.plank);
+painters[TILE.BLADE_STONE] = toolPainter("blade", TOOL_PALETTES.stone);
+painters[TILE.BLADE_IRON] = toolPainter("blade", TOOL_PALETTES.iron);
+
+painters[TILE.IRON_INGOT] = (p) => {
+  // the Sky-Iron Ingot: a squat cast bar, bright-topped, stamped like a
+  // field-journal specimen — the sky that fell, folded and poured
+  p.clear();
+  const pal = TOOL_PALETTES.iron;
+  const dot = (x, y, c, j = 6) => {
+    const d = (p.rand() * 2 - 1) * j;
+    p.px(x, y, c[0] + d, c[1] + d, c[2] + d);
+  };
+  for (let x = 4; x <= 11; x++) dot(x, 6, pal.hi);      // the bright top face
+  for (let y = 7; y <= 9; y++) {
+    for (let x = 3; x <= 12; x++) {
+      dot(x, y, x === 3 || x === 12 ? pal.lo : pal.mid); // body + rounded ends
+    }
+  }
+  for (let x = 4; x <= 11; x++) dot(x, 10, pal.lo);     // the shaded underside
+  // the foundry stamp: a two-pip mark, counted like everything else
+  p.px(7, 8, 96, 104, 122); p.px(9, 8, 96, 104, 122);
 };
 
 export function buildAtlas(seed = 1337) {

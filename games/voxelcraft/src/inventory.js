@@ -1,12 +1,40 @@
 // Slot-based survival inventory: 36 slots (0-8 hotbar, 9-35 main), stacks of
 // up to 64. Slots are the single source of truth — there is no separate
 // hotbar id list, and an empty slot is simply empty.
+//
+// Tools never stack: their block def carries maxStack: 1, honored here and by
+// the slot UI. A tool stack may carry a per-instance `dur` field (uses left);
+// absent dur means factory-fresh. dur travels with every copy/serialize.
 
 import { BLOCKS, AIR } from "./blocks.js";
 
 export const MAX_STACK = 64;
 export const HOTBAR_SIZE = 9;
 export const INV_SIZE = 36;
+
+// per-id stack ceiling: tools (maxStack: 1) never stack
+export function maxStackFor(id) {
+  const b = BLOCKS[id];
+  return b && b.maxStack ? b.maxStack : MAX_STACK;
+}
+
+// the validated dur for a stack of this id: a positive int on a tool, else
+// undefined (non-tools never carry dur; garbage dur is dropped, not crashed)
+export function validDur(id, dur) {
+  const b = BLOCKS[id];
+  if (!b || !b.tool) return undefined;
+  if (!Number.isInteger(dur) || dur <= 0) return undefined;
+  return Math.min(dur, b.tool.maxDur);
+}
+
+// canonical stack copy: clamps count to the per-id ceiling and carries a
+// validated dur along — every slot write funnels through this
+export function makeStack(id, count, dur) {
+  const s = { id, count: Math.min(maxStackFor(id), count) };
+  const d = validDur(id, dur);
+  if (d !== undefined) s.dur = d;
+  return s;
+}
 
 function validStack(s) {
   return s && Number.isInteger(s.id) && s.id !== AIR && !!BLOCKS[s.id] &&
@@ -21,26 +49,29 @@ export class Inventory {
   get(i) { return this.slots[i] || null; }
 
   set(i, stack) {
-    this.slots[i] = validStack(stack) ? { id: stack.id, count: Math.min(MAX_STACK, stack.count) } : null;
+    this.slots[i] = validStack(stack) ? makeStack(stack.id, stack.count, stack.dur) : null;
   }
 
   // Add n of id: merge into existing stacks first, then fill empty slots
   // (hotbar first, then main). Returns the count that did NOT fit.
-  add(id, n) {
+  // `dur` rides along for tools (a picked-up tool keeps its wear); tools
+  // never merge — their per-id ceiling of 1 leaves no room.
+  add(id, n, dur) {
     if (!BLOCKS[id] || id === AIR || n <= 0) return 0;
+    const max = maxStackFor(id);
     let left = n;
     for (let i = 0; i < INV_SIZE && left > 0; i++) {
       const s = this.slots[i];
-      if (s && s.id === id && s.count < MAX_STACK) {
-        const take = Math.min(MAX_STACK - s.count, left);
+      if (s && s.id === id && s.count < max) {
+        const take = Math.min(max - s.count, left);
         s.count += take;
         left -= take;
       }
     }
     for (let i = 0; i < INV_SIZE && left > 0; i++) {
       if (!this.slots[i]) {
-        const take = Math.min(MAX_STACK, left);
-        this.slots[i] = { id, count: take };
+        const take = Math.min(max, left);
+        this.slots[i] = makeStack(id, take, dur);
         left -= take;
       }
     }
@@ -90,7 +121,9 @@ export class Inventory {
   }
 
   serialize() {
-    return this.slots.map((s) => (s ? [s.id, s.count] : 0));
+    // additive v2 shape: tools with wear save a third element [id, count, dur]
+    return this.slots.map((s) =>
+      (s ? (s.dur !== undefined ? [s.id, s.count, s.dur] : [s.id, s.count]) : 0));
   }
 
   load(arr) {
@@ -100,7 +133,7 @@ export class Inventory {
       const e = arr[i];
       if (!Array.isArray(e)) continue;
       const stack = { id: e[0], count: e[1] };
-      if (validStack(stack)) this.slots[i] = { id: stack.id, count: Math.min(MAX_STACK, stack.count) };
+      if (validStack(stack)) this.slots[i] = makeStack(e[0], e[1], e[2]);
     }
   }
 
@@ -110,6 +143,7 @@ export class Inventory {
   // real item pool is packed losslessly regardless of gameMode: v1 always
   // saved the full survival pool even in creative, and the game itself never
   // clears the inventory on mode toggles, so the migration must not either.
+  // (Tools postdate v1 saves, so no dur handling is needed here.)
   static migrateV1(pairs, hotbarIds, gameMode) {
     const inv = new Inventory();
     const pool = new Map();

@@ -7,6 +7,7 @@
 import {
   BERRIES, IRON_ORE, COBBLE, TORCH, MEAL_ROOT, SLING_STONE, PLANKS, BOAT,
   COAL_ORE, GLASS, GRAVEL, MOSS_CLUMP, ROOT_SEED, SILVERFIN, ROAST_LOIN,
+  STONE_PICK,
 } from "./blocks.js";
 import { mulberry32 } from "./noise.js";
 
@@ -28,6 +29,8 @@ export const OFFERS = [
   { give: [[MOSS_CLUMP, 3]], get: [ROOT_SEED, 4] },
   // cold fish for a hot roast: he cooked this morning and regrets nothing
   { give: [[SILVERFIN, 2]], get: [ROAST_LOIN, 1] },
+  // coal for a spare Cracker: he knaps one fresh on the walk between villages
+  { give: [[COAL_ORE, 4]], get: [STONE_PICK, 1] },
 ];
 
 export const OFFERS_PER_DAY = 3;

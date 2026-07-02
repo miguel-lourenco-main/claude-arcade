@@ -105,6 +105,25 @@ export const SIGN = 70;      // north — the canonical sign id
 export const SIGN_E = 71;
 export const SIGN_S = 72;
 export const SIGN_W = 73;
+// tools: 4 kinds × 3 tiers, carried items that never stack (maxStack 1) and
+// never place. The Cracker cracks stone loose, the Hewer hews wood, the
+// Scoop scoops soil, the Shiv settles arguments. Tiers: plank, stone, and
+// sky-iron (smelted from the ore the old sky left behind — see IRON_INGOT).
+export const PLANK_PICK = 74;
+export const STONE_PICK = 75;
+export const IRON_PICK = 76;
+export const PLANK_AXE = 77;
+export const STONE_AXE = 78;
+export const IRON_AXE = 79;
+export const PLANK_SHOVEL = 80;
+export const STONE_SHOVEL = 81;
+export const IRON_SHOVEL = 82;
+export const PLANK_BLADE = 83;
+export const STONE_BLADE = 84;
+export const IRON_BLADE = 85;
+// the Sky-Iron Ingot: what the kiln renders iron ore down to — the sky that
+// fell, folded into a bar. The head material of the iron tool tier.
+export const IRON_INGOT = 86;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -135,6 +154,11 @@ const def = (name, opts) => ({
   base: null,        // facing variants: the canonical id (pick-block routes here)
   colHeight: 1,      // collision height within the cell (slab 0.5); solid only
   extraDrops: null,  // () => [ids] — bonus survival drops beyond drops/randomDrop
+  maxStack: 0,       // 0 = the global 64-stack; 1 = never stacks (tools)
+  tool: null,        // {kind, tier, speed, damage, maxDur} — a carried tool
+  toolKind: null,    // which tool kind mines this block fast ('pick'|'axe'|'shovel')
+  needsPick: 0,      // survival: drops NOTHING unless mined with a pick of
+                     // at least this tier (0 = drops for anyone, bare feet too)
   ...opts,
 });
 
@@ -142,23 +166,25 @@ const cube = (t) => (typeof t === "number" ? { top: t, side: t, bottom: t } : t)
 
 export const BLOCKS = [];
 BLOCKS[AIR] = def("Air", { solid: false, opaque: false, bucket: null });
-BLOCKS[GRASS] = def("Grass Block", { hardness: 0.6, drops: DIRT,
+BLOCKS[GRASS] = def("Grass Block", { hardness: 0.6, drops: DIRT, toolKind: "shovel",
   tiles: cube({ top: TILE.GRASS_TOP, side: TILE.GRASS_SIDE, bottom: TILE.DIRT }),
   sound: "dirt",
 });
-BLOCKS[DIRT] = def("Dirt", { hardness: 0.5, tiles: cube(TILE.DIRT), sound: "dirt" });
-BLOCKS[STONE] = def("Stone", { hardness: 1.9, drops: COBBLE, tiles: cube(TILE.STONE) });
-BLOCKS[COBBLE] = def("Cobblestone", { hardness: 2.0, tiles: cube(TILE.COBBLE) });
-BLOCKS[SAND] = def("Sand", { hardness: 0.5, tiles: cube(TILE.SAND), sound: "sand" });
-BLOCKS[GRAVEL] = def("Gravel", { hardness: 0.6, tiles: cube(TILE.GRAVEL), sound: "sand" });
-BLOCKS[LOG] = def("Oak Log", { hardness: 1.4,
+BLOCKS[DIRT] = def("Dirt", { hardness: 0.5, tiles: cube(TILE.DIRT), sound: "dirt", toolKind: "shovel" });
+BLOCKS[STONE] = def("Stone", { hardness: 1.9, drops: COBBLE, tiles: cube(TILE.STONE),
+  toolKind: "pick", needsPick: 1 });
+BLOCKS[COBBLE] = def("Cobblestone", { hardness: 2.0, tiles: cube(TILE.COBBLE),
+  toolKind: "pick", needsPick: 1 });
+BLOCKS[SAND] = def("Sand", { hardness: 0.5, tiles: cube(TILE.SAND), sound: "sand", toolKind: "shovel" });
+BLOCKS[GRAVEL] = def("Gravel", { hardness: 0.6, tiles: cube(TILE.GRAVEL), sound: "sand", toolKind: "shovel" });
+BLOCKS[LOG] = def("Oak Log", { hardness: 1.4, toolKind: "axe",
   tiles: cube({ top: TILE.LOG_TOP, side: TILE.LOG_SIDE, bottom: TILE.LOG_TOP }),
   sound: "wood",
 });
 BLOCKS[LEAVES] = def("Oak Leaves", { hardness: 0.3, drops: null,
   randomDrop: { id: SAPLING, chance: 0.1 },
   tiles: cube(TILE.LEAVES), sound: "plant" });
-BLOCKS[PLANKS] = def("Oak Planks", { hardness: 1.4, tiles: cube(TILE.PLANKS), sound: "wood" });
+BLOCKS[PLANKS] = def("Oak Planks", { hardness: 1.4, tiles: cube(TILE.PLANKS), sound: "wood", toolKind: "axe" });
 BLOCKS[GLASS] = def("Glass", { hardness: 0.4, drops: null,
   tiles: cube(TILE.GLASS),
   opaque: false,
@@ -175,7 +201,7 @@ BLOCKS[WATER] = def("Water", {
   sound: "plant",
 });
 BLOCKS[BEDROCK] = def("Bedrock", { hardness: Infinity, drops: null, tiles: cube(TILE.BEDROCK) });
-BLOCKS[SNOWY_GRASS] = def("Snowy Grass", { hardness: 0.6, drops: DIRT,
+BLOCKS[SNOWY_GRASS] = def("Snowy Grass", { hardness: 0.6, drops: DIRT, toolKind: "shovel",
   tiles: cube({ top: TILE.SNOW_TOP, side: TILE.SNOW_SIDE, bottom: TILE.DIRT }),
   sound: "dirt",
 });
@@ -208,15 +234,18 @@ BLOCKS[CACTUS] = def("Cactus", { hardness: 0.4,
   tiles: cube({ top: TILE.CACTUS_TOP, side: TILE.CACTUS_SIDE, bottom: TILE.CACTUS_TOP }),
   sound: "plant",
 });
-BLOCKS[BRICKS] = def("Bricks", { hardness: 2.0, tiles: cube(TILE.BRICKS) });
-BLOCKS[SANDSTONE] = def("Sandstone", { hardness: 1.2,
+BLOCKS[BRICKS] = def("Bricks", { hardness: 2.0, tiles: cube(TILE.BRICKS),
+  toolKind: "pick", needsPick: 1 });
+BLOCKS[SANDSTONE] = def("Sandstone", { hardness: 1.2, toolKind: "pick", needsPick: 1,
   tiles: cube({ top: TILE.SANDSTONE_TOP, side: TILE.SANDSTONE_SIDE, bottom: TILE.SANDSTONE_TOP }),
 });
 BLOCKS[LEAVES_COLD] = def("Spruce Leaves", { hardness: 0.3, drops: null,
   randomDrop: { id: SAPLING, chance: 0.1 },
   tiles: cube(TILE.LEAVES_COLD), sound: "plant" });
-BLOCKS[COAL_ORE] = def("Coal Ore", { hardness: 2.8, tiles: cube(TILE.COAL_ORE) });
-BLOCKS[IRON_ORE] = def("Iron Ore", { hardness: 3.2, tiles: cube(TILE.IRON_ORE) });
+BLOCKS[COAL_ORE] = def("Coal Ore", { hardness: 2.8, tiles: cube(TILE.COAL_ORE),
+  toolKind: "pick", needsPick: 1 });
+BLOCKS[IRON_ORE] = def("Iron Ore", { hardness: 3.2, tiles: cube(TILE.IRON_ORE),
+  toolKind: "pick", needsPick: 2 }); // sky-iron asks for a stone pick at least
 BLOCKS[TORCH] = def("Torch", { hardness: 0.05,
   tiles: cube(TILE.TORCH),
   kind: "cross",
@@ -226,7 +255,7 @@ BLOCKS[TORCH] = def("Torch", { hardness: 0.05,
   sound: "wood",
   lightEmit: 14,
 });
-BLOCKS[CHEST] = def("Chest", { hardness: 1.2,
+BLOCKS[CHEST] = def("Chest", { hardness: 1.2, toolKind: "axe",
   tiles: cube({ top: TILE.CHEST_TOP, side: TILE.CHEST_SIDE, bottom: TILE.CHEST_TOP }),
   sound: "wood",
 });
@@ -238,7 +267,7 @@ BLOCKS[SAPLING] = def("Oak Sapling", { hardness: 0.05,
   opaque: false,
   sound: "plant",
 });
-BLOCKS[WORKBENCH] = def("Workbench", { hardness: 1.4,
+BLOCKS[WORKBENCH] = def("Workbench", { hardness: 1.4, toolKind: "axe",
   tiles: cube({ top: TILE.WORKBENCH_TOP, side: TILE.WORKBENCH_SIDE, bottom: TILE.PLANKS }),
   sound: "wood",
 });
@@ -286,25 +315,26 @@ BLOCKS[BERRY_BUSH] = def("Bog Bramble", { hardness: 0.15, drops: BERRIES,
 
 // the Kiln: a stone-bellied smelter — right-click a placed one to feed it
 // (see kiln.js for the smelting model)
-BLOCKS[KILN] = def("Kiln", { hardness: 2.0,
+BLOCKS[KILN] = def("Kiln", { hardness: 2.0, toolKind: "pick", needsPick: 1,
   tiles: cube({ top: TILE.KILN_TOP, side: TILE.KILN_SIDE, bottom: TILE.STONE }),
 });
-BLOCKS[IRON_BLOCK] = def("Iron Block", { hardness: 3.0, tiles: cube(TILE.IRON_BLOCK) });
+BLOCKS[IRON_BLOCK] = def("Iron Block", { hardness: 3.0, tiles: cube(TILE.IRON_BLOCK),
+  toolKind: "pick", needsPick: 2 });
 
 // snuffet back-moss: a soft deco block, and the stuffing of the Moss Cot
-BLOCKS[MOSS_CLUMP] = def("Moss Clump", { hardness: 0.3,
+BLOCKS[MOSS_CLUMP] = def("Moss Clump", { hardness: 0.3, toolKind: "shovel",
   tiles: cube(TILE.MOSS_CLUMP), sound: "plant",
 });
 // the Moss Cot: right-click it at night to sleep to dawn and anchor your
 // respawn there (see the sleep routing in interact.js/main.js)
-BLOCKS[BED] = def("Moss Cot", { hardness: 0.8,
+BLOCKS[BED] = def("Moss Cot", { hardness: 0.8, toolKind: "axe",
   tiles: cube({ top: TILE.COT_TOP, side: TILE.COT_SIDE, bottom: TILE.PLANKS }),
   sound: "plant",
 });
 
 // the Rung Ladder: cross-kind and non-solid, but wall-mounted — placement
 // wants a solid horizontal neighbor, and player.js suspends gravity on it
-BLOCKS[LADDER] = def("Rung Ladder", { hardness: 0.4,
+BLOCKS[LADDER] = def("Rung Ladder", { hardness: 0.4, toolKind: "axe",
   tiles: cube(TILE.LADDER),
   kind: "cross",
   bucket: "cutout",
@@ -317,14 +347,14 @@ BLOCKS[LADDER] = def("Rung Ladder", { hardness: 0.4,
 // the Plank Door: two blocks tall. Closed halves are solid cutout cubes;
 // open halves are cross-kind sprites (the leaf folded aside). All routing
 // (paired place/break/toggle) lives in interact.js.
-BLOCKS[DOOR] = def("Plank Door", { hardness: 1.6,
+BLOCKS[DOOR] = def("Plank Door", { hardness: 1.6, toolKind: "axe",
   tiles: cube(TILE.DOOR_LOWER),
   bucket: "cutout",
   opaque: false,
   drops: null, // the paired-break handler drops the one door item
   sound: "wood",
 });
-BLOCKS[DOOR_TOP] = def("Plank Door (top)", { hardness: 1.6,
+BLOCKS[DOOR_TOP] = def("Plank Door (top)", { hardness: 1.6, toolKind: "axe",
   tiles: cube(TILE.DOOR_UPPER),
   bucket: "cutout",
   opaque: false,
@@ -333,7 +363,7 @@ BLOCKS[DOOR_TOP] = def("Plank Door (top)", { hardness: 1.6,
   placeable: false,
   hidden: true,
 });
-BLOCKS[DOOR_OPEN] = def("Plank Door (open)", { hardness: 1.6,
+BLOCKS[DOOR_OPEN] = def("Plank Door (open)", { hardness: 1.6, toolKind: "axe",
   tiles: cube(TILE.DOOR_LOWER),
   kind: "cross",
   bucket: "cutout",
@@ -345,7 +375,7 @@ BLOCKS[DOOR_OPEN] = def("Plank Door (open)", { hardness: 1.6,
   placeable: false,
   hidden: true,
 });
-BLOCKS[DOOR_TOP_OPEN] = def("Plank Door (open top)", { hardness: 1.6,
+BLOCKS[DOOR_TOP_OPEN] = def("Plank Door (open top)", { hardness: 1.6, toolKind: "axe",
   tiles: cube(TILE.DOOR_UPPER),
   kind: "cross",
   bucket: "cutout",
@@ -361,7 +391,7 @@ BLOCKS[DOOR_TOP_OPEN] = def("Plank Door (open top)", { hardness: 1.6,
 // the Blast Keg: a squat rope-bound powder barrel — coal-dust and sand-crust
 // packed tight. Right-click a placed one to prime it; explosives.js handles
 // the rest of its short, loud life. Danger is real but polite: it ticks.
-BLOCKS[BLAST_KEG] = def("Blast Keg", { hardness: 0.6,
+BLOCKS[BLAST_KEG] = def("Blast Keg", { hardness: 0.6, toolKind: "axe",
   tiles: cube({ top: TILE.KEG_TOP, side: TILE.KEG_SIDE, bottom: TILE.KEG_SIDE }),
   sound: "wood",
 });
@@ -399,35 +429,35 @@ const defStairs = (ids, name, tiles, opts) => {
   });
 };
 
-defSlab(PLANK_SLAB, "Plank Slab", TILE.PLANKS, { hardness: 1.4, sound: "wood" });
-defSlab(STONE_SLAB, "Stone Slab", TILE.STONE, { hardness: 1.9 });
-defSlab(COBBLE_SLAB, "Cobblestone Slab", TILE.COBBLE, { hardness: 2.0 });
+defSlab(PLANK_SLAB, "Plank Slab", TILE.PLANKS, { hardness: 1.4, sound: "wood", toolKind: "axe" });
+defSlab(STONE_SLAB, "Stone Slab", TILE.STONE, { hardness: 1.9, toolKind: "pick", needsPick: 1 });
+defSlab(COBBLE_SLAB, "Cobblestone Slab", TILE.COBBLE, { hardness: 2.0, toolKind: "pick", needsPick: 1 });
 defStairs([PLANK_STAIRS, PLANK_STAIRS_E, PLANK_STAIRS_S, PLANK_STAIRS_W],
-  "Plank Stairs", TILE.PLANKS, { hardness: 1.4, sound: "wood" });
+  "Plank Stairs", TILE.PLANKS, { hardness: 1.4, sound: "wood", toolKind: "axe" });
 defStairs([STONE_STAIRS, STONE_STAIRS_E, STONE_STAIRS_S, STONE_STAIRS_W],
-  "Stone Stairs", TILE.STONE, { hardness: 1.9 });
+  "Stone Stairs", TILE.STONE, { hardness: 1.9, toolKind: "pick", needsPick: 1 });
 defStairs([COBBLE_STAIRS, COBBLE_STAIRS_E, COBBLE_STAIRS_S, COBBLE_STAIRS_W],
-  "Cobblestone Stairs", TILE.COBBLE, { hardness: 2.0 });
+  "Cobblestone Stairs", TILE.COBBLE, { hardness: 2.0, toolKind: "pick", needsPick: 1 });
 
 // --- wattle fence + gate ------------------------------------------------------
 // Both are shaped blocks whose mesh depends on their neighbors (the mesher
 // grows arms toward adjacent fence/gate/solid-cube cells). colHeight 1.5 makes
 // them un-jumpable by the player (1.25-block jump) and un-hoppable by mobs.
-BLOCKS[FENCE] = def("Wattle Fence", { hardness: 1.2,
+BLOCKS[FENCE] = def("Wattle Fence", { hardness: 1.2, toolKind: "axe",
   tiles: cube(TILE.WATTLE),
   shape: "fence",
   opaque: false,
   colHeight: 1.5,
   sound: "wood",
 });
-BLOCKS[GATE] = def("Wattle Gate", { hardness: 1.2,
+BLOCKS[GATE] = def("Wattle Gate", { hardness: 1.2, toolKind: "axe",
   tiles: cube(TILE.WATTLE),
   shape: "gate",
   opaque: false,
   colHeight: 1.5,
   sound: "wood",
 });
-BLOCKS[GATE_OPEN] = def("Wattle Gate (open)", { hardness: 1.2,
+BLOCKS[GATE_OPEN] = def("Wattle Gate (open)", { hardness: 1.2, toolKind: "axe",
   tiles: cube(TILE.WATTLE),
   shape: "gate",
   open: true,
@@ -616,6 +646,64 @@ export const DOOR_TOGGLE = {
   [DOOR]: DOOR_OPEN, [DOOR_OPEN]: DOOR,
   [DOOR_TOP]: DOOR_TOP_OPEN, [DOOR_TOP_OPEN]: DOOR_TOP,
 };
+
+// --- tools: 4 kinds × 3 tiers -------------------------------------------------
+// A tool is a carried item that never stacks and never places. `tool.kind`
+// matched against a block's `toolKind` divides its mining time by
+// `tool.speed`; `tool.tier` gates stone-family drops (needsPick); blades
+// carry `damage` instead of digging talent. Durability lives per-instance on
+// the STACK ({id, count: 1, dur}) — absent dur means factory-fresh.
+//
+// tier 1 plank: 2× speed, 64 uses; tier 2 stone: 4×, 128; tier 3 sky-iron:
+// 6×, 256 — the field-journal stamp counts (×64) go up the tiers.
+const TOOL_TIERS = [
+  { adj: "Plank", tier: 1, speed: 2, damage: 3, maxDur: 64 },
+  { adj: "Stone", tier: 2, speed: 4, damage: 4, maxDur: 128 },
+  { adj: "Sky-Iron", tier: 3, speed: 6, damage: 5, maxDur: 256 },
+];
+const defTool = (id, kindName, kind, t, tile) => {
+  BLOCKS[id] = def(`${t.adj} ${kindName}`, {
+    tiles: cube(tile),
+    kind: "cross",
+    bucket: "cutout",
+    solid: false,
+    opaque: false,
+    hardness: 0.05,
+    placeable: false,
+    sound: kind === "blade" ? "wood" : "stone",
+    maxStack: 1,
+    tool: { kind, tier: t.tier, speed: t.speed, damage: t.damage, maxDur: t.maxDur },
+  });
+};
+// the Cracker: kicks stone loose along the grain (the pick)
+defTool(PLANK_PICK, "Cracker", "pick", TOOL_TIERS[0], TILE.PICK_PLANK);
+defTool(STONE_PICK, "Cracker", "pick", TOOL_TIERS[1], TILE.PICK_STONE);
+defTool(IRON_PICK, "Cracker", "pick", TOOL_TIERS[2], TILE.PICK_IRON);
+// the Hewer: bites through logs and plankwork (the axe)
+defTool(PLANK_AXE, "Hewer", "axe", TOOL_TIERS[0], TILE.AXE_PLANK);
+defTool(STONE_AXE, "Hewer", "axe", TOOL_TIERS[1], TILE.AXE_STONE);
+defTool(IRON_AXE, "Hewer", "axe", TOOL_TIERS[2], TILE.AXE_IRON);
+// the Scoop: soil, sand, and gravel move aside politely (the shovel)
+defTool(PLANK_SHOVEL, "Scoop", "shovel", TOOL_TIERS[0], TILE.SHOVEL_PLANK);
+defTool(STONE_SHOVEL, "Scoop", "shovel", TOOL_TIERS[1], TILE.SHOVEL_STONE);
+defTool(IRON_SHOVEL, "Scoop", "shovel", TOOL_TIERS[2], TILE.SHOVEL_IRON);
+// the Shiv: a whittled fighting sliver — danger, politely answered (the sword)
+defTool(PLANK_BLADE, "Shiv", "blade", TOOL_TIERS[0], TILE.BLADE_PLANK);
+defTool(STONE_BLADE, "Shiv", "blade", TOOL_TIERS[1], TILE.BLADE_STONE);
+defTool(IRON_BLADE, "Shiv", "blade", TOOL_TIERS[2], TILE.BLADE_IRON);
+
+// the Sky-Iron Ingot: a carried bar, never placed (the kiln makes it from
+// iron ore; four fold back into an Iron Block at the workbench)
+BLOCKS[IRON_INGOT] = def("Sky-Iron Ingot", {
+  tiles: cube(TILE.IRON_INGOT),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  hardness: 0.05,
+  placeable: false,
+  sound: "stone",
+});
 
 // a cross block that pops off / is replaced in place when built over (plants;
 // NOT ladders or open door halves)

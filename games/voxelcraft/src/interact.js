@@ -97,6 +97,7 @@ export class Interaction {
     this.onChestBreak = opts.onChestBreak; // (x, y, z) => spill contents
     this.onKilnBreak = opts.onKilnBreak;   // (x, y, z) => spill kiln slots
     this.onEat = opts.onEat;               // (kind) => chew/swallow sfx
+    this.onToolUse = opts.onToolUse;       // (use: 'mine'|'hit') => tool wear
     this.onDoor = opts.onDoor;             // (opened) => hinge-creak sfx
     this.onThrow = opts.onThrow;           // () => launch a sling stone
     this.canThrowStone = opts.canThrow;    // () => bool (projectile cap)
@@ -215,6 +216,14 @@ export class Interaction {
     this.particles.update(dt);
   }
 
+  // the tool def on the selected hotbar stack, or null (bare feet, blocks,
+  // food, and every other non-tool item mine at the bare-hand rate)
+  _heldTool() {
+    const s = this.hotbar.selectedStack ? this.hotbar.selectedStack() : null;
+    const def = s && BLOCKS[s.id];
+    return def && def.tool ? def.tool : null;
+  }
+
   // right-click routes to the targeted block (chest/workbench/kiln/cot/keg/
   // door/gate) no matter what's in hand — unless the player sneaks to
   // override. Shared by the eating and throwing owners of the button.
@@ -291,7 +300,12 @@ export class Interaction {
       this._hitSoundTimer = 0;
     }
     const hardness = BLOCKS[t.id].hardness;
-    this._mineProgress += dt;
+    // the right tool for the block multiplies dig speed by its tier rate
+    // (plank 2x, stone 4x, iron 6x); wrong or no tool digs at the bare-hand
+    // rate — hardness itself is unchanged, so pre-tool progression holds
+    const tool = this._heldTool();
+    const rate = tool && tool.kind === BLOCKS[t.id].toolKind ? tool.speed : 1;
+    this._mineProgress += dt * rate;
 
     this._hitSoundTimer -= dt;
     if (this._hitSoundTimer <= 0) {
@@ -341,10 +355,18 @@ export class Interaction {
     this.onSound("break", t.id);
     this.particles.burst(t.x, t.y, t.z, this.avgColor[BLOCKS[t.id].tiles.side] || [0.5, 0.5, 0.5]);
 
-    this._spawnBlockDrops(t.id, t.x + 0.5, t.y + 0.4, t.z + 0.5);
+    // pick gating: stone-family blocks and ores hand over NOTHING unless
+    // broken with a pick of sufficient tier (iron ore wants stone-tier+).
+    // The block still breaks — the Upturn just keeps the pieces.
+    const tool = this._heldTool();
+    const need = BLOCKS[t.id].needsPick;
+    const gated = need > 0 && !(tool && tool.kind === "pick" && tool.tier >= need);
+    if (!gated) this._spawnBlockDrops(t.id, t.x + 0.5, t.y + 0.4, t.z + 0.5);
     if (popped !== null) {
       this._spawnBlockDrops(popped, t.x + 0.5, t.y + 1.3, t.z + 0.5);
     }
+    // every broken block costs the held tool one use (main.js owns the wear)
+    if (tool && this.onToolUse) this.onToolUse("mine");
   }
 
   _act(button) {
@@ -358,11 +380,22 @@ export class Interaction {
       const reach = this.player.mode === "survival" ? REACH_SURVIVAL : REACH_CREATIVE;
       const block = raycast(this.world, eye, dir, reach);
       const lim = block ? block.dist : reach;
+      // a shiv in hand raises the kick from 1 to its tier's damage; other
+      // tools swing like a bare foot. Any landed tool hit costs 1 use.
+      const tool = this._heldTool();
+      const dmg = tool && tool.kind === "blade" ? tool.damage : 1;
       if (this.boats) {
         const b = this.boats.rayHit(eye, dir, lim);
-        if (b) { this.boats.punch(b, this.player); return; } // two kicks break it
+        if (b) { // two kicks break it
+          this.boats.punch(b, this.player);
+          if (tool && this.onToolUse) this.onToolUse("hit");
+          return;
+        }
       }
-      if (this.mobs && this.mobs.punch(eye, dir, lim, this.player.pos)) return;
+      if (this.mobs && this.mobs.punch(eye, dir, lim, this.player.pos, dmg)) {
+        if (tool && this.onToolUse) this.onToolUse("hit");
+        return;
+      }
     }
     // survival LMB is handled by the mining loop, not instant breaking
     if (button === 0 && this.player.mode !== "survival") this._break();
@@ -425,6 +458,9 @@ export class Interaction {
       if (popped !== null) {
         this._spawnBlockDrops(popped, t.x + 0.5, lowerY + 2.3, t.z + 0.5);
       }
+      // a door is a broken block like any other: one use off the held tool
+      const tool = this._heldTool();
+      if (tool && this.onToolUse) this.onToolUse("mine");
     }
   }
 

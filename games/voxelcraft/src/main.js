@@ -16,7 +16,7 @@ import { SignBoards } from "./signs.js";
 import { craft } from "./craft.js";
 import { dailyOffers, executeTrade } from "./trade.js";
 import { makeKiln, tickKilns } from "./kiln.js";
-import { PlayerModel, buildHeldFoot, setHeldSkinLight } from "./player-model.js";
+import { PlayerModel, buildHeldFoot, buildHeldTool, setHeldSkinLight } from "./player-model.js";
 import { PlayerViewer } from "./player-viewer.js";
 import {
   SAPLING, LOG, LEAVES, LEAVES_COLD, BED, WATER as WATER_ID, dropFor,
@@ -127,15 +127,18 @@ if (save) {
     // additive field: pending overflow stacks from an earlier session
     if (Array.isArray(save.overflowStacks)) {
       for (const e of save.overflowStacks) {
-        if (validSaveStack(e)) pendingOverflow.push({ id: e[0], count: e[1] });
+        // e[2]: additive tool wear (validated on the way into a slot)
+        if (validSaveStack(e)) pendingOverflow.push({ id: e[0], count: e[1], dur: e[2] });
       }
     }
     // additive field: the stack that was held on the drag cursor when the
     // save was written — return it to the satchel, or queue it if full
     if (validSaveStack(save.cursor)) {
       const count = Math.min(64, save.cursor[1]);
-      const left = inventory.add(save.cursor[0], count);
-      if (left > 0) pendingOverflow.push({ id: save.cursor[0], count: left });
+      const left = inventory.add(save.cursor[0], count, save.cursor[2]);
+      if (left > 0) {
+        pendingOverflow.push({ id: save.cursor[0], count: left, dur: save.cursor[2] });
+      }
     }
   } else {
     // v1 save: pool counts + a 9-id hotbar -> 64-stacks in slots, layout kept
@@ -154,7 +157,7 @@ function drainOverflow() {
   if (pendingOverflow.length === 0) return;
   let changed = false;
   pendingOverflow = pendingOverflow.filter((stack) => {
-    const left = inventory.add(stack.id, stack.count);
+    const left = inventory.add(stack.id, stack.count, stack.dur);
     if (left !== stack.count) changed = true;
     stack.count = left;
     return left > 0;
@@ -435,7 +438,7 @@ function spillStack(stack) {
   drops.spawn(
     player.pos.x + dir.x * 0.6, player.eyeY - 0.2, player.pos.z + dir.z * 0.6,
     stack.id, stack.count,
-    { vel: { x: dir.x * 4, y: 2, z: dir.z * 4 }, pickupDelay: 1.2 });
+    { vel: { x: dir.x * 4, y: 2, z: dir.z * 4 }, pickupDelay: 1.2, dur: stack.dur });
 }
 
 player.onDamage = () => { hud.flashDamage(); sfx.hurt(); };
@@ -527,6 +530,27 @@ const interaction = new Interaction(world, player, scene, hud, {
     return ok;
   },
   onSpawnDrop: (x, y, z, id) => drops.spawn(x, y, z, id),
+  // one use off the held tool (a broken block, a landed hit). At 0 the tool
+  // shatters: crack sound, a chip burst at the hands, and the slot empties.
+  onToolUse: () => {
+    if (player.mode !== "survival") return;
+    const s = inventory.get(hud.selected);
+    const def = s && BLOCKS[s.id];
+    if (!def || !def.tool) return;
+    const left = (Number.isInteger(s.dur) ? s.dur : def.tool.maxDur) - 1;
+    if (left <= 0) {
+      inventory.set(hud.selected, null);
+      sfx.stoneCrack();
+      const dir = player.lookDir();
+      interaction.particles.burst(
+        player.pos.x + dir.x * 0.8 - 0.5, player.eyeY - 0.9, player.pos.z + dir.z * 0.8 - 0.5,
+        atlas.avgColor[def.tiles.side] || [0.6, 0.6, 0.6], 18);
+      hud.announce(`The ${def.name} gives out.`, 2200);
+    } else {
+      s.dur = left;
+    }
+    hud.refreshHotbarRow();
+  },
   onOpenChest: (x, y, z) => {
     const key = `${x},${y},${z}`;
     let store = world.chests.get(key);
@@ -576,7 +600,7 @@ const interaction = new Interaction(world, player, scene, hud, {
     const kiln = world.kilns.get(key);
     if (kiln) {
       for (const s of kiln.slots) {
-        if (s) drops.spawn(x + 0.5, y + 0.6, z + 0.5, s.id, s.count);
+        if (s) drops.spawn(x + 0.5, y + 0.6, z + 0.5, s.id, s.count, { dur: s.dur });
       }
       world.kilns.delete(key);
     }
@@ -587,7 +611,7 @@ const interaction = new Interaction(world, player, scene, hud, {
     const store = world.chests.get(key);
     if (store) {
       for (const s of store) {
-        if (s) drops.spawn(x + 0.5, y + 0.6, z + 0.5, s.id, s.count);
+        if (s) drops.spawn(x + 0.5, y + 0.6, z + 0.5, s.id, s.count, { dur: s.dur });
       }
       world.chests.delete(key);
     }
@@ -666,7 +690,8 @@ const stopAutosave = startAutosave(() => writeSave(world, player, sky, hud, inve
     const stage = Math.max(0, CROP_STAGES.indexOf(world.getBlock(x, y, z)));
     return [x, y, z, stage, Math.max(1, due - growthSeconds)];
   }),
-  overflowStacks: pendingOverflow.map((s) => [s.id, s.count]),
+  overflowStacks: pendingOverflow.map((s) =>
+    (s.dur !== undefined ? [s.id, s.count, s.dur] : [s.id, s.count])),
   boats: boats.serialize(), // additive: deployed skiffs [[x,y,z,yaw]...]
   weather: [
     sky.weatherPhase,
@@ -712,6 +737,10 @@ function toggleThirdPerson() {
 let heldKey = null;
 let swingT = 1; // 0..1 swing animation progress (1 = at rest)
 
+// box-built held tool models, one per tool id (12 at most), built on demand
+const heldToolCache = new Map();
+let heldToolGroup = null;
+
 function refreshHeldMesh() {
   // slots are the truth: empty selected slot = bare foot, in both modes
   const st = inventory.get(hud.selected);
@@ -719,9 +748,26 @@ function refreshHeldMesh() {
   if (key === heldKey) return;
   heldKey = key;
   const empty = key === "foot";
+  const toolDef = empty ? null : BLOCKS[st.id].tool;
+  if (heldToolGroup) { heldGroup.remove(heldToolGroup); heldToolGroup = null; }
   heldFoot.visible = empty;
-  heldBlock.visible = !empty;
-  if (!empty) {
+  heldBlock.visible = !empty && !toolDef;
+  if (toolDef) {
+    // a tool in hand: its haft-and-head box model instead of the flat sprite
+    let g = heldToolCache.get(st.id);
+    if (!g) {
+      g = buildHeldTool(toolDef.kind, toolDef.tier, 1337);
+      g.scale.setScalar(0.85);
+      // haft raked up-left with the head high, arms angled across the view
+      g.rotation.order = "XZY";
+      g.rotation.set(0.35, 1.2, 0.85);
+      g.position.set(-0.02, 0.02, 0);
+      g.traverse((o) => { o.frustumCulled = false; });
+      heldToolCache.set(st.id, g);
+    }
+    heldToolGroup = g;
+    heldGroup.add(g);
+  } else if (!empty) {
     if (heldBlock.geometry) heldBlock.geometry.dispose();
     const geo = buildBlockGeometry(st.id);
     geo.translate(-0.5, -0.5, -0.5); // rotate around the block center
@@ -949,8 +995,8 @@ function tick(now) {
       player.update(FIXED_DT);
       accumulator -= FIXED_DT;
     }
-    drops.update(frameDt, world, player, (id, qty) => {
-      const leftover = inventory.add(id, qty);
+    drops.update(frameDt, world, player, (id, qty, dur) => {
+      const leftover = inventory.add(id, qty, dur);
       const accepted = qty - leftover;
       if (accepted > 0) {
         sfx.pickup();

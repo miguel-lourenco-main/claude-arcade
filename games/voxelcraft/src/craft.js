@@ -1,16 +1,19 @@
-// Survival crafting: flat recipe list (no crafting-table grid — no tools or
-// intermediate items exist, so shapes would add ceremony without depth).
-// Heat conversions (sand -> glass, cobblestone -> stone, ores, cooking) are
-// NOT recipes — they belong to the Kiln (see kiln.js).
+// Survival crafting: flat recipe list (no crafting-table grid — shapes would
+// add ceremony without depth). Heat conversions (sand -> glass, cobblestone
+// -> stone, ores, cooking) are NOT recipes — they belong to the Kiln
+// (see kiln.js).
 
 import {
   LOG, PLANKS, SAND, COBBLE, STONE, BRICKS, SANDSTONE, COAL_ORE,
   TORCH, CHEST, WORKBENCH, KILN, MOSS_CLUMP, BED, LADDER, DOOR, BLAST_KEG,
   PLANK_SLAB, STONE_SLAB, COBBLE_SLAB, PLANK_STAIRS, STONE_STAIRS, COBBLE_STAIRS,
   FENCE, GATE, SLING_STONE, BOAT, FISHING_POLE, SIGN,
+  PLANK_PICK, STONE_PICK, IRON_PICK, PLANK_AXE, STONE_AXE, IRON_AXE,
+  PLANK_SHOVEL, STONE_SHOVEL, IRON_SHOVEL, PLANK_BLADE, STONE_BLADE, IRON_BLADE,
+  IRON_INGOT, IRON_BLOCK,
 } from "./blocks.js";
 
-// in: [[blockId, count], ...]  out: [blockId, count]
+// in: [[blockId, count], ...]  out: [blockId, count]  note: extra recipe copy
 // basic recipes ("field recipes") craft anywhere; the rest need a workbench.
 export const RECIPES = [
   { in: [[LOG, 1]], out: [PLANKS, 4], basic: true },
@@ -44,6 +47,25 @@ export const RECIPES = [
   // wattle-work: woven field fencing and its swinging gate (workbench)
   { in: [[PLANKS, 4]], out: [FENCE, 3] },
   { in: [[PLANKS, 4]], out: [GATE, 1] },
+  // --- tools (workbench). No stick item exists in the Upturn: every tool is
+  // hafted on two PLANKS, with the head material on top of that — picks and
+  // hewers take 3 head pieces, scoops 1, shivs 2. Iron-tier heads are
+  // Sky-Iron Ingots (the kiln renders them from iron ore).
+  { in: [[PLANKS, 5]], out: [PLANK_PICK, 1], note: "3 head the arc, 2 haft it" },
+  { in: [[PLANKS, 5]], out: [PLANK_AXE, 1], note: "3 head the bit, 2 haft it" },
+  { in: [[PLANKS, 3]], out: [PLANK_SHOVEL, 1], note: "1 heads the pan, 2 haft it" },
+  { in: [[PLANKS, 4]], out: [PLANK_BLADE, 1], note: "2 whittle the sliver, 2 haft it" },
+  { in: [[COBBLE, 3], [PLANKS, 2]], out: [STONE_PICK, 1], note: "the planks are the haft" },
+  { in: [[COBBLE, 3], [PLANKS, 2]], out: [STONE_AXE, 1], note: "the planks are the haft" },
+  { in: [[COBBLE, 1], [PLANKS, 2]], out: [STONE_SHOVEL, 1], note: "the planks are the haft" },
+  { in: [[COBBLE, 2], [PLANKS, 2]], out: [STONE_BLADE, 1], note: "the planks are the haft" },
+  { in: [[IRON_INGOT, 3], [PLANKS, 2]], out: [IRON_PICK, 1], note: "the planks are the haft" },
+  { in: [[IRON_INGOT, 3], [PLANKS, 2]], out: [IRON_AXE, 1], note: "the planks are the haft" },
+  { in: [[IRON_INGOT, 1], [PLANKS, 2]], out: [IRON_SHOVEL, 1], note: "the planks are the haft" },
+  { in: [[IRON_INGOT, 2], [PLANKS, 2]], out: [IRON_BLADE, 1], note: "the planks are the haft" },
+  // sky-iron, folded and unfolded: four ingots to the block and back
+  { in: [[IRON_INGOT, 4]], out: [IRON_BLOCK, 1] },
+  { in: [[IRON_BLOCK, 1]], out: [IRON_INGOT, 4] },
 ];
 
 export const BASIC_RECIPES = RECIPES.filter((r) => r.basic);

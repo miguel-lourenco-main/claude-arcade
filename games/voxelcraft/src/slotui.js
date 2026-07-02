@@ -3,8 +3,15 @@
 // the engine renders 9-column grids, tracks the stack held on the cursor,
 // and implements classic container-click semantics (pick/place/merge/swap,
 // right-click half/one, shift-click quick-move).
+//
+// Stacks may carry a per-instance `dur` field (tool wear) — every copy made
+// here goes through makeStack/copyStack so dur is never dropped. Tools have
+// a per-id stack ceiling of 1 (maxStackFor), so two tools never merge: a
+// left-click of one tool onto another of the same id swaps them instead.
 
-import { MAX_STACK } from "./inventory.js";
+import { maxStackFor, makeStack } from "./inventory.js";
+
+const copyStack = (s, count = s.count) => makeStack(s.id, count, s.dur);
 
 // region: { name, size, get(i), set(i, stack|null), palette?, takeOnly? }
 export function invRegion(name, inventory, offset, length) {
@@ -21,7 +28,7 @@ export function arrayRegion(name, slots) {
     name,
     size: slots.length,
     get: (i) => slots[i] || null,
-    set: (i, s) => { slots[i] = s ? { id: s.id, count: Math.min(MAX_STACK, s.count) } : null; },
+    set: (i, s) => { slots[i] = s ? copyStack(s) : null; },
   };
 }
 
@@ -33,27 +40,28 @@ export function slotRegion(name, slots, index, opts = {}) {
     size: 1,
     ...opts,
     get: () => slots[index] || null,
-    set: (_, s) => { slots[index] = s ? { id: s.id, count: Math.min(MAX_STACK, s.count) } : null; },
+    set: (_, s) => { slots[index] = s ? copyStack(s) : null; },
   };
 }
 
-// creative palette: infinite source; placing a cursor stack here deletes it
+// creative palette: infinite source; placing a cursor stack here deletes it.
+// Tools conjure as singles (their ceiling), everything else as full stacks.
 export function paletteRegion(name, ids) {
   return {
     name,
     size: ids.length,
     palette: true,
-    get: (i) => ({ id: ids[i], count: MAX_STACK }),
+    get: (i) => ({ id: ids[i], count: maxStackFor(ids[i]) }),
     set: () => {},
   };
 }
 
 export class SlotUI {
   constructor({ drawIcon, onChange, onSpill }) {
-    this.drawIcon = drawIcon;   // (canvasCtx, blockId) => void
+    this.drawIcon = drawIcon;   // (canvasCtx, stack) => void
     this.onChange = onChange;   // () => refresh hotbar/hud after any mutation
     this.onSpill = onSpill;     // (stack) => drop it at the player
-    this.cursor = null;         // null | {id, count}
+    this.cursor = null;         // null | {id, count, dur?}
 
     this.el = document.getElementById("cursor-stack");
     this.elCanvas = this.el.querySelector("canvas");
@@ -134,7 +142,7 @@ export class SlotUI {
     const s = view.region.get(i);
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, 40, 40);
-    if (s) this.drawIcon(ctx, s.id);
+    if (s) this.drawIcon(ctx, s);
     n.textContent = s && !view.region.palette && s.count > 1 ? String(s.count) : "";
   }
 
@@ -146,7 +154,7 @@ export class SlotUI {
       }
       const ctx = this.elCanvas.getContext("2d");
       ctx.clearRect(0, 0, 40, 40);
-      this.drawIcon(ctx, this.cursor.id);
+      this.drawIcon(ctx, this.cursor);
       this.elCount.textContent = this.cursor.count > 1 ? String(this.cursor.count) : "";
       this.el.classList.remove("hidden");
     } else {
@@ -175,20 +183,21 @@ export class SlotUI {
   _clickTakeOnly(region, i, button) {
     const s = region.get(i);
     if (!s) return;
+    const max = maxStackFor(s.id);
     if (!this.cursor) {
       const take = button === 2 ? Math.ceil(s.count / 2) : s.count;
-      this.cursor = { id: s.id, count: take };
-      region.set(i, s.count - take > 0 ? { id: s.id, count: s.count - take } : null);
-    } else if (this.cursor.id === s.id && this.cursor.count < MAX_STACK) {
-      const move = Math.min(MAX_STACK - this.cursor.count, s.count);
+      this.cursor = copyStack(s, take);
+      region.set(i, s.count - take > 0 ? copyStack(s, s.count - take) : null);
+    } else if (this.cursor.id === s.id && this.cursor.count < max) {
+      const move = Math.min(max - this.cursor.count, s.count);
       this.cursor.count += move;
-      region.set(i, s.count - move > 0 ? { id: s.id, count: s.count - move } : null);
+      region.set(i, s.count - move > 0 ? copyStack(s, s.count - move) : null);
     }
   }
 
   _clickPalette(region, i) {
     // empty cursor: take a full stack; held cursor: the void takes it
-    this.cursor = this.cursor ? null : { id: region.get(i).id, count: MAX_STACK };
+    this.cursor = this.cursor ? null : copyStack(region.get(i));
   }
 
   _leftClick(region, i) {
@@ -200,13 +209,14 @@ export class SlotUI {
     } else if (!s) {
       region.set(i, this.cursor);
       this.cursor = null;
-    } else if (s.id === this.cursor.id) {
-      const room = MAX_STACK - s.count;
+    } else if (s.id === this.cursor.id && maxStackFor(s.id) > 1) {
+      const room = maxStackFor(s.id) - s.count;
       const move = Math.min(room, this.cursor.count);
-      region.set(i, { id: s.id, count: s.count + move });
+      region.set(i, copyStack(s, s.count + move));
       this.cursor.count -= move;
       if (this.cursor.count === 0) this.cursor = null;
     } else {
+      // different ids — or two same-id TOOLS, which never merge: swap
       region.set(i, this.cursor);
       this.cursor = { ...s };
     }
@@ -214,17 +224,18 @@ export class SlotUI {
 
   _rightClick(region, i) {
     const s = region.get(i);
+    const max = s ? maxStackFor(s.id) : 0;
     if (!this.cursor) {
       if (!s) return;
       const take = Math.ceil(s.count / 2);
-      this.cursor = { id: s.id, count: take };
-      region.set(i, s.count - take > 0 ? { id: s.id, count: s.count - take } : null);
+      this.cursor = copyStack(s, take);
+      region.set(i, s.count - take > 0 ? copyStack(s, s.count - take) : null);
     } else if (!s) {
-      region.set(i, { id: this.cursor.id, count: 1 });
+      region.set(i, copyStack(this.cursor, 1));
       this.cursor.count -= 1;
       if (this.cursor.count === 0) this.cursor = null;
-    } else if (s.id === this.cursor.id && s.count < MAX_STACK) {
-      region.set(i, { id: s.id, count: s.count + 1 });
+    } else if (s.id === this.cursor.id && s.count < max) {
+      region.set(i, copyStack(s, s.count + 1));
       this.cursor.count -= 1;
       if (this.cursor.count === 0) this.cursor = null;
     } else if (s.id !== this.cursor.id) {
@@ -236,29 +247,31 @@ export class SlotUI {
   _quickMoveFrom(region, i) {
     const s = region.get(i);
     if (!s) return;
+    const max = maxStackFor(s.id);
     // a quickMove entry may be a function of the stack — the kiln routes
     // smeltables to its input and fuels to its fuel slot by id
     let targets = this._quickMove[region.name] || [];
     if (typeof targets === "function") targets = targets(s) || [];
     let left = s.count;
-    // merge pass, then empty-fill pass, across targets in order
+    // merge pass, then empty-fill pass, across targets in order (tools have
+    // a ceiling of 1, so they only ever land in empty slots, dur intact)
     for (const pass of ["merge", "fill"]) {
       for (const target of targets) {
         for (let t = 0; t < target.size && left > 0; t++) {
           const ts = target.get(t);
-          if (pass === "merge" && ts && ts.id === s.id && ts.count < MAX_STACK) {
-            const move = Math.min(MAX_STACK - ts.count, left);
-            target.set(t, { id: s.id, count: ts.count + move });
+          if (pass === "merge" && ts && ts.id === s.id && ts.count < max) {
+            const move = Math.min(max - ts.count, left);
+            target.set(t, copyStack(ts, ts.count + move));
             left -= move;
           } else if (pass === "fill" && !ts) {
-            const move = Math.min(MAX_STACK, left);
-            target.set(t, { id: s.id, count: move });
+            const move = Math.min(max, left);
+            target.set(t, copyStack(s, move));
             left -= move;
           }
         }
       }
     }
     // a palette stack is conjured, not stored — nothing to write back
-    if (!region.palette) region.set(i, left > 0 ? { id: s.id, count: left } : null);
+    if (!region.palette) region.set(i, left > 0 ? copyStack(s, left) : null);
   }
 }
