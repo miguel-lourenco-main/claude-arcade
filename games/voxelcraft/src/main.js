@@ -10,13 +10,14 @@ import { ItemDrops } from "./entities.js";
 import { PrimedKegs } from "./explosives.js";
 import { SlingStones } from "./projectiles.js";
 import { Mobs } from "./mobs.js";
+import { Boats } from "./boats.js";
 import { craft } from "./craft.js";
 import { makeKiln, tickKilns } from "./kiln.js";
 import { PlayerModel, buildHeldFoot, setHeldSkinLight } from "./player-model.js";
 import { PlayerViewer } from "./player-viewer.js";
 import {
   SAPLING, LOG, LEAVES, LEAVES_COLD, BED, WATER as WATER_ID, dropFor,
-  CROP_SPROUT, CROP_RIPE, CROP_STAGES, isCrop, SLING_STONE,
+  CROP_SPROUT, CROP_RIPE, CROP_STAGES, isCrop, SLING_STONE, BOAT,
 } from "./blocks.js";
 import { makeGenerator, findSpawn, findBiomeLocation } from "./terrain.js";
 import {
@@ -160,8 +161,16 @@ function drainOverflow() {
   }
 }
 const mobs = new Mobs(scene);
+// the Reed Skiffs afloat (and beached) in this world — created before the
+// Interaction so its boarding/launch routing can hold the instance directly
+const boats = new Boats(scene, {
+  onDrop: (x, y, z, id) => drops.spawn(x, y, z, id),
+  onHit: () => sfx.block("hit", BOAT),
+  onBreak: () => sfx.block("break", BOAT),
+});
 if (save && save.chests) world.loadChests(save.chests);
 if (save && save.kilns) world.loadKilns(save.kilns); // additive v2 field
+if (save && Array.isArray(save.boats)) boats.load(save.boats); // additive v2 field
 
 // --- saplings: planted ones grow into real (edit-persisted) trees ----------
 
@@ -546,6 +555,21 @@ const interaction = new Interaction(world, player, scene, hud, {
     if (hud.chestOpen) { hud.closeChest(); requestLock(); }
   },
   mobs,
+  boats,
+  // seat the Wanderling: player physics suspends itself while riding (see
+  // player.update) and boats.update carries the seat from here on
+  onBoardBoat: (b) => {
+    player.riding = b;
+    player.vel.x = player.vel.y = player.vel.z = 0;
+    player.resetFall();
+    player.sprinting = false;
+  },
+  // interact.js has already found the water column, checked headroom and the
+  // cap, and consumed the item — just splash the hull down on the surface
+  onDeployBoat: (x, topWaterY, z) => {
+    // bow pointing away from the launcher; buoyancy settles the exact line
+    boats.deploy(x + 0.5, topWaterY + 1 - 0.3, z + 0.5, player.yaw + Math.PI);
+  },
   crackTextures: buildCrackTextures(1337),
   avgColor: atlas.avgColor,
 });
@@ -588,6 +612,7 @@ const stopAutosave = startAutosave(() => writeSave(world, player, sky, hud, inve
     return [x, y, z, stage, Math.max(1, due - growthSeconds)];
   }),
   overflowStacks: pendingOverflow.map((s) => [s.id, s.count]),
+  boats: boats.serialize(), // additive: deployed skiffs [[x,y,z,yaw]...]
   weather: [
     sky.weatherPhase,
     Math.round(sky.weatherTimer * 10) / 10,
@@ -877,6 +902,7 @@ function tick(now) {
       return accepted; // a full inventory keeps the rest on the ground
     });
     mobs.update(frameDt, { world, player, terrain, night: sky.lightLevel < 0.45 });
+    boats.update(frameDt, world, player);
     kegs.update(frameDt, world, player);
     stones.update(frameDt, world);
     worldSeconds += frameDt;
@@ -889,6 +915,7 @@ function tick(now) {
     }
   }
   mobs.setLight(sky.lightLevel, sky.lightTint);
+  boats.setLight(sky.lightLevel, sky.lightTint);
 
   // kilns burn whenever the game is up — including while a window is open
   // (the whole point: watch the smelt arrow fill). Paused = time stops.
@@ -939,11 +966,16 @@ function tick(now) {
     const boom = hit ? Math.min(4, Math.max(0.05, hit.dist - 0.15)) : 4;
     camera.position.set(eye.x + back.x * boom, eye.y + back.y * boom, eye.z + back.z * boom);
   }
-  playerModel.group.position.set(player.pos.x, player.pos.y, player.pos.z);
+  // riding: a simple crouch offset sinks the model to the bench, and the
+  // seated pose kicks the legs forward (chosen over a real sit rig — cheap)
+  const seated = !!player.riding;
+  playerModel.group.position.set(
+    player.pos.x, player.pos.y - (seated ? 0.5 : 0), player.pos.z);
   playerModel.group.rotation.y = player.yaw + Math.PI;
   playerModel.update(frameDt, {
     speed: horizSpeed,
-    swimming: player.inWater,
+    swimming: player.inWater && !seated,
+    seated,
   });
 
   // moving water: visible surface drift + a gentle vertex swell
@@ -1010,7 +1042,7 @@ requestAnimationFrame(tick);
 if (NO_LOCK) {
   window.voxelcraft = {
     player, world, hud, sky, terrain, interaction, mobs, drops, saplings, crops,
-    inventory, kegs, stones,
+    inventory, kegs, stones, boats,
     rain: rainFx, sfx,
     growAllSaplings: () => { for (const k of saplings.keys()) saplings.set(k, 0); },
     growAllCrops: () => { for (const k of crops.keys()) crops.set(k, 0); },

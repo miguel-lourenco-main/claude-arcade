@@ -171,7 +171,23 @@ export class PlayerModel {
   // punch/mine: kick the right arm forward
   swing() { this._swing = 0; }
 
-  update(dt, { speed = 0, swimming = false } = {}) {
+  update(dt, { speed = 0, swimming = false, seated = false } = {}) {
+    // seated in a skiff: legs kicked forward over the bow, arms resting a
+    // touch ahead — a static pose that overrides the walk cycle entirely
+    // (main.js pairs it with a simple crouch offset on the whole model)
+    if (seated) {
+      this.legs[0].rotation.x = -1.35;
+      this.legs[1].rotation.x = -1.35;
+      this.arms[0].rotation.x = -0.35;
+      this.arms[0].rotation.z = 0.08;
+      this.arms[1].rotation.z = -0.08;
+      this._swing = Math.min(1, this._swing + dt / 0.25);
+      const sw = Math.sin(Math.PI * this._swing);
+      this.arms[1].rotation.x = sw > 0.01 ? -sw * 1.8 : -0.35;
+      this.swimLean = 0;
+      this.group.rotation.x = 0;
+      return;
+    }
     this.phase += Math.max(speed, 0.6) * dt * 3.2;
     const walk = Math.min(1, speed / 2);
     const a = Math.sin(this.phase) * 0.7 * walk;

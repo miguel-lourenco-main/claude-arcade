@@ -4,7 +4,7 @@
 import * as THREE from "three";
 import {
   AIR, BEDROCK, CHEST, WORKBENCH, KILN, BED, LADDER, DOOR, DOOR_TOP, BLAST_KEG,
-  GATE, GATE_OPEN, ROOT_SEED, CROP_SPROUT, DIRT, GRASS, SLING_STONE,
+  GATE, GATE_OPEN, ROOT_SEED, CROP_SPROUT, DIRT, GRASS, SLING_STONE, BOAT, WATER,
   BLOCKS, isSolid, isPlant, isDoor, isDoorLower, isGate, DOOR_TOGGLE,
   dropFor, yawToFacing,
 } from "./blocks.js";
@@ -47,6 +47,34 @@ export function raycast(world, origin, dir, maxDist = REACH_CREATIVE) {
   return null;
 }
 
+// The skiff-launching ray: the same DDA, but it STOPS at the first water
+// cell (the regular raycast swims straight through water). Any other
+// non-air block blocks the launch — you can't slide a hull through a wall.
+function raycastWater(world, origin, dir, maxDist) {
+  let x = Math.floor(origin.x), y = Math.floor(origin.y), z = Math.floor(origin.z);
+  const stepX = dir.x > 0 ? 1 : -1, stepY = dir.y > 0 ? 1 : -1, stepZ = dir.z > 0 ? 1 : -1;
+  const tDeltaX = dir.x !== 0 ? Math.abs(1 / dir.x) : Infinity;
+  const tDeltaY = dir.y !== 0 ? Math.abs(1 / dir.y) : Infinity;
+  const tDeltaZ = dir.z !== 0 ? Math.abs(1 / dir.z) : Infinity;
+  let tMaxX = dir.x !== 0 ? (dir.x > 0 ? (x + 1 - origin.x) : (origin.x - x)) * tDeltaX : Infinity;
+  let tMaxY = dir.y !== 0 ? (dir.y > 0 ? (y + 1 - origin.y) : (origin.y - y)) * tDeltaY : Infinity;
+  let tMaxZ = dir.z !== 0 ? (dir.z > 0 ? (z + 1 - origin.z) : (origin.z - z)) * tDeltaZ : Infinity;
+  let t = 0;
+  while (t <= maxDist) {
+    const id = world.getBlock(x, y, z);
+    if (id === WATER) return { x, y, z };
+    if (id !== AIR) return null;
+    if (tMaxX < tMaxY && tMaxX < tMaxZ) {
+      t = tMaxX; tMaxX += tDeltaX; x += stepX;
+    } else if (tMaxY < tMaxZ) {
+      t = tMaxY; tMaxY += tDeltaY; y += stepY;
+    } else {
+      t = tMaxZ; tMaxZ += tDeltaZ; z += stepZ;
+    }
+  }
+  return null;
+}
+
 export class Interaction {
   constructor(world, player, scene, hotbar, opts) {
     this.world = world;
@@ -71,6 +99,9 @@ export class Interaction {
     this.onThrow = opts.onThrow;           // () => launch a sling stone
     this.canThrowStone = opts.canThrow;    // () => bool (projectile cap)
     this.mobs = opts.mobs;           // Mobs instance (punching)
+    this.boats = opts.boats;         // Boats instance (board/deploy/kick)
+    this.onBoardBoat = opts.onBoardBoat;   // (boat) => seat the player
+    this.onDeployBoat = opts.onDeployBoat; // (x, topWaterY, z) => launch one
     this.avgColor = opts.avgColor;   // tile -> [r,g,b]
 
     this.target = null;
@@ -230,11 +261,13 @@ export class Interaction {
       this.crack.visible = false;
       return;
     }
-    // a mob standing in front of the block absorbs the mining, MC-style —
-    // otherwise the crack renders through the pig and the wall breaks
-    if (this.mobs) {
+    // a mob (or a skiff) standing in front of the block absorbs the mining,
+    // MC-style — otherwise the crack renders through it and the wall breaks
+    if (this.mobs || this.boats) {
       const eye = { x: this.player.pos.x, y: this.player.eyeY, z: this.player.pos.z };
-      if (this.mobs.rayHit(eye, this.player.lookDir(), t.dist)) {
+      const dir = this.player.lookDir();
+      if ((this.mobs && this.mobs.rayHit(eye, dir, t.dist)) ||
+          (this.boats && this.boats.rayHit(eye, dir, t.dist))) {
         this._mineKey = null;
         this._mineProgress = 0;
         this.crack.visible = false;
@@ -306,15 +339,20 @@ export class Interaction {
 
   _act(button) {
     if ((this.target || button === 0) && this.onSwing) this.onSwing();
-    // punching a mob takes priority over the block behind it. Recompute the
-    // block clamp with a FRESH raycast — this.target is from last frame's
-    // camera direction and a flick+click could punch through a wall
-    if (button === 0 && this.mobs) {
+    // punching a mob or a skiff takes priority over the block behind it.
+    // Recompute the block clamp with a FRESH raycast — this.target is from
+    // last frame's camera direction and a flick+click could punch a wall
+    if (button === 0 && (this.mobs || this.boats)) {
       const eye = { x: this.player.pos.x, y: this.player.eyeY, z: this.player.pos.z };
       const dir = this.player.lookDir();
       const reach = this.player.mode === "survival" ? REACH_SURVIVAL : REACH_CREATIVE;
       const block = raycast(this.world, eye, dir, reach);
-      if (this.mobs.punch(eye, dir, block ? block.dist : reach, this.player.pos)) return;
+      const lim = block ? block.dist : reach;
+      if (this.boats) {
+        const b = this.boats.rayHit(eye, dir, lim);
+        if (b) { this.boats.punch(b, this.player); return; } // two kicks break it
+      }
+      if (this.mobs && this.mobs.punch(eye, dir, lim, this.player.pos)) return;
     }
     // survival LMB is handled by the mining loop, not instant breaking
     if (button === 0 && this.player.mode !== "survival") this._break();
@@ -437,12 +475,47 @@ export class Interaction {
     if (this.onSwing) this.onSwing();
   }
 
+  // a Reed Skiff in hand owns right-click over water: launch it there.
+  // Consume-last discipline: the water target, headroom, and the boat cap
+  // are all ruled out BEFORE the inventory take.
+  _deployBoat() {
+    if (!this.onDeployBoat || !this.boats) return;
+    const eye = { x: this.player.pos.x, y: this.player.eyeY, z: this.player.pos.z };
+    const dir = this.player.lookDir();
+    const reach = this.player.mode === "survival" ? REACH_SURVIVAL : REACH_CREATIVE;
+    const w = raycastWater(this.world, eye, dir, reach);
+    if (!w) return;
+    // climb to the top of the water column — the hull floats on the surface
+    let ty = w.y;
+    while (ty + 1 < HEIGHT && this.world.getBlock(w.x, ty + 1, w.z) === WATER) ty++;
+    if (this.world.getBlock(w.x, ty + 1, w.z) !== AIR) return; // needs open sky
+    if (!this.boats.canDeploy()) return;
+    if (this.player.mode === "survival" && !this.canConsume(BOAT)) return;
+    this.onDeployBoat(w.x, ty, w.z);
+    this.onSound("place", BOAT);
+  }
+
   _place() {
     const t = this.target;
+    // right-click a Reed Skiff to board it — checked before any block
+    // routing, exactly like mobs eat the punch ray (sneak to override)
+    if (this.boats && this.onBoardBoat && !this.player.riding && !this.player._sneaking) {
+      const eye = { x: this.player.pos.x, y: this.player.eyeY, z: this.player.pos.z };
+      const dir = this.player.lookDir();
+      const reach = this.player.mode === "survival" ? REACH_SURVIVAL : REACH_CREATIVE;
+      const lim = t ? Math.min(t.dist, reach) : reach;
+      const b = this.boats.rayHit(eye, dir, lim);
+      if (b) { this.onBoardBoat(b); return; }
+    }
     // a sling stone throws instead of placing — unless an interactive block
     // is targeted (sneak-throw at a chest works, like sneak-place does)
     if (this.hotbar.selectedId() === SLING_STONE && !this._interactiveTarget()) {
       this._throw();
+      return;
+    }
+    // a skiff in hand launches onto water instead of placing
+    if (this.hotbar.selectedId() === BOAT && !this._interactiveTarget()) {
+      this._deployBoat();
       return;
     }
     if (!t) return;

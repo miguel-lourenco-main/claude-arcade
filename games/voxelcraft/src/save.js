@@ -32,6 +32,9 @@ export function writeSave(world, player, sky, hud, inventory, extra = {}) {
       // additive: [phase, secondsLeftInPhase, intensity] — absent in older
       // saves, which simply boot clear with a fresh timer
       weather: extra.weather || undefined,
+      // additive: deployed Reed Skiffs [[x, y, z, yaw]...] — absent in older
+      // saves, which simply have no boats afloat
+      boats: extra.boats || [],
       player: {
         x: player.pos.x, y: player.pos.y, z: player.pos.z,
         yaw: player.yaw, pitch: player.pitch, flying: player.flying,

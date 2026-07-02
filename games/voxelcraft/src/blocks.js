@@ -85,6 +85,11 @@ export const BAKED_ROOT = 64;
 // block. Right-click with one selected THROWS it (see interact.js routing
 // and projectiles.js for its short ballistic career).
 export const SLING_STONE = 65;
+// the Reed Skiff: a little lashed-plank hull, carried on the satchel and
+// never placed as a block — right-clicking WATER with it selected launches
+// a boat ENTITY there (see interact.js routing and boats.js for its life
+// afloat: buoyancy, boarding, paddling, and its two-kick demise).
+export const BOAT = 66;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -494,6 +499,18 @@ BLOCKS[SLING_STONE] = def("Sling Stone", {
   hardness: 0.05,
   placeable: false,
   sound: "stone",
+});
+
+// the Reed Skiff item: an entity-in-waiting, never a world block
+BLOCKS[BOAT] = def("Reed Skiff", {
+  tiles: cube(TILE.SKIFF),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  hardness: 0.05,
+  placeable: false,
+  sound: "wood",
 });
 
 export const CROP_STAGES = [CROP_SPROUT, CROP_HALF, CROP_RIPE];

@@ -7,7 +7,7 @@ import {
   LOG, PLANKS, SAND, COBBLE, STONE, BRICKS, SANDSTONE, COAL_ORE,
   TORCH, CHEST, WORKBENCH, KILN, MOSS_CLUMP, BED, LADDER, DOOR, BLAST_KEG,
   PLANK_SLAB, STONE_SLAB, COBBLE_SLAB, PLANK_STAIRS, STONE_STAIRS, COBBLE_STAIRS,
-  FENCE, GATE, SLING_STONE,
+  FENCE, GATE, SLING_STONE, BOAT,
 } from "./blocks.js";
 
 // in: [[blockId, count], ...]  out: [blockId, count]
@@ -23,6 +23,8 @@ export const RECIPES = [
   { in: [[PLANKS, 3], [MOSS_CLUMP, 2]], out: [BED, 1] },
   { in: [[PLANKS, 2]], out: [LADDER, 3] },
   { in: [[PLANKS, 6]], out: [DOOR, 1] },
+  // the Reed Skiff: five planks lashed into a shallow hull (workbench)
+  { in: [[PLANKS, 5]], out: [BOAT, 1] },
   { in: [[COAL_ORE, 4], [SAND, 5]], out: [BLAST_KEG, 1] },
   { in: [[SAND, 4]], out: [SANDSTONE, 1] },
   { in: [[STONE, 4]], out: [BRICKS, 4] },

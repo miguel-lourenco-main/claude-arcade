@@ -64,6 +64,7 @@ export const TILE = {
   MEAL_ROOT: 53,
   BAKED_ROOT: 54,
   SLING_STONE: 55,
+  SKIFF: 56,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -897,6 +898,39 @@ const painters = {
     // knapping chips scattered beside it
     p.px(3, 13, 118, 120, 126); p.px(12, 12, 118, 120, 126);
     p.px(11, 14, 100, 102, 108);
+  },
+  [TILE.SKIFF](p) {
+    // the Reed Skiff, side-on: a shallow lashed-plank hull with upswept
+    // horns at bow and stern and a mustard gunwale rail — carried rolled on
+    // the satchel, stamped like a field-journal specimen
+    p.clear();
+    // hull: widest amidships, curving up into the ends
+    for (let y = 8; y <= 12; y++) {
+      const inset = y <= 9 ? 0 : y === 10 ? 1 : y === 11 ? 3 : 5;
+      for (let x = 1 + inset; x <= 14 - inset; x++) {
+        const d = (p.rand() * 2 - 1) * 9;
+        const edge = y === 12 || x === 1 + inset || x === 14 - inset;
+        if (edge) p.px(x, y, 116 + d, 90 + d, 52 + d);
+        else p.px(x, y, 170 + d, 138 + d, 82 + d);
+      }
+    }
+    // reed lashings cinched around the hull
+    for (const lx of [4, 8, 12]) {
+      p.px(lx, 9, 132, 104, 58); p.px(lx, 10, 124, 98, 54);
+    }
+    // gunwale rail: mustard trim the length of the sheer line
+    for (let x = 1; x <= 14; x++) {
+      const d = (p.rand() * 2 - 1) * 8;
+      p.px(x, 7, 198 + d, 160 + d, 64 + d);
+    }
+    // upswept horns at bow and stern
+    p.px(0, 7, 190, 152, 60); p.px(15, 7, 190, 152, 60);
+    p.px(0, 6, 172, 136, 54); p.px(15, 6, 172, 136, 54);
+    p.px(0, 5, 140, 108, 46); p.px(15, 5, 140, 108, 46);
+    // a paddle leaned across the beam, blade up
+    for (let i = 0; i < 4; i++) p.px(5 + i, 6 - i, 138, 106, 58);
+    p.px(9, 2, 160, 126, 66); p.px(10, 2, 160, 126, 66);
+    p.px(9, 1, 172, 138, 72); p.px(10, 1, 172, 138, 72);
   },
   [TILE.SAPLING](p) {
     p.clear();

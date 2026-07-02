@@ -63,6 +63,9 @@ export class Player {
     this.inWater = false;
     this.eyeInWater = false;
     this.onLadder = false;
+    // riding a Reed Skiff: the boat entity that owns this player's physics
+    // (boats.js seats, drives, and dismounts; update() suspends everything)
+    this.riding = null;
     // "camera": classic FPS movement, WASD relative to where you look.
     // "static": WASD along fixed world axes (W=north/-z), camera independent.
     this.moveMode = "camera";
@@ -111,6 +114,7 @@ export class Player {
   }
 
   respawn(spawnPoint) {
+    this.riding = null; // death unseats — the skiff stays where it was
     Object.assign(this.pos, spawnPoint);
     this.vel.x = this.vel.y = this.vel.z = 0;
     this.health = MAX_HEALTH;
@@ -196,6 +200,21 @@ export class Player {
   update(dt) {
     if (this.dead) return;
     this._updateWaterState();
+
+    // riding a skiff: all physics is the boat's problem (boats.js moves the
+    // seat and reads WASD/Sneak itself). No swimming, no hunger drain, no
+    // fall — a seated Wanderling exerts nothing. Space does nothing here.
+    if (this.riding) {
+      this._sneaking = this.keys.has("ShiftLeft") || this.keys.has("ShiftRight");
+      this.vel.x = this.vel.y = this.vel.z = 0;
+      this.onGround = false;
+      this._peakY = this.pos.y;
+      this._sinceDamage += dt;
+      if (!this.eyeInWater) { // catching breath on the bench
+        this.air = Math.min(AIR_SECONDS, this.air + dt * 4);
+      }
+      return;
+    }
 
     const forward = (this.keys.has("KeyW") ? 1 : 0) - (this.keys.has("KeyS") ? 1 : 0);
     const strafe = (this.keys.has("KeyD") ? 1 : 0) - (this.keys.has("KeyA") ? 1 : 0);
