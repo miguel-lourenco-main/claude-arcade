@@ -62,9 +62,27 @@ export class Sfx {
 
   hurt() { this._noiseBurst(170, 0.18, 0.3); }
 
-  oink() {
-    this._noiseBurst(320, 0.09, 0.12);
-    setTimeout(() => this._noiseBurst(250, 0.1, 0.1), 100);
+  // ambient creature calls (see LORE.md for who's who)
+  creature(kind) {
+    switch (kind) {
+      case "snuffle": // Snuffet: soft double snort
+        this._noiseBurst(320, 0.09, 0.12);
+        setTimeout(() => this._noiseBurst(250, 0.1, 0.1), 100);
+        break;
+      case "rasp": // Murkling: a whisper you wish you hadn't heard
+        this._noiseBurst(1400, 0.28, 0.05);
+        break;
+      case "clicks": // Stalkid: stone knuckles
+        this._noiseBurst(950, 0.03, 0.1);
+        setTimeout(() => this._noiseBurst(1150, 0.03, 0.1), 90);
+        break;
+      case "rustle": // Prickleback: dry spines
+        this._noiseBurst(750, 0.14, 0.07);
+        break;
+      case "bellow": // Mirewalker: the shoreline disagrees
+        this._noiseBurst(110, 0.45, 0.28);
+        break;
+    }
   }
 
   mobHurt() { this._noiseBurst(700, 0.12, 0.16); }
