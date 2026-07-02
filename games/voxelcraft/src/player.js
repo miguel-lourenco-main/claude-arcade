@@ -16,6 +16,7 @@ const SNEAK_SPEED = 1.31;
 const FLY_SPEED = 11;
 const FLY_SPRINT_SPEED = 22;
 const SWIM_SPEED = 2.2;
+const SWIM_SPRINT_SPEED = 3.9;
 const SWIM_UP_MAX = 3.5;
 const WATER_EXIT_BOOST = 6;       // upward kick when swimming into a bank
 const MAX_STEP_DISP = 0.4;        // max movement per collision substep (anti-tunneling)
@@ -205,11 +206,12 @@ export class Player {
       ? (forward !== 0 || strafe !== 0) : forward > 0;
     let speed;
     if (this.flying) speed = this.sprinting ? FLY_SPRINT_SPEED : FLY_SPEED;
-    else if (this.inWater) speed = SWIM_SPEED;
+    else if (this.inWater) speed = this.sprinting && sprintInput ? SWIM_SPRINT_SPEED : SWIM_SPEED;
     else if (sneaking) speed = SNEAK_SPEED;
     else if (this.sprinting && sprintInput) speed = SPRINT_SPEED;
     else speed = WALK_SPEED;
-    this.sprintActive = speed === SPRINT_SPEED || (this.flying && this.sprinting);
+    this.sprintActive = speed === SPRINT_SPEED || speed === SWIM_SPRINT_SPEED ||
+      (this.flying && this.sprinting);
 
     // linear acceleration toward the wanted velocity, applied as a VECTOR
     // approach (not per-axis): a rotating camera swings the target around
@@ -242,9 +244,43 @@ export class Player {
         const s = Math.min(1, accel / d);
         this.vel.x += dvx * s; this.vel.y += dvy * s; this.vel.z += dvz * s;
       }
+    } else if (this.inWater) {
+      // swimming follows the camera: look down + forward dives, look up
+      // surfaces — Space/Shift still push straight up/down
+      const up = (jumping ? 1 : 0) - (sneaking ? 1 : 0);
+      let tx, ty, tz;
+      if (this.moveMode === "camera") {
+        const look = this.lookDir();
+        const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);
+        tx = look.x * forward + rx * strafe;
+        ty = look.y * forward;
+        tz = look.z * forward + rz * strafe;
+      } else {
+        tx = dirX; ty = 0; tz = dirZ;
+      }
+      ty += up * 0.9;
+      const len = Math.hypot(tx, ty, tz);
+      if (len > 1) { tx /= len; ty /= len; tz /= len; }
+      const accel = ACCEL_WATER * dt;
+      const dvx = tx * speed - this.vel.x;
+      const dvy = ty * speed - this.vel.y;
+      const dvz = tz * speed - this.vel.z;
+      const d = Math.hypot(dvx, dvy, dvz);
+      if (d > 1e-9) {
+        const s = Math.min(1, accel / d);
+        this.vel.x += dvx * s; this.vel.y += dvy * s; this.vel.z += dvz * s;
+      }
+      if (!hasInput && up === 0) {
+        this.vel.y = Math.max(-1.2, this.vel.y - 3 * dt); // idle sink
+      }
+      this.vel.y = Math.max(-4.2, Math.min(Math.max(SWIM_UP_MAX, speed), this.vel.y));
+      // pressing into a bank while heading upward or jumping: boost out of
+      // the water, or the 1-block ledge is never clearable
+      if ((jumping || ty > 0.2) && (this._hitWall || this.onGround) && (hasInput || jumping)) {
+        this.vel.y = WATER_EXIT_BOOST;
+      }
     } else {
-      const accel = (this.inWater ? ACCEL_WATER
-        : this.onGround ? (hasInput ? ACCEL_GROUND : FRICTION_GROUND)
+      const accel = (this.onGround ? (hasInput ? ACCEL_GROUND : FRICTION_GROUND)
         : ACCEL_AIR) * dt;
       const dvx = dirX * speed - this.vel.x;
       const dvz = dirZ * speed - this.vel.z;
@@ -253,23 +289,11 @@ export class Player {
         const s = Math.min(1, accel / d);
         this.vel.x += dvx * s; this.vel.z += dvz * s;
       }
-
-      if (this.inWater) {
-        this.vel.y -= 4 * dt;                      // gentle sink
-        if (jumping) this.vel.y += 16 * dt;        // swim up
-        this.vel.y = Math.max(-3, Math.min(SWIM_UP_MAX, this.vel.y));
-        // swimming against a bank while pressing up/forward: boost out of the
-        // water (exempt from the swim clamp, or the ledge is never clearable)
-        if (jumping && (this._hitWall || this.onGround) && hasInput) {
-          this.vel.y = WATER_EXIT_BOOST;
-        }
-      } else {
-        this.vel.y -= GRAVITY * dt;
-        if (this.vel.y < -TERMINAL_VELOCITY) this.vel.y = -TERMINAL_VELOCITY;
-        if (jumping && this.onGround) {
-          this.vel.y = JUMP_SPEED;
-          this.onGround = false;
-        }
+      this.vel.y -= GRAVITY * dt;
+      if (this.vel.y < -TERMINAL_VELOCITY) this.vel.y = -TERMINAL_VELOCITY;
+      if (jumping && this.onGround) {
+        this.vel.y = JUMP_SPEED;
+        this.onGround = false;
       }
     }
 
