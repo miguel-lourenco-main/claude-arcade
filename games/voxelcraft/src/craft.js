@@ -13,7 +13,7 @@ import {
   IRON_INGOT, IRON_BLOCK, COMPASS, CLOCK, CHART,
   BARK_CROWN, BARK_JERKIN, BARK_LEGGINGS, BARK_TREADS,
   IRON_CROWN, IRON_JERKIN, IRON_LEGGINGS, IRON_TREADS,
-  STARSTONE, STAR_BLADE,
+  STARSTONE, STAR_BLADE, RAIL, CART,
 } from "./blocks.js";
 
 // in: [[blockId, count], ...]  out: [blockId, count]  note: extra recipe copy
@@ -81,6 +81,10 @@ export const RECIPES = [
   { in: [[IRON_INGOT, 8]], out: [IRON_JERKIN, 1], note: "hammered plate, lashed at the seam" },
   { in: [[IRON_INGOT, 7]], out: [IRON_LEGGINGS, 1], note: "iron greaves for the walking legs" },
   { in: [[IRON_INGOT, 4]], out: [IRON_TREADS, 1], note: "iron wraps for the hand-feet" },
+  // --- the Waybar & the Trundle (workbench). Block-guided transport: sky-iron
+  // bars pegged over split knotwood ties, and the riveted tub that rolls them.
+  { in: [[IRON_INGOT, 6], [PLANKS, 3]], out: [RAIL, 8], note: "bars pegged over split ties" },
+  { in: [[IRON_INGOT, 5]], out: [CART, 1], note: "a riveted tub on four wheels" },
   // sky-iron, folded and unfolded: four ingots to the block and back
   { in: [[IRON_INGOT, 4]], out: [IRON_BLOCK, 1] },
   { in: [[IRON_BLOCK, 1]], out: [IRON_INGOT, 4] },

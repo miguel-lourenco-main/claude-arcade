@@ -105,6 +105,13 @@ export const TILE = {
   ICE: 88,
   // Gleam Moss: the old-sky caves' own faint lamp (see LORE.md)
   GLEAM_MOSS: 89,
+  // the Waybar (rail): split-knotwood ties + a sky-iron bar surface. Two
+  // tiles because the shape framework's per-box tile override (mesher.js)
+  // dresses tie boxes in wood and bar boxes in metal.
+  RAIL_TIE: 90,
+  RAIL_BAR: 91,
+  // the Trundle: the cart item's side-view silhouette (icon + drop)
+  TRUNDLE: 92,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -1466,6 +1473,71 @@ painters[TILE.GLEAM_MOSS] = (p) => {
   }
   // two bright cores — the pinches worth journaling
   p.px(4, 13, 224, 255, 236); p.px(11, 3, 224, 255, 236);
+};
+
+painters[TILE.RAIL_TIE] = (p) => {
+  // Waybar ties: split knotwood, weather-grayed, laid crosswise — the grain
+  // runs along x (across the track) with a few checked splits and the dark
+  // peg-holes where the bars are spiked down
+  for (let y = 0; y < TILE_PX; y++) {
+    for (let x = 0; x < TILE_PX; x++) {
+      const d = (p.rand() * 2 - 1) * 9;
+      const grain = y % 5 === 2 ? -16 : 0; // long grain lines across
+      p.px(x, y, 118 + d + grain, 96 + d + grain, 64 + d + grain);
+    }
+  }
+  // checked splits: short dark cracks with the grain
+  for (let s = 0; s < 3; s++) {
+    const y = (p.rand() * TILE_PX) | 0;
+    const x0 = (p.rand() * 10) | 0;
+    const len = 3 + ((p.rand() * 4) | 0);
+    for (let i = 0; i < len; i++) p.px(x0 + i, y, 78, 62, 40);
+  }
+  // spike heads at the bar lines (u 2-4 and 11-13 — where the bars sit)
+  for (const x of [3, 12]) {
+    for (const y of [2, 8, 13]) p.px(x, y, 88, 92, 104);
+  }
+};
+
+painters[TILE.RAIL_BAR] = (p) => {
+  // Waybar bars: sky-iron rolled flat, the running surface worn bright down
+  // the middle (u), rust-bloom freckles at the edges
+  p.noiseFill([142, 148, 162], 8);
+  for (let y = 0; y < TILE_PX; y++) {
+    for (let x = 5; x <= 10; x++) { // the wheel-polished stripe
+      const d = (p.rand() * 2 - 1) * 6;
+      p.px(x, y, 190 + d, 197 + d, 212 + d);
+    }
+  }
+  p.speckle(10, [104, 96, 96], 8);  // rust freckle
+  p.speckle(8, [166, 172, 188], 6);
+};
+
+painters[TILE.TRUNDLE] = (p) => {
+  // the Trundle item: side view of a riveted sky-iron tub on two visible
+  // wheels — rust-orange trim board along the rim (Wanderling colors)
+  p.clear();
+  const dot = (x, y, c, j = 7) => {
+    const d = (p.rand() * 2 - 1) * j;
+    p.px(x, y, c[0] + d, c[1] + d, c[2] + d);
+  };
+  const iron = [140, 147, 162], dark = [102, 108, 122], trim = [197, 106, 43];
+  for (let x = 2; x <= 13; x++) dot(x, 4, trim, 10); // the rim board
+  for (let y = 5; y <= 10; y++) {
+    for (let x = 2; x <= 13; x++) {
+      dot(x, y, x === 2 || x === 13 || y === 10 ? dark : iron);
+    }
+  }
+  // rivet studs down the side
+  p.px(4, 7, 190, 197, 212); p.px(8, 7, 190, 197, 212); p.px(11, 7, 190, 197, 212);
+  // two wheels, hub-bright
+  for (const cx of [4, 11]) {
+    for (let y = 11; y <= 13; y++) for (let x = cx - 1; x <= cx + 1; x++) {
+      if ((x === cx - 1 || x === cx + 1) && (y === 11 || y === 13)) continue;
+      dot(x, y, [58, 60, 70], 6);
+    }
+    p.px(cx, 12, 150, 156, 170);
+  }
 };
 
 export function buildAtlas(seed = 1337) {

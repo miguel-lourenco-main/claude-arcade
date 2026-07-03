@@ -7,7 +7,7 @@
 import {
   BERRIES, IRON_ORE, COBBLE, TORCH, MEAL_ROOT, SLING_STONE, PLANKS, BOAT,
   COAL_ORE, GLASS, GRAVEL, MOSS_CLUMP, ROOT_SEED, SILVERFIN, ROAST_LOIN,
-  STONE_PICK, COMPASS, BARK_JERKIN, IRON_TREADS, IRON_INGOT, STARSTONE,
+  STONE_PICK, COMPASS, BARK_JERKIN, IRON_TREADS, IRON_INGOT, STARSTONE, RAIL,
 } from "./blocks.js";
 import { mulberry32 } from "./noise.js";
 
@@ -43,6 +43,9 @@ export const OFFERS = [
   // a fortune for a fallen pearl: he swears he marked where it came down,
   // and the price says he means it (the Pearlfall's starstone, meteors.js)
   { give: [[IRON_INGOT, 8]], get: [STARSTONE, 1] },
+  // ore for waybars: he smelts and pegs them on the walk — a peddler knows
+  // the worth of a road that carries the pack for you
+  { give: [[IRON_ORE, 6]], get: [RAIL, 8] },
 ];
 
 export const OFFERS_PER_DAY = 3;

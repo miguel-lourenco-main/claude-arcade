@@ -106,16 +106,17 @@ function drawShapedIcon(ctx, atlas, def, src) {
 
   for (const b of boxes) {
     const dx = b.x1 - b.x0, dy = b.y1 - b.y0, dz = b.z1 - b.z0;
+    const tiles = b.tiles || def.tiles; // per-box override (waybar bars)
     // top face (y = y1)
-    face(def.tiles.top, P(b.x0, b.y1, b.z0),
+    face(tiles.top, P(b.x0, b.y1, b.z0),
       [dx * K, dx * K * 0.5], [-dz * K, dz * K * 0.5],
       [b.x0, b.z0, dx, dz], 0);
     // left face (z = z1)
-    face(def.tiles.side, P(b.x0, b.y1, b.z1),
+    face(tiles.side, P(b.x0, b.y1, b.z1),
       [dx * K, dx * K * 0.5], [0, dy * H],
       [b.x0, 1 - b.y1, dx, dy], 0.22);
     // right face (x = x1)
-    face(def.tiles.side, P(b.x1, b.y1, b.z1),
+    face(tiles.side, P(b.x1, b.y1, b.z1),
       [dz * K, -dz * K * 0.5], [0, dy * H],
       [b.z0, 1 - b.y1, dz, dy], 0.4);
   }

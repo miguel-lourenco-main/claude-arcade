@@ -5,9 +5,9 @@ import * as THREE from "three";
 import {
   AIR, BEDROCK, CHEST, WORKBENCH, KILN, BED, LADDER, DOOR, DOOR_TOP, BLAST_KEG,
   GATE, GATE_OPEN, ROOT_SEED, CROP_SPROUT, DIRT, GRASS, SLING_STONE, BOAT, WATER,
-  FISHING_POLE, SNOW_LAYER, GLEAM_MOSS,
-  BLOCKS, isSolid, isPlant, isDoor, isDoorLower, isGate, isSign, DOOR_TOGGLE,
-  dropFor, yawToFacing,
+  FISHING_POLE, SNOW_LAYER, GLEAM_MOSS, RAIL, CART,
+  BLOCKS, isSolid, isPlant, isDoor, isDoorLower, isGate, isSign, isRail,
+  DOOR_TOGGLE, dropFor, yawToFacing,
 } from "./blocks.js";
 import { HEIGHT } from "./world.js";
 import { EYE_HEIGHT, MAX_HUNGER } from "./player.js";
@@ -19,8 +19,10 @@ const EAT_SECONDS = 1.2;      // hold right-click this long to finish a bite
 const CHEW_INTERVAL = 0.28;   // chewing sound cadence while eating
 const THROW_COOLDOWN_MS = 350; // between sling-stone throws
 
-// Amanatides & Woo voxel traversal.
-export function raycast(world, origin, dir, maxDist = REACH_CREATIVE) {
+// Amanatides & Woo voxel traversal. `skip(id)` marks extra block ids the ray
+// passes through — the entity-clamp rays skip rails, because a trundle LIVES
+// inside a rail's cell and the cell entry would always out-shadow the cart.
+export function raycast(world, origin, dir, maxDist = REACH_CREATIVE, skip = null) {
   let x = Math.floor(origin.x), y = Math.floor(origin.y), z = Math.floor(origin.z);
   const stepX = dir.x > 0 ? 1 : -1, stepY = dir.y > 0 ? 1 : -1, stepZ = dir.z > 0 ? 1 : -1;
   const tDeltaX = dir.x !== 0 ? Math.abs(1 / dir.x) : Infinity;
@@ -34,7 +36,7 @@ export function raycast(world, origin, dir, maxDist = REACH_CREATIVE) {
 
   while (t <= maxDist) {
     const id = world.getBlock(x, y, z);
-    if (id !== AIR && BLOCKS[id].bucket !== "water") {
+    if (id !== AIR && BLOCKS[id].bucket !== "water" && !(skip && skip(id))) {
       return { x, y, z, id, normal, dist: t };
     }
     if (tMaxX < tMaxY && tMaxX < tMaxZ) {
@@ -104,9 +106,12 @@ export class Interaction {
     this.mobs = opts.mobs;           // Mobs instance (punching)
     this.onTradeMob = opts.onTradeMob; // (mob) => open the Peddler's trade window
     this.boats = opts.boats;         // Boats instance (board/deploy/kick)
+    this.carts = opts.carts;         // Carts instance (board/deploy/kick)
     this.fishing = opts.fishing;     // Fishing instance (cast/reel)
     this.onBoardBoat = opts.onBoardBoat;   // (boat) => seat the player
     this.onDeployBoat = opts.onDeployBoat; // (x, topWaterY, z) => launch one
+    this.onBoardCart = opts.onBoardCart;   // (cart) => seat the player
+    this.onDeployCart = opts.onDeployCart; // (x, y, z, railDef) => set one down
     this.avgColor = opts.avgColor;   // tile -> [r,g,b]
 
     this.target = null;
@@ -224,6 +229,15 @@ export class Interaction {
     return def && def.tool ? def.tool : null;
   }
 
+  // the wall clamp for entity rays (punching, boarding, trading): a fresh
+  // raycast that SKIPS rails — a trundle stands inside its rail's cell, and
+  // the cell entry would otherwise always shadow the cart itself
+  _entityClamp(eye, dir) {
+    const reach = this.player.mode === "survival" ? REACH_SURVIVAL : REACH_CREATIVE;
+    const block = raycast(this.world, eye, dir, reach, isRail);
+    return block ? block.dist : reach;
+  }
+
   // right-click routes to the targeted block (chest/workbench/kiln/cot/keg/
   // door/gate) no matter what's in hand — unless the player sneaks to
   // override. Shared by the eating and throwing owners of the button.
@@ -280,13 +294,15 @@ export class Interaction {
       this.crack.visible = false;
       return;
     }
-    // a mob (or a skiff) standing in front of the block absorbs the mining,
-    // MC-style — otherwise the crack renders through it and the wall breaks
-    if (this.mobs || this.boats) {
+    // a mob (or a skiff, or a trundle) standing in front of the block absorbs
+    // the mining, MC-style — otherwise the crack renders through it and the
+    // wall breaks
+    if (this.mobs || this.boats || this.carts) {
       const eye = { x: this.player.pos.x, y: this.player.eyeY, z: this.player.pos.z };
       const dir = this.player.lookDir();
       if ((this.mobs && this.mobs.rayHit(eye, dir, t.dist)) ||
-          (this.boats && this.boats.rayHit(eye, dir, t.dist))) {
+          (this.boats && this.boats.rayHit(eye, dir, t.dist)) ||
+          (this.carts && this.carts.rayHit(eye, dir, t.dist))) {
         this._mineKey = null;
         this._mineProgress = 0;
         this.crack.visible = false;
@@ -347,8 +363,9 @@ export class Interaction {
     const affected = this.world.setBlock(t.x, t.y, t.z, AIR);
     const above = this.world.getBlock(t.x, t.y + 1, t.z);
     let popped = null;
-    // a plant (or a Snowdrift — which keeps nothing) pops off its support
-    if (isPlant(above) || above === SNOW_LAYER) {
+    // a plant (or a Snowdrift — which keeps nothing — or a Waybar, which
+    // hands back the one rail item) pops off its support
+    if (isPlant(above) || above === SNOW_LAYER || isRail(above)) {
       popped = above;
       this.world.setBlock(t.x, t.y + 1, t.z, AIR);
     }
@@ -372,15 +389,13 @@ export class Interaction {
 
   _act(button) {
     if ((this.target || button === 0) && this.onSwing) this.onSwing();
-    // punching a mob or a skiff takes priority over the block behind it.
-    // Recompute the block clamp with a FRESH raycast — this.target is from
-    // last frame's camera direction and a flick+click could punch a wall
-    if (button === 0 && (this.mobs || this.boats)) {
+    // punching a mob, a skiff, or a trundle takes priority over the block
+    // behind it. Recompute the block clamp with a FRESH raycast — this.target
+    // is from last frame's camera direction and a flick+click could punch a wall
+    if (button === 0 && (this.mobs || this.boats || this.carts)) {
       const eye = { x: this.player.pos.x, y: this.player.eyeY, z: this.player.pos.z };
       const dir = this.player.lookDir();
-      const reach = this.player.mode === "survival" ? REACH_SURVIVAL : REACH_CREATIVE;
-      const block = raycast(this.world, eye, dir, reach);
-      const lim = block ? block.dist : reach;
+      const lim = this._entityClamp(eye, dir);
       // a shiv in hand raises the kick from 1 to its tier's damage; other
       // tools swing like a bare foot. Any landed tool hit costs 1 use.
       const tool = this._heldTool();
@@ -398,6 +413,14 @@ export class Interaction {
         const b = this.boats.rayHit(eye, dir, lim);
         if (b) { // two kicks break it
           this.boats.punch(b, this.player);
+          if (tool && this.onToolUse) this.onToolUse("hit");
+          return;
+        }
+      }
+      if (this.carts) {
+        const cart = this.carts.rayHit(eye, dir, lim);
+        if (cart) { // two kicks fold it back into the item, like the skiff
+          this.carts.punch(cart, this.player);
           if (tool && this.onToolUse) this.onToolUse("hit");
           return;
         }
@@ -428,10 +451,10 @@ export class Interaction {
     if (t.id === KILN && this.onKilnBreak) this.onKilnBreak(t.x, t.y, t.z);
     const def = BLOCKS[t.id];
     const affected = this.world.setBlock(t.x, t.y, t.z, AIR);
-    // breaking the support under a plant (or a Snowdrift) pops it too
+    // breaking the support under a plant (or a Snowdrift, or a Waybar) pops it too
     const above = this.world.getBlock(t.x, t.y + 1, t.z);
     let popped = null;
-    if (isPlant(above) || above === SNOW_LAYER) {
+    if (isPlant(above) || above === SNOW_LAYER || isRail(above)) {
       popped = above;
       this.world.setBlock(t.x, t.y + 1, t.z, AIR);
     }
@@ -569,6 +592,20 @@ export class Interaction {
     this.onSound("place", BOAT);
   }
 
+  // a Trundle in hand owns right-click over a Waybar: set the cart on the
+  // track there. Consume-last discipline: the rail target, the cart cap, and
+  // a cart already parked there are all ruled out BEFORE the inventory take.
+  _deployCart() {
+    if (!this.onDeployCart || !this.carts) return;
+    const t = this.target;
+    if (!t || !isRail(t.id)) return;
+    if (!this.carts.canDeploy()) return;
+    if (this.carts.cartAt(t.x, t.y, t.z)) return; // one trundle per cell
+    if (this.player.mode === "survival" && !this.canConsume(CART)) return;
+    this.onDeployCart(t.x, t.y, t.z, BLOCKS[t.id]);
+    this.onSound("place", CART);
+  }
+
   _place() {
     const t = this.target;
     // right-click a Reed Skiff to board it — checked before any block
@@ -576,10 +613,16 @@ export class Interaction {
     if (this.boats && this.onBoardBoat && !this.player.riding && !this.player._sneaking) {
       const eye = { x: this.player.pos.x, y: this.player.eyeY, z: this.player.pos.z };
       const dir = this.player.lookDir();
-      const reach = this.player.mode === "survival" ? REACH_SURVIVAL : REACH_CREATIVE;
-      const lim = t ? Math.min(t.dist, reach) : reach;
-      const b = this.boats.rayHit(eye, dir, lim);
+      const b = this.boats.rayHit(eye, dir, this._entityClamp(eye, dir));
       if (b) { this.onBoardBoat(b); return; }
+    }
+    // right-click a Trundle to board it — the same idiom as the skiff (the
+    // rail-skipping clamp matters here: the cart stands inside a rail's cell)
+    if (this.carts && this.onBoardCart && !this.player.riding && !this.player._sneaking) {
+      const eye = { x: this.player.pos.x, y: this.player.eyeY, z: this.player.pos.z };
+      const dir = this.player.lookDir();
+      const cart = this.carts.rayHit(eye, dir, this._entityClamp(eye, dir));
+      if (cart) { this.onBoardCart(cart); return; }
     }
     // right-click the Peddler to trade — the mob ray runs before any block
     // routing, exactly like boarding a skiff (sneak to override). Survival
@@ -589,9 +632,7 @@ export class Interaction {
         !this.player._sneaking) {
       const eye = { x: this.player.pos.x, y: this.player.eyeY, z: this.player.pos.z };
       const dir = this.player.lookDir();
-      const reach = REACH_SURVIVAL;
-      const lim = t ? Math.min(t.dist, reach) : reach;
-      const m = this.mobs.rayHit(eye, dir, lim);
+      const m = this.mobs.rayHit(eye, dir, this._entityClamp(eye, dir));
       if (m && m.spec.trades) { this.onTradeMob(m); return; }
     }
     // a sling stone throws instead of placing — unless an interactive block
@@ -603,6 +644,11 @@ export class Interaction {
     // a skiff in hand launches onto water instead of placing
     if (this.hotbar.selectedId() === BOAT && !this._interactiveTarget()) {
       this._deployBoat();
+      return;
+    }
+    // a trundle in hand sets down on a targeted Waybar instead of placing
+    if (this.hotbar.selectedId() === CART && !this._interactiveTarget()) {
+      this._deployCart();
       return;
     }
     // a Dib-Pole in hand casts/reels instead of placing — same sneak-to-
@@ -692,6 +738,11 @@ export class Interaction {
     } else if (id === SNOW_LAYER) {
       // a Snowdrift settles on flat full-block tops only (never mid-air,
       // never on a slab's half rise or a fence's shoulders)
+      const below = BLOCKS[this.world.getBlock(px, py - 1, pz)];
+      if (!below.solid || below.shape || below.colHeight !== 1) return;
+    } else if (id === RAIL) {
+      // a Waybar is pegged to flat full-block tops only — same footing rule
+      // as the Snowdrift (never mid-air, never a slab or a fence shoulder)
       const below = BLOCKS[this.world.getBlock(px, py - 1, pz)];
       if (!below.solid || below.shape || below.colHeight !== 1) return;
     } else if (id === GLEAM_MOSS) {

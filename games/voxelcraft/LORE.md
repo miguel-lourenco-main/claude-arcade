@@ -112,6 +112,15 @@ specific item vocabulary.
   which is technically true.
 - **Star-Edge** — a starstone edge honed onto a sky-iron shiv; the keenest
   blade a Wanderling can carry, and it hums very faintly on clear nights.
+- **Waybar** — sky-iron bars pegged over split knotwood ties, laid flat on
+  the ground: the Wanderlings' answer to the road question. The Upturn rose
+  in terraces, so waybars learned to bend around corners and step up the
+  rises; a line of them is called a **way**, and laying one is considered a
+  gift to whoever walks behind you.
+- **Trundle** — a riveted sky-iron tub on four squeaking wheels that rolls
+  the waybars. It goes where the way goes and nowhere else, gathers speed
+  down a rise the way gossip gathers detail, and off the end of the line it
+  simply rolls to a sulky stop. Named for the sound; kept for the joy.
 - **The Steads-Before** — the pre-Upturn homesteads: raised when the world
   faced the other way, and carried along when it turned. They came through
   the flip the way crockery comes through a move — mostly. What's left

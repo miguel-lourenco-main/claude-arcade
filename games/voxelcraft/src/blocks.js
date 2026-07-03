@@ -166,6 +166,25 @@ export const ICE = 102;
 // pinches loose instantly, drops itself, and presses back onto ANY solid
 // face — floor, wall, or ceiling (see the placement rule in interact.js).
 export const GLEAM_MOSS = 103;
+// the Waybar: block-guided transport track (see LORE.md) — TEN ids, one per
+// baked track shape, like the stairs. RAIL (the north-south straight) is the
+// only user-visible/craftable/droppable id; the east-west straight, the four
+// corners, and the four slopes are internal placement states written by the
+// auto-shaper (rails.js) as the web of neighboring rails changes.
+export const RAIL = 104;      // straight north-south — the canonical id
+export const RAIL_EW = 105;   // straight east-west
+export const RAIL_NE = 106;   // corner joining north (-z) and east (+x)
+export const RAIL_NW = 107;
+export const RAIL_SE = 108;
+export const RAIL_SW = 109;
+export const RAIL_UP_N = 110; // slope ascending toward north (-z)
+export const RAIL_UP_E = 111;
+export const RAIL_UP_S = 112;
+export const RAIL_UP_W = 113;
+// the Trundle: an entity-in-waiting like the Reed Skiff — right-clicking a
+// Waybar with it selected sets a cart ENTITY on the track (see interact.js
+// routing and carts.js for its rolling life)
+export const CART = 114;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -890,6 +909,58 @@ BLOCKS[GLEAM_MOSS] = def("Gleam Moss", {
   hardness: 0.05,
   sound: "plant",
   lightEmit: 7,
+});
+
+// --- the Waybar & the Trundle ---------------------------------------------------
+// The Waybar: sky-iron bars pegged over split knotwood ties, laid flat and
+// inset on a solid block top. Non-solid (a Wanderling steps over a waybar,
+// never into it), not opaque, and shaped: the mesher builds ties + bars from
+// `rail` (per-box tile overrides keep the ties wood and the bars metal).
+// Shapes are baked into the id; rails.js is the auto-shaper and the track
+// geometry oracle the Trundle rolls on.
+//   rail.kind: "straight" (axis) | "corner" (exits, mirror flags) |
+//              "slope" (axis + up, the horizontal direction of ascent)
+const defRail = (id, name, rail, hiddenVariant = true) => {
+  BLOCKS[id] = def("Waybar" + name, {
+    tiles: cube(TILE.RAIL_TIE),
+    shape: "rail",
+    rail,
+    solid: false,
+    opaque: false,
+    hardness: 0.7,
+    toolKind: "pick",
+    sound: "stone",
+    base: RAIL,
+    ...(hiddenVariant ? { hidden: true, placeable: false, drops: RAIL } : {}),
+  });
+};
+defRail(RAIL, "", { kind: "straight", axis: "z" }, false);
+defRail(RAIL_EW, " (east-west)", { kind: "straight", axis: "x" });
+defRail(RAIL_NE, " (bend NE)", { kind: "corner", exits: [[0, -1], [1, 0]], mx: false, mz: false });
+defRail(RAIL_NW, " (bend NW)", { kind: "corner", exits: [[0, -1], [-1, 0]], mx: true, mz: false });
+defRail(RAIL_SE, " (bend SE)", { kind: "corner", exits: [[0, 1], [1, 0]], mx: false, mz: true });
+defRail(RAIL_SW, " (bend SW)", { kind: "corner", exits: [[0, 1], [-1, 0]], mx: true, mz: true });
+defRail(RAIL_UP_N, " (rise N)", { kind: "slope", axis: "z", up: [0, -1] });
+defRail(RAIL_UP_E, " (rise E)", { kind: "slope", axis: "x", up: [1, 0] });
+defRail(RAIL_UP_S, " (rise S)", { kind: "slope", axis: "z", up: [0, 1] });
+defRail(RAIL_UP_W, " (rise W)", { kind: "slope", axis: "x", up: [-1, 0] });
+
+export function isRail(id) {
+  const b = BLOCKS[id];
+  return b !== undefined && b.shape === "rail";
+}
+
+// the Trundle item: never a world block — a riveted sky-iron tub on wheels,
+// carried folded-flat in the satchel (Wanderlings don't ask how)
+BLOCKS[CART] = def("Trundle", {
+  tiles: cube(TILE.TRUNDLE),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  hardness: 0.05,
+  placeable: false,
+  sound: "stone",
 });
 
 // total damage-reduction fraction of a wear-slot array (entries are stacks or

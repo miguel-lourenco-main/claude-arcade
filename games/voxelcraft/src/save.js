@@ -45,6 +45,10 @@ export function writeSave(world, player, sky, hud, inventory, extra = {}) {
       // additive: deployed Reed Skiffs [[x, y, z, yaw]...] — absent in older
       // saves, which simply have no boats afloat
       boats: extra.boats || [],
+      // additive: deployed Trundles [[x, y, z, yaw]...] — absent in older
+      // saves, which simply have no carts on the waybars (velocity is not
+      // saved; a reloaded trundle wakes parked)
+      carts: extra.carts || [],
       // additive: the Field Chart's inked leaf {ax, az, png} — absent in
       // older saves (and worlds that never unrolled one): a fresh chart
       chart: extra.chart || undefined,

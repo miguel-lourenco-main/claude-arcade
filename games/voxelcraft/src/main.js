@@ -12,6 +12,8 @@ import { SlingStones } from "./projectiles.js";
 import { Mobs } from "./mobs.js";
 import { MeteorShowers } from "./meteors.js";
 import { Boats } from "./boats.js";
+import { Carts } from "./carts.js";
+import { reshapeRails, railShape } from "./rails.js";
 import { Fishing } from "./fishing.js";
 import { SignBoards } from "./signs.js";
 import { craft } from "./craft.js";
@@ -26,7 +28,7 @@ import { PlayerViewer } from "./player-viewer.js";
 import {
   SAPLING, LOG, LEAVES, LEAVES_COLD, BED, WATER as WATER_ID, dropFor,
   CROP_SPROUT, CROP_RIPE, CROP_STAGES, isCrop, SLING_STONE, BOAT, FISHING_POLE,
-  isSign, COMPASS, CLOCK, SNOW_LAYER,
+  isSign, COMPASS, CLOCK, SNOW_LAYER, CART,
 } from "./blocks.js";
 import { makeGenerator, findSpawn, findBiomeLocation } from "./terrain.js";
 import { findNearestRuin, ruinForChunk } from "./ruins.js";
@@ -199,9 +201,17 @@ const boats = new Boats(scene, {
   onHit: () => sfx.block("hit", BOAT),
   onBreak: () => sfx.block("break", BOAT),
 });
+// the Trundles rolling (and parked) on this world's waybars — same lifecycle
+// as the skiffs
+const carts = new Carts(scene, {
+  onDrop: (x, y, z, id) => drops.spawn(x, y, z, id),
+  onHit: () => sfx.block("hit", CART),
+  onBreak: () => sfx.block("break", CART),
+});
 if (save && save.chests) world.loadChests(save.chests);
 if (save && save.kilns) world.loadKilns(save.kilns); // additive v2 field
 if (save && Array.isArray(save.boats)) boats.load(save.boats); // additive v2 field
+if (save && Array.isArray(save.carts)) carts.load(save.carts); // additive v2 field
 if (save && save.signs) world.loadSigns(save.signs); // additive v2 field
 // additive v2 field: ruin chunks whose loot was already dealt — must load
 // before any chunk generates, or a looted stead would re-seed its chest
@@ -602,7 +612,15 @@ const interaction = new Interaction(world, player, scene, hud, {
     if (chunks.length === 0) return;
     const lightTouched = !!(info && info.ids &&
       info.ids.some((id) => id != null && BLOCKS[id].lightEmit > 0));
-    lightAwareRemesh(chunks, lightTouched);
+    // the waybar web reshapes around ANY edit (a placed canonical rail takes
+    // its true shape; neighbors follow a laid, broken, or popped rail) —
+    // cheap when no rails are near, and the extra chunks remesh in one pass
+    let all = chunks;
+    if (info) {
+      const railChunks = reshapeRails(world, info.x, info.y, info.z);
+      if (railChunks.length > 0) all = [...new Set([...chunks, ...railChunks])];
+    }
+    lightAwareRemesh(all, lightTouched);
     // sapling lifecycle
     if (info) {
       if (info.placed === SAPLING) registerSapling(info.x, info.y, info.z);
@@ -728,6 +746,7 @@ const interaction = new Interaction(world, player, scene, hud, {
   },
   mobs,
   boats,
+  carts,
   fishing,
   // right-click the Peddler: the trade window with the day's three offers —
   // unless he's still nursing the grudge from the last kick
@@ -757,6 +776,21 @@ const interaction = new Interaction(world, player, scene, hud, {
   onDeployBoat: (x, topWaterY, z) => {
     // bow pointing away from the launcher; buoyancy settles the exact line
     boats.deploy(x + 0.5, topWaterY + 1 - 0.3, z + 0.5, player.yaw + Math.PI);
+  },
+  // seat the Wanderling in a Trundle — the same suspended-physics idiom as
+  // the skiff (carts.update carries the seat from here on)
+  onBoardCart: (c) => {
+    player.riding = c;
+    player.vel.x = player.vel.y = player.vel.z = 0;
+    player.resetFall();
+    player.sprinting = false;
+  },
+  // interact.js has already confirmed the rail target, the cap, and the
+  // empty cell, and consumed the item — set the tub down nose-along-track
+  // (its first update snaps the exact track height, slopes included)
+  onDeployCart: (x, y, z, railDef) => {
+    const yaw = railDef.rail && railDef.rail.axis === "x" ? Math.PI / 2 : 0;
+    carts.deploy(x + 0.5, y + 0.06, z + 0.5, yaw);
   },
   crackTextures: buildCrackTextures(1337),
   avgColor: atlas.avgColor,
@@ -825,6 +859,7 @@ const stopAutosave = startAutosave(() => writeSave(world, player, sky, hud, inve
   wear: wearSlots.map((s) =>
     (s ? (s.dur !== undefined ? [s.id, s.count, s.dur] : [s.id, s.count]) : 0)),
   boats: boats.serialize(), // additive: deployed skiffs [[x,y,z,yaw]...]
+  carts: carts.serialize(), // additive: deployed trundles [[x,y,z,yaw]...]
   weather: [
     sky.weatherPhase,
     Math.round(sky.weatherTimer * 10) / 10,
@@ -1193,6 +1228,7 @@ function tick(now) {
     });
     mobs.update(frameDt, { world, player, terrain, night: sky.lightLevel < 0.45 });
     boats.update(frameDt, world, player);
+    carts.update(frameDt, world, player);
     kegs.update(frameDt, world, player);
     stones.update(frameDt, world);
     fishing.update(frameDt, world, player);
@@ -1214,6 +1250,7 @@ function tick(now) {
   }
   mobs.setLight(sky.lightLevel, sky.lightTint);
   boats.setLight(sky.lightLevel, sky.lightTint);
+  carts.setLight(sky.lightLevel, sky.lightTint);
   fishing.setLight(sky.lightLevel, sky.lightTint);
   signBoards.setLight(sky.lightLevel, sky.lightTint);
   signBoards.sync(); // boards follow chunk load/unload and sign edits
@@ -1378,7 +1415,9 @@ requestAnimationFrame(tick);
 if (NO_LOCK) {
   window.voxelcraft = {
     player, world, hud, sky, terrain, interaction, mobs, drops, saplings, crops,
-    inventory, kegs, stones, boats, fishing, signBoards, wayfinder, meteors,
+    inventory, kegs, stones, boats, carts, fishing, signBoards, wayfinder, meteors,
+    // the waybar auto-shaper's oracle — lets tests assert what a cell wants
+    railShape: (x, y, z) => railShape(world, x, y, z),
     wear: wearSlots, playerModel,
     rain: rainFx, sfx, music, camera,
     // torch-light probe (the same BFS the mesher bakes) — lets tests assert

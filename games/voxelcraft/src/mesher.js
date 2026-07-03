@@ -4,7 +4,7 @@
 import * as THREE from "three";
 import { BLOCKS, AIR, LEAVES, LEAVES_COLD } from "./blocks.js";
 import { CHUNK, HEIGHT } from "./world.js";
-import { tileUV } from "./textures.js";
+import { tileUV, TILE } from "./textures.js";
 import { hash2 } from "./noise.js";
 
 // Corner order per face: bl, br, tr, tl (uv 00,10,11,01), CCW from outside.
@@ -328,6 +328,67 @@ function gateBoxes(open, c) {
   return boxes.map((b) => ({ x0: b.z0, x1: b.z1, y0: b.y0, y1: b.y1, z0: b.x0, z1: b.x1 }));
 }
 
+// --- the Waybar (rail) ----------------------------------------------------------
+// Ties + two sky-iron bars, inset flat on the block top. The shape is baked
+// into the id (like stairs): straights, four corners, four stepped slopes.
+// Bar boxes carry a per-box tile override (box.tiles) so the ties stay
+// knotwood while the bars read as metal — addShapedBlock, the icon projector
+// (hud.js), and buildBlockGeometry all honor it.
+
+const RAIL_TIE_H = 0.09;   // tie tops
+const RAIL_BAR_H = 0.17;   // bar tops (the running surface)
+const RAIL_BARS = [[2.5 / 16, 4.5 / 16], [11.5 / 16, 13.5 / 16]]; // bar u-strips
+const RAIL_TIES = [[1 / 16, 4 / 16], [6.5 / 16, 9.5 / 16], [12 / 16, 15 / 16]];
+const RAIL_BAR_TILES = { top: TILE.RAIL_BAR, side: TILE.RAIL_BAR, bottom: TILE.RAIL_BAR };
+// slope step tops, low end first: a linear rise from the flat-rail height at
+// one edge up to the neighboring block top at the other
+const RAIL_SLOPE_TOPS = [0.3, 0.55, 0.8, 1.0];
+
+const railBar = (x0, x1, z0, z1, y0 = RAIL_TIE_H, y1 = RAIL_BAR_H) =>
+  ({ x0, x1, z0, z1, y0, y1, tiles: RAIL_BAR_TILES });
+const railTie = (x0, x1, z0, z1, y0 = 0, y1 = RAIL_TIE_H) => ({ x0, x1, z0, z1, y0, y1 });
+const railMirrorX = (b) => ({ ...b, x0: 1 - b.x1, x1: 1 - b.x0 });
+const railMirrorZ = (b) => ({ ...b, z0: 1 - b.z1, z1: 1 - b.z0 });
+// mirror the whole cell across the x/z diagonal (the gateBoxes idiom)
+const railSwapXZ = (b) => ({ ...b, x0: b.z0, x1: b.z1, z0: b.x0, z1: b.x1 });
+
+function railBoxes(def) {
+  const r = def.rail;
+  let boxes = [];
+  if (r.kind === "straight") {
+    for (const [z0, z1] of RAIL_TIES) boxes.push(railTie(1 / 16, 15 / 16, z0, z1));
+    for (const [x0, x1] of RAIL_BARS) boxes.push(railBar(x0, x1, 0, 1));
+    if (r.axis === "x") boxes = boxes.map(railSwapXZ);
+  } else if (r.kind === "corner") {
+    // built as the NE bend (joins -z and +x), then mirrored into place:
+    // the outer bar sweeps wide through the cell, the inner hugs the turn
+    boxes.push(railTie(1 / 16, 15 / 16, 1 / 16, 4 / 16));   // north-arm tie
+    boxes.push(railTie(12 / 16, 15 / 16, 4 / 16, 15 / 16)); // east-arm tie
+    boxes.push(railBar(2.5 / 16, 4.5 / 16, 0, 13.5 / 16));       // outer, north run
+    boxes.push(railBar(4.5 / 16, 1, 11.5 / 16, 13.5 / 16));      // outer, east run
+    boxes.push(railBar(11.5 / 16, 13.5 / 16, 0, 4.5 / 16));      // inner, north run
+    boxes.push(railBar(13.5 / 16, 1, 2.5 / 16, 4.5 / 16));       // inner, east run
+    if (r.mx) boxes = boxes.map(railMirrorX);
+    if (r.mz) boxes = boxes.map(railMirrorZ);
+  } else {
+    // slope: four rail-slices stepping up toward the `up` direction, each a
+    // tie plate with the two bar strips riding on top (floating boxes are
+    // fine — interior faces never cull)
+    const ascendPos = r.up[0] + r.up[1] > 0; // high end at the +axis edge?
+    for (let k = 0; k < 4; k++) {           // k counts from the LOW end
+      const top = RAIL_SLOPE_TOPS[k];
+      const a0 = (ascendPos ? k : 3 - k) / 4;
+      const a1 = a0 + 0.25;
+      boxes.push(railTie(1 / 16, 15 / 16, a0, a1, top - 0.15, top - 0.08));
+      for (const [x0, x1] of RAIL_BARS) {
+        boxes.push(railBar(x0, x1, a0, a1, top - 0.08, top));
+      }
+    }
+    if (r.axis === "x") boxes = boxes.map(railSwapXZ);
+  }
+  return boxes;
+}
+
 // --- the Notice Post ----------------------------------------------------------
 // A slim ground post carrying a wide framed board. The board's thin axis
 // follows the facing (0/2 = board spans x, faces ±z; 1/3 = spans z, faces ±x);
@@ -376,6 +437,8 @@ export function shapeBoxes(def) {
     boxes = gateBoxes(def.open, [false, true, false, true]);
   } else if (def.shape === "sign") {
     boxes = signBoxes(def.facing);
+  } else if (def.shape === "rail") {
+    boxes = railBoxes(def);
   } else {
     boxes = [];
   }
@@ -429,7 +492,8 @@ function addShapedBlock(bucket, def, lx, y, lz, get, wx, wz, lightAt, blockLight
       const sx = boundary ? dx : 0, sy = boundary ? dy : 0, sz = boundary ? dz : 0;
       const light = lightAt(lx + sx, Math.max(0, y + sy), lz + sz);
       const torch = blockLightAt(lx + sx, y + sy, lz + sz);
-      const tile = dy > 0 ? def.tiles.top : dy < 0 ? def.tiles.bottom : def.tiles.side;
+      const tiles = box.tiles || def.tiles; // per-box override (waybar bars)
+      const tile = dy > 0 ? tiles.top : dy < 0 ? tiles.bottom : tiles.side;
       const corners = face.corners.map((p) => {
         const c = boxCorner(box, p);
         return [lx + c[0], y + c[1], lz + c[2]];
@@ -609,7 +673,8 @@ export function buildBlockGeometry(blockId, blockLight = 0.25) {
     for (const box of shapeBoxes(def)) {
       for (const face of FACES) {
         if (face.dir[1] < 0 && box.skipBottom) continue;
-        const tile = face.dir[1] > 0 ? def.tiles.top : face.dir[1] < 0 ? def.tiles.bottom : def.tiles.side;
+        const tiles = box.tiles || def.tiles;
+        const tile = face.dir[1] > 0 ? tiles.top : face.dir[1] < 0 ? tiles.bottom : tiles.side;
         const s = face.shade;
         b.quad(face.corners.map((p) => boxCorner(box, p)), tile, [s, s, s, s], bl,
           false, boxFaceUV(tile, box, face.dir));
