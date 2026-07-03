@@ -105,6 +105,12 @@ specific item vocabulary.
   which is technically true.
 - **Star-Edge** — a starstone edge honed onto a sky-iron shiv; the keenest
   blade a Wanderling can carry, and it hums very faintly on clear nights.
+- **Wispcap** — a squat pale mushroom of the deep caves, cousin (the
+  botanists insist) of the Sunwisp: when the world flipped, some of the
+  old daylight got buried, and it grows back up through the stone as a
+  mushroom with a lit cap. Dim as lights go — a mushroom is not a
+  campfire — but it kicks loose in one hit, replants anywhere solid,
+  and asks for nothing, which makes it the delver's favorite lamp.
 - **The Emberwash** — what the flip couldn't cool. In the deepest carvings,
   below even the old-sky caves, the ground still remembers being on fire
   about the whole arrangement: molten pools with a dark crust and bright

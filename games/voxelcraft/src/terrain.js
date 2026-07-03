@@ -6,7 +6,7 @@
 import {
   GRASS, DIRT, STONE, SAND, GRAVEL, LOG, LEAVES, LEAVES_COLD, WATER, BEDROCK,
   SNOWY_GRASS, TALLGRASS, POPPY, DANDELION, CACTUS, SANDSTONE, COAL_ORE,
-  IRON_ORE, BERRY_BUSH, SNOW_LAYER, ICE, AIR, LAVA,
+  IRON_ORE, BERRY_BUSH, SNOW_LAYER, ICE, AIR, LAVA, WISPCAP, isSolid,
 } from "./blocks.js";
 import { CHUNK, HEIGHT, SEA_LEVEL } from "./world.js";
 import { Perlin, hash2 } from "./noise.js";
@@ -18,6 +18,9 @@ const TREE_MARGIN = 3; // canopy radius 2 + 1 safety
 // molten rock instead of air — a flat "sea level" for the deep, safely above
 // the bedrock band (y <= 2) and well under the cavern belt (y < 26)
 const LAVA_LEVEL = 11;
+// Wispcaps grow on cave floors below this height (the old-sky caves proper)
+const WISPCAP_CEILING = 24;
+const WISPCAP_CHANCE = 0.03;
 
 function smoothstep(a, b, t) {
   t = Math.min(1, Math.max(0, (t - a) / (b - a)));
@@ -140,6 +143,7 @@ export function makeGenerator(seed) {
         // neighbor's water line would open a hole into static water
         const minNbH = Math.min(hAt(lx - 1, lz), hAt(lx + 1, lz), hAt(lx, lz - 1), hAt(lx, lz + 1));
 
+        let prev = BEDROCK; // what the cell below this one got (per column)
         for (let y = 0; y <= h; y++) {
           let id;
           if (y === 0 || (y <= 2 && hash2(x * 3 + y, z * 3, seed ^ 0xbed) < 0.6)) {
@@ -148,6 +152,12 @@ export function makeGenerator(seed) {
             // the deepest carvings hold the Emberwash — pools with a flat,
             // chunk-coherent surface (pure function of y, like the carve)
             id = y <= LAVA_LEVEL ? LAVA : AIR;
+            // Wispcaps sprout where a deep carve meets a solid floor —
+            // scattered scraps of the buried old daylight
+            if (id === AIR && y < WISPCAP_CEILING && isSolid(prev) &&
+                hash2(x * 7 + y, z * 7, seed ^ 0x815c) < WISPCAP_CHANCE) {
+              id = WISPCAP;
+            }
           } else if (biome === "desert") {
             if (y > h - 4) id = SAND;
             else if (y > h - 9) id = SANDSTONE;
@@ -164,6 +174,7 @@ export function makeGenerator(seed) {
           }
           if (id === STONE) id = t.oreAt(x, y, z, h) || STONE;
           if (id !== AIR) chunk.set(lx, y, lz, id);
+          prev = id;
         }
 
         // surface water — the Rimelands pull a River Glass lid over theirs

@@ -165,6 +165,11 @@ export const ICE = 102;
 // tool ever collects it. Terrain floods deep cave cells with it; creative
 // can paint more.
 export const LAVA = 103;
+// the Wispcap: a pale deep-cave mushroom holding a scrap of the buried old
+// daylight (cousin of the Sunwisp). Grows on the floors of the old-sky
+// caves; kicks loose in one hit and replants anywhere solid — a dim,
+// farmable light for delve camps (emit 8: a mushroom, not a campfire).
+export const WISPCAP = 104;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -894,6 +899,16 @@ BLOCKS[LAVA] = def("Emberwash", {
 // a fluid cell: the player swims in it, and building into it is allowed
 // (placement replaces the fluid the way it replaces water)
 export function isFluid(id) { return id === WATER || id === LAVA; }
+
+BLOCKS[WISPCAP] = def("Wispcap", { hardness: 0.05,
+  tiles: cube(TILE.WISPCAP),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  sound: "plant",
+  lightEmit: 8,
+});
 
 // total damage-reduction fraction of a wear-slot array (entries are stacks or
 // null), capped at 0.60. Falls are a special case: armor helps a fall at only

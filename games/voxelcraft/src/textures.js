@@ -105,6 +105,8 @@ export const TILE = {
   ICE: 88,
   // the Emberwash: molten pools of the deep (LAVA block)
   LAVA: 89,
+  // the Wispcap: pale glowing deep-cave mushroom (cross sprite)
+  WISPCAP: 90,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -1438,6 +1440,35 @@ painters[TILE.ICE] = (p) => {
   }
   // a frosted glint near one corner
   p.px(3, 3, 240, 248, 254); p.px(4, 3, 240, 248, 254); p.px(3, 4, 226, 238, 248);
+};
+
+painters[TILE.WISPCAP] = (p) => {
+  // a squat pale mushroom holding a scrap of the buried old daylight:
+  // moon-white cap with a faint green-gold rim glow, slim stem
+  p.clear();
+  // stem
+  for (let y = 10; y < 16; y++) {
+    const d = (p.rand() * 2 - 1) * 6;
+    p.px(7, y, 214 + d, 218 + d, 198 + d);
+    p.px(8, y, 196 + d, 200 + d, 180 + d);
+  }
+  // cap: a dome from y6..y9, widest at the base
+  const rows = [[7, 8], [6, 9], [5, 10], [4, 11]];
+  rows.forEach(([x0, x1], i) => {
+    const y = 6 + i;
+    for (let x = x0; x <= x1; x++) {
+      const d = (p.rand() * 2 - 1) * 8;
+      p.px(x, y, 232 + d, 238 + d, 212 + d);
+    }
+  });
+  // the wisp in the cap: a warm glowing heart + rim motes
+  p.px(7, 7, 255, 246, 190); p.px(8, 7, 255, 246, 190);
+  p.px(7, 8, 250, 240, 170); p.px(8, 8, 244, 236, 168);
+  p.px(4, 9, 210, 232, 170); p.px(11, 9, 210, 232, 170);
+  // gills: a darker underline where cap meets stem
+  for (let x = 5; x <= 10; x++) p.px(x, 10, 168, 176, 150);
+  // a spore mote drifting off the cap
+  p.px(11, 5, 226, 240, 190); p.px(3, 6, 218, 234, 184);
 };
 
 painters[TILE.LAVA] = (p) => {
