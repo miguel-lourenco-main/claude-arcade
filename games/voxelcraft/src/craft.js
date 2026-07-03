@@ -16,7 +16,7 @@ import {
   STARSTONE, STAR_BLADE,
   GLOAM_INGOT, GLOAM_BLOCK, GLOAM_PICK, GLOAM_AXE, GLOAM_SHOVEL, GLOAM_BLADE,
   GLOAM_CROWN, GLOAM_JERKIN, GLOAM_LEGGINGS, GLOAM_TREADS,
-  PLANK_HOE, STONE_HOE, IRON_HOE,
+  PLANK_HOE, STONE_HOE, IRON_HOE, MEAL_ROOT, BOGBEAN, POTTAGE,
 } from "./blocks.js";
 
 // in: [[blockId, count], ...]  out: [blockId, count]  note: extra recipe copy
@@ -41,6 +41,8 @@ export const RECIPES = [
   // the Reed Skiff: five planks lashed into a shallow hull (workbench)
   { in: [[PLANKS, 5]], out: [BOAT, 1] },
   { in: [[COAL_ORE, 4], [SAND, 5]], out: [BLAST_KEG, 1] },
+  // Wanderer's Pottage: the mire and the meadow, in one pot (workbench)
+  { in: [[MEAL_ROOT, 1], [BOGBEAN, 2]], out: [POTTAGE, 1], note: "the mire and the meadow, in one pot" },
   { in: [[SAND, 4]], out: [SANDSTONE, 1] },
   { in: [[STONE, 4]], out: [BRICKS, 4] },
   // shaped blocks: 3 blocks -> 6 slabs, 6 blocks -> 4 stairs (workbench)

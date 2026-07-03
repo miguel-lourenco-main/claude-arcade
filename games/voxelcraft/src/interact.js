@@ -4,7 +4,7 @@
 import * as THREE from "three";
 import {
   AIR, BEDROCK, CHEST, WORKBENCH, KILN, BED, LADDER, DOOR, DOOR_TOP, BLAST_KEG,
-  GATE, GATE_OPEN, ROOT_SEED, CROP_SPROUT, DIRT, GRASS, MUD, FARMLAND,
+  GATE, GATE_OPEN, SEED_TO_SPROUT, DIRT, GRASS, MUD, FARMLAND,
   SLING_STONE, BOAT, WATER, FISHING_POLE, SNOW_LAYER,
   BLOCKS, isSolid, isPlant, isFluid, isDoor, isDoorLower, isGate, isSign,
   DOOR_TOGGLE, dropFor, yawToFacing,
@@ -697,8 +697,9 @@ export class Interaction {
           !isSolid(this.world.getBlock(px - 1, py, pz)) &&
           !isSolid(this.world.getBlock(px, py, pz + 1)) &&
           !isSolid(this.world.getBlock(px, py, pz - 1))) return;
-    } else if (id === ROOT_SEED) {
-      // root pips want TURNED EARTH now — the Furrower made farming a craft
+    } else if (SEED_TO_SPROUT[id] !== undefined) {
+      // seed items (root pips, bogbean pods) want TURNED EARTH — the
+      // Furrower made farming a craft
       const below = this.world.getBlock(px, py - 1, pz);
       if (below !== FARMLAND) return;
     } else if (def.shape === "sign") {
@@ -736,9 +737,9 @@ export class Interaction {
     if (def.shape === "sign" && def.facings) {
       placeId = def.facings[(yawToFacing(this.player.yaw) + 2) % 4];
     }
-    // planted pips go into the ground as a sprout — the seed item never
-    // exists as a world block
-    if (id === ROOT_SEED) placeId = CROP_SPROUT;
+    // planted seeds go into the ground as their sprout — the seed item
+    // never exists as a world block
+    if (SEED_TO_SPROUT[id] !== undefined) placeId = SEED_TO_SPROUT[id];
     const affected = this.world.setBlock(px, py, pz, placeId);
     if (affected.length === 0) return;
     // include the replaced block: overwriting a torch must clear its light

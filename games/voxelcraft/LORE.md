@@ -149,7 +149,10 @@ specific item vocabulary.
   guilt.
 - **Marsh Reed** — the tall seed-headed reed of the Mirelands. Some
   stalks keep a twist of **Bogbean Pods** — fat speckled beans the bog
-  folk swore by, and swear they'll plant again someday.
+  folk swore by. Planted in Turned Earth they twine up into vines and
+  hand back **Bogbeans**; a meal root and two bogbeans simmered together
+  make **Wanderer's Pottage**, the dish every satchel dreams about on
+  the fourth night out.
 - **The Delvings-Under** — the Steads-Before didn't just farm; they dug.
   Timbered galleries chasing sky-iron down into the old-sky dark, rung
   shafts up to little head-frames that have mostly given up standing

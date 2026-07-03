@@ -129,6 +129,12 @@ export const TILE = {
   HOE_PLANK: 106,
   HOE_STONE: 107,
   HOE_IRON: 108,
+  // bogbean farming: the second crop's three stages, the bean, the pottage
+  BOGBEAN_SPROUT: 109,
+  BOGBEAN_HALF: 110,
+  BOGBEAN_RIPE: 111,
+  BOGBEAN: 112,
+  POTTAGE: 113,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -1204,6 +1210,87 @@ painters[TILE.BLADE_GLOAM] = toolPainter("blade", TOOL_PALETTES.gloam);
 painters[TILE.HOE_PLANK] = toolPainter("hoe", TOOL_PALETTES.plank);
 painters[TILE.HOE_STONE] = toolPainter("hoe", TOOL_PALETTES.stone);
 painters[TILE.HOE_IRON] = toolPainter("hoe", TOOL_PALETTES.iron);
+
+painters[TILE.BOGBEAN_SPROUT] = (p) => {
+  // bogbean, first showing: two shy twining threads finding their feet
+  p.clear();
+  for (const [x, lean] of [[5, 1], [10, -1]]) {
+    const h = 3 + ((p.rand() * 2) | 0);
+    for (let i = 0; i < h; i++) {
+      const d = (p.rand() * 2 - 1) * 12;
+      p.px(x + (i >= h - 1 ? lean : 0), 15 - i, 88 + d, 148 + d, 70 + d);
+    }
+    p.px(x + lean, 15 - h - 1, 110, 168, 84); // the curling tip
+  }
+};
+painters[TILE.BOGBEAN_HALF] = (p) => {
+  // half-grown: proper vines now, twining up imagined stakes, first pods
+  p.clear();
+  for (const cx of [4, 11]) {
+    for (let dy = 0; dy <= 9; dy++) {
+      const d = (p.rand() * 2 - 1) * 14;
+      const wob = dy % 3 === 1 ? 1 : dy % 3 === 2 ? -1 : 0;
+      p.px(cx + wob, 15 - dy, 84 + d, 142 + d, 64 + d);
+      if (p.rand() < 0.35) p.px(cx + wob + 1, 15 - dy, 96 + d, 150 + d, 72 + d);
+    }
+    p.px(cx + 1, 9, 140, 152, 96); // a first green pod
+  }
+};
+painters[TILE.BOGBEAN_RIPE] = (p) => {
+  // ripe: heavy vines strung with fat speckled pods, leaves going amber
+  p.clear();
+  for (const cx of [4, 11]) {
+    for (let dy = 0; dy <= 11; dy++) {
+      const d = (p.rand() * 2 - 1) * 14;
+      const wob = dy % 3 === 1 ? 1 : dy % 3 === 2 ? -1 : 0;
+      p.px(cx + wob, 15 - dy, 96 + d, 138 + d, 58 + d);
+      if (p.rand() < 0.3) p.px(cx + wob - 1, 15 - dy, 148 + d, 142 + d, 70 + d);
+    }
+    // the pods: plump speckled drops hung off the vine
+    for (const [dx, dy] of [[1, 5], [-1, 8], [1, 10]]) {
+      p.px(cx + dx, 15 - dy, 168, 178, 120);
+      p.px(cx + dx, 15 - dy + 1, 148, 160, 104);
+      if (p.rand() < 0.6) p.px(cx + dx + (dx > 0 ? 1 : -1), 15 - dy, 120, 134, 84);
+    }
+  }
+};
+painters[TILE.BOGBEAN] = (p) => {
+  // the bogbean: a fat speckled bean, kidney-bent
+  p.clear();
+  for (let y = 6; y <= 10; y++) {
+    const half = y === 6 || y === 10 ? 2 : 3;
+    for (let x = 8 - half; x <= 8 + half; x++) {
+      if (y >= 8 && x <= 6) continue; // the kidney notch
+      const d = (p.rand() * 2 - 1) * 10;
+      const edge = x === 8 - half || x === 8 + half || y === 6 || y === 10;
+      p.px(x, y, (edge ? 118 : 158) + d, (edge ? 134 : 172) + d, (edge ? 80 : 110) + d);
+    }
+  }
+  p.px(7, 7, 96, 110, 66); p.px(9, 9, 96, 110, 66); // the speckles
+  p.px(8, 6, 196, 206, 150); // the shine
+};
+painters[TILE.POTTAGE] = (p) => {
+  // Wanderer's Pottage: a stout bowl, thick amber stew, a curl of steam
+  p.clear();
+  // the bowl
+  for (let y = 9; y <= 13; y++) {
+    const half = y === 9 ? 5 : y <= 11 ? 5 : y === 12 ? 4 : 3;
+    for (let x = 8 - half; x <= 8 + half; x++) {
+      const d = (p.rand() * 2 - 1) * 8;
+      const edge = x === 8 - half || x === 8 + half || y === 13;
+      p.px(x, y, (edge ? 96 : 128) + d, (edge ? 66 : 88) + d, (edge ? 42 : 56) + d);
+    }
+  }
+  // the stew surface: amber with root-and-bean lumps
+  for (let x = 4; x <= 12; x++) {
+    const d = (p.rand() * 2 - 1) * 12;
+    p.px(x, 9, 198 + d, 140 + d, 62 + d);
+  }
+  p.px(6, 9, 158, 170, 108); p.px(10, 9, 202, 146, 82); // a bean, a root lump
+  // steam: two shy curls
+  p.px(6, 7, 226, 228, 232, 150); p.px(7, 6, 226, 228, 232, 120);
+  p.px(10, 7, 226, 228, 232, 150); p.px(9, 5, 226, 228, 232, 110);
+};
 
 painters[TILE.FARMLAND_TOP] = (p) => {
   // Turned Earth: dark worked soil combed into furrow rows

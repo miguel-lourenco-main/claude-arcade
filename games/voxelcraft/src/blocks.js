@@ -199,6 +199,15 @@ export const FARMLAND = 119;
 export const PLANK_HOE = 120;
 export const STONE_HOE = 121;
 export const IRON_HOE = 122;
+// bogbean farming: the second crop. Pods plant in Turned Earth as
+// BOGBEAN_SPROUT and grow through the same three-stage clock as meal
+// roots (main.js updateCrops speaks cropStagesFor now). BOGBEAN is the
+// food; POTTAGE is meal root + bogbeans simmered into the real dish.
+export const BOGBEAN_SPROUT = 123;
+export const BOGBEAN_HALF = 124;
+export const BOGBEAN_RIPE = 125;
+export const BOGBEAN = 126;
+export const POTTAGE = 127;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -701,10 +710,64 @@ BLOCKS[SEARED_SILVERFIN] = def("Seared Silverfin", {
   food: { restore: 6 },
 });
 
+// --- bogbean farming: the second crop on the same three-stage clock -----------
+BLOCKS[BOGBEAN_SPROUT] = def("Bogbean Sprouts", cropCross({
+  tiles: cube(TILE.BOGBEAN_SPROUT),
+  drops: BOGBEAN_POD,
+  base: BOGBEAN_POD, // pick-block hands back the pods
+  placeable: false,
+  hidden: true,
+}));
+BLOCKS[BOGBEAN_HALF] = def("Bogbean Vines", cropCross({
+  tiles: cube(TILE.BOGBEAN_HALF),
+  drops: BOGBEAN_POD,
+  base: BOGBEAN_POD,
+  placeable: false,
+  hidden: true,
+}));
+BLOCKS[BOGBEAN_RIPE] = def("Ripe Bogbeans", cropCross({
+  tiles: cube(TILE.BOGBEAN_RIPE),
+  drops: BOGBEAN, // guaranteed beans, then the bonus roll below
+  base: BOGBEAN_POD,
+  // 1-2 beans + 1-2 pods per harvest — the patch always comes out ahead
+  extraDrops: () => {
+    const out = [BOGBEAN_POD];
+    if (Math.random() < 0.5) out.push(BOGBEAN_POD);
+    if (Math.random() < 0.5) out.push(BOGBEAN);
+    return out;
+  },
+  placeable: false,
+  hidden: true,
+}));
+BLOCKS[BOGBEAN] = def("Bogbean", cropCross({
+  tiles: cube(TILE.BOGBEAN),
+  placeable: false,
+  food: { restore: 2 },
+}));
+// the dish every satchel dreams about: the mire and the meadow, one pot
+BLOCKS[POTTAGE] = def("Wanderer's Pottage", cropCross({
+  tiles: cube(TILE.POTTAGE),
+  placeable: false,
+  food: { restore: 10 },
+}));
+
 export const CROP_STAGES = [CROP_SPROUT, CROP_HALF, CROP_RIPE];
-export function isCrop(id) {
-  return id === CROP_SPROUT || id === CROP_HALF || id === CROP_RIPE;
+export const BOGBEAN_STAGES = [BOGBEAN_SPROUT, BOGBEAN_HALF, BOGBEAN_RIPE];
+// the stage ladder a growing block belongs to, or null. New crops add their
+// trio here and the shared clock in main.js updateCrops just works.
+export function cropStagesFor(id) {
+  if (id === CROP_SPROUT || id === CROP_HALF || id === CROP_RIPE) return CROP_STAGES;
+  if (id === BOGBEAN_SPROUT || id === BOGBEAN_HALF || id === BOGBEAN_RIPE) return BOGBEAN_STAGES;
+  return null;
 }
+export function isCrop(id) {
+  return cropStagesFor(id) !== null;
+}
+// the seed item -> the sprout it plants (interact.js placement routing)
+export const SEED_TO_SPROUT = {
+  [ROOT_SEED]: CROP_SPROUT,
+  [BOGBEAN_POD]: BOGBEAN_SPROUT,
+};
 
 // yaw -> cardinal facing index (0 N(-z), 1 E(+x), 2 S(+z), 3 W(-x)).
 // Stairs place with their tall back in the look direction, so the steps
@@ -977,8 +1040,8 @@ BLOCKS[REEDS] = def("Marsh Reed", { hardness: 0.05, drops: null,
   opaque: false,
   sound: "plant",
 });
-// the pod is an item for now (placeable: false) — the bogbean farming wave
-// wires it into the Turned Earth planting flow
+// the pod "places" only into Turned Earth — interact.js routes it to a
+// BOGBEAN_SPROUT exactly like Root Pips; the pod never exists as a block
 BLOCKS[BOGBEAN_POD] = def("Bogbean Pods", { hardness: 0.05,
   tiles: cube(TILE.BOGBEAN_POD),
   kind: "cross",
@@ -986,7 +1049,6 @@ BLOCKS[BOGBEAN_POD] = def("Bogbean Pods", { hardness: 0.05,
   solid: false,
   opaque: false,
   sound: "plant",
-  placeable: false,
 });
 
 // Turned Earth: worked soil, combed into rows. Stays turned (no reversion

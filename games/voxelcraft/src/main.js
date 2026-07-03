@@ -25,7 +25,7 @@ import { Wayfinder, bearingYaw, normAngle } from "./wayfinding.js";
 import { PlayerViewer } from "./player-viewer.js";
 import {
   SAPLING, LOG, LEAVES, LEAVES_COLD, BED, WATER as WATER_ID, LAVA as LAVA_ID,
-  dropFor, CROP_SPROUT, CROP_RIPE, CROP_STAGES, isCrop, SLING_STONE, BOAT,
+  dropFor, cropStagesFor, isCrop, SEED_TO_SPROUT, SLING_STONE, BOAT,
   FISHING_POLE, isSign, COMPASS, CLOCK, SNOW_LAYER,
 } from "./blocks.js";
 import { makeGenerator, findSpawn, findBiomeLocation } from "./terrain.js";
@@ -350,12 +350,17 @@ function updateCrops() {
     if (!world.isGenerated(x >> 4, z >> 4)) continue;
     crops.delete(key);
     // the world block is the truth about the stage — a stale entry (the crop
-    // was broken/overwritten while the timer ran) simply falls out here
-    const stage = CROP_STAGES.indexOf(world.getBlock(x, y, z));
-    if (stage === -1 || stage === CROP_STAGES.length - 1) continue;
-    const next = CROP_STAGES[stage + 1];
+    // was broken/overwritten while the timer ran) simply falls out here.
+    // cropStagesFor picks the right ladder (meal root, bogbean, whatever
+    // grows next), so one clock serves every crop.
+    const id = world.getBlock(x, y, z);
+    const stages = cropStagesFor(id);
+    if (!stages) continue;
+    const stage = stages.indexOf(id);
+    if (stage === stages.length - 1) continue;
+    const next = stages[stage + 1];
     lightAwareRemesh(world.setBlock(x, y, z, next), false, { x, y, z });
-    if (next !== CROP_RIPE) registerCrop(x, y, z);
+    if (stage + 2 < stages.length) registerCrop(x, y, z);
   }
 }
 // additive v2 field: [[x,y,z,stage,remain]...] — stage is written for
@@ -637,9 +642,11 @@ const interaction = new Interaction(world, player, scene, hud, {
       if (info.placed === SAPLING) registerSapling(info.x, info.y, info.z);
       if (info.broken === SAPLING) saplings.delete(`${info.x},${info.y},${info.z}`);
       if (info.popped === SAPLING) saplings.delete(`${info.x},${info.y + 1},${info.z}`);
-      // crop lifecycle: planting pips writes a sprout; breaking or popping
-      // (soil dug out underneath) any growing stage cancels its timer
-      if (info.placed === CROP_SPROUT) registerCrop(info.x, info.y, info.z);
+      // crop lifecycle: planting a seed writes its sprout; breaking or
+      // popping (soil dug out underneath) any growing stage cancels its timer
+      if (Object.values(SEED_TO_SPROUT).includes(info.placed)) {
+        registerCrop(info.x, info.y, info.z);
+      }
       if (isCrop(info.broken)) crops.delete(`${info.x},${info.y},${info.z}`);
       if (isCrop(info.popped)) crops.delete(`${info.x},${info.y + 1},${info.z}`);
       // breaking a Notice Post takes its writing with it (the board mesh
@@ -845,7 +852,9 @@ const stopAutosave = startAutosave(() => writeSave(world, player, sky, hud, inve
   }),
   crops: [...crops].map(([key, due]) => {
     const [x, y, z] = key.split(",").map(Number);
-    const stage = Math.max(0, CROP_STAGES.indexOf(world.getBlock(x, y, z)));
+    const id = world.getBlock(x, y, z);
+    const stages = cropStagesFor(id);
+    const stage = stages ? Math.max(0, stages.indexOf(id)) : 0;
     return [x, y, z, stage, Math.max(1, due - growthSeconds)];
   }),
   overflowStacks: pendingOverflow.map((s) =>
