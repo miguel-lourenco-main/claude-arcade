@@ -6,7 +6,7 @@ import {
   AIR, BEDROCK, CHEST, WORKBENCH, KILN, BED, LADDER, DOOR, DOOR_TOP, BLAST_KEG,
   GATE, GATE_OPEN, SEED_TO_SPROUT, DIRT, GRASS, MUD, FARMLAND, LOOMSTONE,
   SLING_STONE, BOAT, WATER, FISHING_POLE, SNOW_LAYER, QUILL, ROOT_SEED,
-  SILVERFIN,
+  SILVERFIN, MURK_LANTERN,
   BLOCKS, isSolid, isPlant, isFluid, isDoor, isDoorLower, isGate, isSign,
   DOOR_TOGGLE, dropFor, yawToFacing,
 } from "./blocks.js";
@@ -96,6 +96,7 @@ export class Interaction {
     this.onOpenBench = opts.onOpenBench;   // () => open workbench UI (survival)
     this.onOpenKiln = opts.onOpenKiln;     // (x, y, z) => open kiln UI (survival)
     this.onOpenLoom = opts.onOpenLoom;     // () => open Loomstone UI (survival)
+    this.onSummon = opts.onSummon;         // (target) => the Murk Lantern's use
     this.onSleep = opts.onSleep;           // (x, y, z) => Moss Cot rest (survival)
     this.onOpenSign = opts.onOpenSign;     // (x, y, z) => Notice Post write window
     this.onPrimeKeg = opts.onPrimeKeg;     // (x, y, z) => light a Blast Keg
@@ -477,9 +478,11 @@ export class Interaction {
       // A Keen Thread woven through the blade adds its bite on top.
       const tool = this._heldTool();
       let dmg = tool && tool.kind === "blade" ? tool.damage : 1;
+      let dim = false; // a Dusk Thread hangs the dark on whatever it cuts
       if (tool && tool.kind === "blade") {
         const s = this.hotbar.selectedStack ? this.hotbar.selectedStack() : null;
         if (s && s.mod === "keen") dmg += 2;
+        else if (s && s.mod === "dusk") { dmg += 3; dim = true; }
       }
       // falling crit: airborne AND dropping — a hit that carries the whole
       // Wanderling behind it lands half again as hard (fists and blades
@@ -498,7 +501,7 @@ export class Interaction {
           return;
         }
       }
-      if (this.mobs && this.mobs.punch(eye, dir, lim, this.player.pos, dmg, { crit, knock })) {
+      if (this.mobs && this.mobs.punch(eye, dir, lim, this.player.pos, dmg, { crit, knock, dim })) {
         if (tool && this.onToolUse) this.onToolUse("hit");
         return;
       }
@@ -730,6 +733,12 @@ export class Interaction {
           return;
         }
       }
+    }
+    // a Murk Lantern in hand summons instead of placing — main.js owns the
+    // night check and the polite daytime refusal (nothing consumed)
+    if (this.hotbar.selectedId() === MURK_LANTERN && !this._interactiveTarget()) {
+      if (t && this.onSummon) this.onSummon(t);
+      return;
     }
     // a sling stone throws instead of placing — unless an interactive block
     // is targeted (sneak-throw at a chest works, like sneak-place does)

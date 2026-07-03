@@ -6,7 +6,7 @@
 import * as THREE from "three";
 import {
   BLOCKS, GRASS, SAND, MUD, WATER, LAVA, isFluid, COAL_ORE, TORCH,
-  SNUFFET_LOIN, MOSS_CLUMP, KELP_GLAND, AIR, isSolid,
+  SNUFFET_LOIN, MOSS_CLUMP, KELP_GLAND, DUSK_PEARL, STARSTONE, AIR, isSolid,
 } from "./blocks.js";
 import { mulberry32 } from "./noise.js";
 
@@ -57,6 +57,18 @@ export const SPECIES = {
     name: "Tuftling", hp: 8, speed: 3.4, behavior: "passive", habitat: "meadow",
     cap: 1, halfW: 0.28, height: 0.5, damage: 3, attackRange: 1.2,
     rareChance: 0.25, sound: "chirp", gleam: 2, drops: null,
+  },
+  // The Unshaken: the one shadow the flip couldn't shake off, grown fat in
+  // the dark. Summon-only (the Murk Lantern, at night — habitat "boss"
+  // matches neither cleanup rule and never enters _trySpawn), sunrise-proof,
+  // and the only fight in the Upturn that fights back properly. Under half
+  // health it splits off two murklings and starts LUNGING.
+  unshaken: {
+    name: "The Unshaken", hp: 60, speed: 2.0, behavior: "hostile", habitat: "boss",
+    cap: 1, halfW: 0.6, height: 2.6, damage: 6, aggro: 48, attackRange: 2.2,
+    knockResist: 0.9, gleam: 40, boss: true, sound: "bellow",
+    drops: [[DUSK_PEARL, 1], [STARSTONE, 2]],
+    inflicts: ["dimmed", 5], // its hits hang the dark on you
   },
   // the Peddler: a wandering trader Wanderling, hunched under an enormous
   // patchwork backpack. Day-only (gone by dusk, the way the Murkling is gone
@@ -175,6 +187,17 @@ export class Mobs {
     const peStick = this._mat(paint(0xf65, [148, 126, 90], 10));
     // the dangling trinkets: little bright oddments on strings
     const peTrinket = this._mat(paint(0xf66, [200, 168, 84], 20));
+    // The Unshaken: charcoal-indigo bulk, pale unblinking eyes
+    const unBody = this._mat(paint(0xb81, [30, 28, 44], 7, (ctx, rand) => {
+      for (let i = 0; i < 6; i++) {
+        ctx.fillStyle = "rgba(12,10,22,0.7)";
+        ctx.fillRect((rand() * 14) | 0, (rand() * 14) | 0, 2, 3);
+      }
+    }));
+    const unFace = this._mat(paint(0xb82, [30, 28, 44], 7, (ctx) => {
+      ctx.fillStyle = "#cfd4ea";
+      ctx.fillRect(3, 6, 3, 2); ctx.fillRect(10, 6, 3, 2); // the pale stare
+    }));
     // Tuftling: warm sand-rust coat, cream belly, and the famous tail tuft
     const tuBody = this._mat(paint(0xa71, [188, 138, 86], 10));
     const tuFace = this._mat(paint(0xa72, [188, 138, 86], 10, (ctx) => {
@@ -212,6 +235,28 @@ export class Mobs {
           ear.position.set(side * 0.26, 0.52, 0.5);
           ear.rotation.z = side * 0.35;
           g.add(ear);
+        }
+        return { group: g, legs };
+      },
+      unshaken: () => {
+        // a murkling silhouette at twice the scale, arms grown too long
+        const g = new THREE.Group();
+        const body = box(0.72, 1.7, 0.56, unBody);
+        body.position.y = 1.5;
+        g.add(body);
+        const headMats = [unBody, unBody, unBody, unBody, unFace, unBody];
+        const head = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.56), headMats);
+        head.position.y = 2.66;
+        g.add(head);
+        const legs = [];
+        for (const side of [-1, 1]) {
+          const leg = box(0.26, 0.7, 0.26, unBody);
+          leg.position.set(side * 0.22, 0.35, 0);
+          g.add(leg); legs.push(leg);
+          const arm = box(0.18, 1.5, 0.18, unBody);
+          arm.position.set(side * 0.5, 1.5, 0.12);
+          arm.rotation.x = 0.25;
+          g.add(arm); legs.push(arm); // arms swing with the stride too
         }
         return { group: g, legs };
       },
@@ -466,9 +511,27 @@ export class Mobs {
       sizeMul: 1,        // presentation + collision scale (pups 0.45)
       tamed: false,      // a tamed Tuftling stays, follows, and fights
       mode: "follow",    // tamed: "follow" | "stay"
+      split: false,      // boss: the half-health shadow-split fired
+      lungeCd: 0,        // boss phase 2: seconds to the next lunge
+      farT: 0,           // boss: seconds spent >60 blocks from the player
+      dimT: 0,           // a Dusk Thread's mark: halved pace while it holds
     };
     this.mobs.push(mob);
     return mob;
+  }
+
+  // the Murk Lantern's answer: raise The Unshaken from the ground near
+  // (x, z). Returns the boss, or null if one already stalks the world.
+  summonBoss(world, x, z) {
+    for (const m of this.mobs) if (m.spec.boss) return null;
+    const sy = this._surfaceY(world, Math.floor(x), Math.floor(z));
+    if (sy < 0) return null;
+    const boss = this.spawnAt(x, sy + 1.01, z, "unshaken");
+    if (boss) {
+      boss.critT = 0.3; // rises with a pop
+      if (this.onSound) this.onSound(boss.spec.sound);
+    }
+    return boss;
   }
 
   // tamed companions persist (the ONLY mobs that do): [[x,y,z,hp,stay]...]
@@ -604,7 +667,18 @@ export class Mobs {
       // NOT wake up because someone walked overhead
       const dist3 = Math.hypot(m.x - player.pos.x, m.y - player.pos.y, m.z - player.pos.z);
 
-      if (distToPlayer > DESPAWN_DIST && !m.tamed) { this._remove(i); continue; }
+      if (distToPlayer > DESPAWN_DIST && !m.tamed && !spec.boss) { this._remove(i); continue; }
+      // a kited boss doesn't vanish at a distance line — but if the player
+      // dies, or keeps 60+ blocks away for 90 seconds, the shadow settles
+      // back into the ground (and the lantern is owed nothing)
+      if (spec.boss) {
+        m.farT = distToPlayer > 60 ? m.farT + dt : 0;
+        if (player.dead || m.farT > 90) {
+          if (this.onBossGone) this.onBossGone();
+          this._remove(i);
+          continue;
+        }
+      }
       // death pays out BEFORE the dawn cleanup — a kill landed on the
       // dawn-crossing frame still drops its loot
       if (m.hp <= 0) {
@@ -627,6 +701,8 @@ export class Mobs {
       m.angryT = Math.max(0, m.angryT - dt);
       m.grudgeT = Math.max(0, m.grudgeT - dt);
       m.breedCd = Math.max(0, m.breedCd - dt);
+      m.dimT = Math.max(0, m.dimT - dt);
+      m.lungeCd = Math.max(0, m.lungeCd - dt);
       if (m.baby) {
         m.growT -= dt;
         if (m.growT <= 0) { m.baby = false; m.sizeMul = 1; }
@@ -654,6 +730,33 @@ export class Mobs {
       } else if (chasing) {
         m.yaw = Math.atan2(player.pos.x - m.x, player.pos.z - m.z);
         targetSpeed = spec.speed;
+        // The Unshaken's phases: crossing half health it SPLITS — two
+        // murklings peel off its flanks — then it moves half again as
+        // fast and starts lunging in bursts the substepped mover handles
+        if (spec.boss) {
+          if (!m.split && m.hp <= spec.hp / 2) {
+            m.split = true;
+            m.critT = 0.3;
+            for (const side of [-1, 1]) {
+              this.spawnAt(m.x + Math.cos(m.yaw) * side * 1.4, m.y + 0.2,
+                m.z - Math.sin(m.yaw) * side * 1.4, "murkling");
+            }
+            if (this.onSound) this.onSound(spec.sound);
+            if (this.onBossSplit) this.onBossSplit();
+          }
+          if (m.split) {
+            targetSpeed = spec.speed * 1.5;
+            if (m.lungeCd <= 0 && distToPlayer > 3 && distToPlayer < 14 && m.onGround) {
+              m.lungeCd = 6;
+              const lx = player.pos.x - m.x, lz = player.pos.z - m.z;
+              const ll = Math.max(0.2, Math.hypot(lx, lz));
+              m.vx = (lx / ll) * spec.speed * 4.5;
+              m.vz = (lz / ll) * spec.speed * 4.5;
+              m.vy = 4;
+              if (this.onSound) this.onSound(spec.sound);
+            }
+          }
+        }
         // melee — only with clear line of sight (no biting through walls)
         if (distToPlayer < spec.attackRange && m.attackCd <= 0 &&
             Math.abs(player.pos.y - m.y) < 2 &&
@@ -734,6 +837,7 @@ export class Mobs {
       }
 
       // --- movement ---
+      if (m.dimT > 0) targetSpeed *= 0.5; // a Dusk-marked stride drags
       const tx = Math.sin(m.yaw) * targetSpeed;
       const tz = Math.cos(m.yaw) * targetSpeed;
       m.vx += (tx - m.vx) * Math.min(1, 10 * dt);
@@ -925,6 +1029,7 @@ export class Mobs {
     // any hit the PLAYER lands marks the target for a following Tuftling
     // (the pet's own strikes pass byPet so it never re-marks or un-marks)
     if (!opts.byPet && !m.tamed && !m.spec.trades) this._petTarget = m;
+    if (opts.dim) m.dimT = 4; // the Dusk Thread hangs the dark on THEM
     m.hp -= dmg;
     m.hurtT = 0.3;
     if (opts.crit) m.critT = 0.22; // the burst cue: a quick scale-pop

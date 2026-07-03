@@ -223,6 +223,13 @@ export const LOOMSTONE = 132;
 // draw, projectiles.js the flight. Quills are whittled darts, stackable.
 export const QUILL = 133;
 export const SPRINGSTAVE = 134;
+// the Murk Lantern and the Dusk Pearl: the way INTO the Upturn's one real
+// fight, and what comes out of it. The lantern is starglass painted out
+// with soot — a lantern that sheds dark; right-clicking ground with it at
+// night summons The Unshaken (mobs.js). The pearl is its heart, and the
+// Dusk Thread's material (loom.js).
+export const MURK_LANTERN = 135;
+export const DUSK_PEARL = 136;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -826,6 +833,31 @@ BLOCKS[SPRINGSTAVE] = def("Springstave", {
   sound: "wood",
   maxStack: 1,
   tool: { kind: "stave", tier: 1, speed: 1, damage: 0, maxDur: 128 },
+});
+
+// the Murk Lantern: carried, never placed — the summons IS the use
+BLOCKS[MURK_LANTERN] = def("Murk Lantern", {
+  tiles: cube(TILE.MURK_LANTERN),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  hardness: 0.05,
+  placeable: false,
+  sound: "glass",
+  maxStack: 1,
+});
+// the Dusk Pearl: a pearl of the deep dark — nothing sheds it but the
+// Unshaken itself, and nothing consumes it but the Dusk Thread
+BLOCKS[DUSK_PEARL] = def("Dusk Pearl", {
+  tiles: cube(TILE.DUSK_PEARL),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  hardness: 0.05,
+  placeable: false,
+  sound: "stone",
 });
 
 export const CROP_STAGES = [CROP_SPROUT, CROP_HALF, CROP_RIPE];

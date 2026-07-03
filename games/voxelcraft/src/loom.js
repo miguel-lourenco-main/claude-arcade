@@ -9,7 +9,9 @@
 // hooks live where the numbers live — interact.js (keen bite, flint pace),
 // main.js/player.js (oak wear-skips), blocks.js armorProtection (ward).
 
-import { BLOCKS, IRON_INGOT, COAL_ORE, MOSS_CLUMP, STARGLASS } from "./blocks.js";
+import {
+  BLOCKS, IRON_INGOT, COAL_ORE, MOSS_CLUMP, STARGLASS, DUSK_PEARL,
+} from "./blocks.js";
 
 export const THREADS = {
   keen: {
@@ -39,6 +41,14 @@ export const THREADS = {
     fits: (def) => !!def.armor,
     levels: 4,
     mats: [[STARGLASS, 1]],
+  },
+  // strictly post-boss: the pearl only ever comes out of The Unshaken
+  dusk: {
+    name: "Dusk Thread",
+    blurb: "+3 bite, and the struck are Dimmed",
+    fits: (def) => !!def.tool && def.tool.kind === "blade",
+    levels: 6,
+    mats: [[DUSK_PEARL, 1]],
   },
 };
 

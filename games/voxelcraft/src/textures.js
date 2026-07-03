@@ -146,6 +146,9 @@ export const TILE = {
   // the Springstave and its Quills
   QUILL: 120,
   SPRINGSTAVE: 121,
+  // the Murk Lantern and the Dusk Pearl (The Unshaken's summons + drop)
+  MURK_LANTERN: 122,
+  DUSK_PEARL: 123,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -1422,6 +1425,46 @@ painters[TILE.SPRINGSTAVE] = (p) => {
     const x = 5 + Math.round(i * 0.55), y = 2 + i;
     p.px(Math.min(12, x), y, 148, 170, 132, 220);
   }
+};
+
+painters[TILE.MURK_LANTERN] = (p) => {
+  // a starglass pane painted out with soot, cased and ring-handled: a
+  // lantern that sheds dark — the pane swallows instead of glows
+  p.clear();
+  // the carry ring
+  p.px(7, 1, 120, 126, 138); p.px(8, 1, 120, 126, 138);
+  p.px(6, 2, 120, 126, 138); p.px(9, 2, 120, 126, 138);
+  // the case
+  for (let y = 3; y <= 13; y++) {
+    for (let x = 4; x <= 11; x++) {
+      const frame = x === 4 || x === 11 || y === 3 || y === 13;
+      if (frame) {
+        const d = (p.rand() * 2 - 1) * 8;
+        p.px(x, y, 128 + d, 134 + d, 148 + d);
+      } else {
+        // the sooted pane: near-black with a violet breath at the center
+        const cd = Math.abs(x - 7.5) + Math.abs(y - 8);
+        const b = Math.max(0, 26 - cd * 5);
+        p.px(x, y, 16 + b, 12 + b, 26 + b * 1.6);
+      }
+    }
+  }
+  p.px(5, 4, 60, 54, 80); // one smudged corner the soot missed
+};
+painters[TILE.DUSK_PEARL] = (p) => {
+  // the Dusk Pearl: nacre in negative — a dark orb with an oil-sheen rim
+  p.clear();
+  for (let y = 4; y <= 12; y++) {
+    const half = y === 4 || y === 12 ? 2 : y === 5 || y === 11 ? 3 : 4;
+    for (let x = 8 - half; x <= 7 + half; x++) {
+      const edge = x === 8 - half || x === 7 + half || y === 4 || y === 12;
+      const d = (p.rand() * 2 - 1) * 8;
+      if (edge) p.px(x, y, 74 + d, 58 + d, 104 + d); // the oil-sheen rim
+      else p.px(x, y, 26 + d * 0.5, 20 + d * 0.5, 40 + d * 0.5);
+    }
+  }
+  p.px(6, 6, 148, 130, 190); // the one reluctant glint
+  p.px(9, 10, 96, 82, 132);
 };
 
 painters[TILE.FARMLAND_TOP] = (p) => {

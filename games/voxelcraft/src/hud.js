@@ -437,6 +437,20 @@ export class Hud {
     row.classList.toggle("hidden", list.length === 0);
   }
 
+  // the boss bar: shown while a boss stalks within hailing distance
+  setBossBar(name, frac) {
+    const key = name ? `${name}:${Math.round(frac * 100)}` : "";
+    if (key === this._lastBoss) return;
+    this._lastBoss = key;
+    const bar = document.getElementById("boss-bar");
+    bar.classList.toggle("hidden", !name);
+    if (name) {
+      document.getElementById("boss-name").textContent = name.toUpperCase();
+      document.getElementById("boss-fill").style.width =
+        Math.max(0, Math.min(100, Math.round(frac * 100))) + "%";
+    }
+  }
+
   // the Springstave draw: the crosshair pinches toward full pull
   setDraw(charge) {
     const step = Math.round(charge * 10);

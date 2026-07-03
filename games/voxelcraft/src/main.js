@@ -32,6 +32,7 @@ import {
   KILN as KILN_ID, WORKBENCH as WORKBENCH_ID,
   IRON_INGOT as IRON_INGOT_ID, GLOAM_INGOT as GLOAM_INGOT_ID,
   STARGLASS as STARGLASS_ID, QUILL as QUILL_ID,
+  MURK_LANTERN as MURK_LANTERN_ID,
 } from "./blocks.js";
 import { makeGenerator, findSpawn, findBiomeLocation } from "./terrain.js";
 import { findNearestRuin, ruinForChunk } from "./ruins.js";
@@ -842,6 +843,22 @@ const interaction = new Interaction(world, player, scene, hud, {
     if (!kiln) { kiln = makeKiln(); world.kilns.set(key, kiln); }
     hud.openKiln(kiln);
   },
+  // the Murk Lantern: at night, on ground, it raises The Unshaken — by
+  // day it politely declines (and is never consumed on a refusal)
+  onSummon: (t) => {
+    if (sky.lightLevel >= 0.45) {
+      hud.announce("The lantern needs a proper dark.", 2600);
+      return;
+    }
+    if (mobs.mobs.some((m) => m.spec.boss)) {
+      hud.announce("The dark is already up and walking.", 2600);
+      return;
+    }
+    if (player.mode === "survival" && !interaction.canConsume(MURK_LANTERN_ID)) return;
+    if (mobs.summonBoss(world, t.x + 0.5, t.z + 0.5)) {
+      hud.announce("The dark gathers itself…", 3200);
+    }
+  },
   // right-click a Loomstone: the weaving window. The target is always the
   // SELECTED hotbar stack — the basin follows the belt.
   onOpenLoom: () => {
@@ -976,7 +993,14 @@ mobs.onMobHurt = (crit) => (crit ? sfx.critHit() : sfx.mobHurt());
 player.isEating = () => interaction.eating;
 mobs.onSound = (kind) => sfx.creature(kind);
 mobs.onDrop = (x, y, z, id, n) => drops.spawn(x, y, z, id, n);
-mobs.onKill = (m) => awardGleam(m.spec.gleam || 0);
+mobs.onKill = (m) => {
+  awardGleam(m.spec.gleam || 0);
+  if (m.spec.boss) hud.announce("The Unshaken comes apart into ordinary night.", 4200);
+};
+mobs.onBossSplit = () =>
+  hud.announce("The shadow splits!", 2600);
+mobs.onBossGone = () =>
+  hud.announce("The shadow settles back into the ground.", 3200);
 // a new Snufflet: a mote of gleam and a field note (life clings to work too)
 mobs.onBreed = () => {
   awardGleam(1);
@@ -1434,6 +1458,10 @@ function tick(now) {
   } else {
     hud.setEffects([]);
   }
+  // the boss bar tracks a stalking boss within hailing distance
+  const boss = mobs.mobs.find((m) => m.spec.boss &&
+    Math.hypot(m.x - player.pos.x, m.z - player.pos.z) < 48);
+  hud.setBossBar(boss ? boss.spec.name : null, boss ? boss.hp / boss.spec.hp : 0);
 
   // void safety net (creative only — in survival the void deals damage and
   // the death screen handles it)

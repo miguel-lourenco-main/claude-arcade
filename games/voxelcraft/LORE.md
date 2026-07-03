@@ -132,6 +132,18 @@ specific item vocabulary.
   the Notice Post still says, take what the chest offers, and leave the
   walls to their sulk. It's agreed this is a fair split.
 
+- **The Unshaken** — when the world flipped, every shadow was shaken off
+  its owner and most of them politely dispersed. One did not. It has
+  been down there since, in the gloam under the gloam, growing fat on
+  the dark the drowned stars left behind. It does not come when called —
+  it comes when INVITED: a **Murk Lantern** (starglass painted out with
+  soot; a lantern that sheds dark) raised on open ground at night. It
+  hits like a falling roof, hangs the dark on you as it does, and at
+  half strength it SPLITS — two murklings peel off its flanks and it
+  stops walking and starts lunging. What's left afterward is a **Dusk
+  Pearl**: nacre in negative, the material of the Dusk Thread, and the
+  only proof the Upturn accepts that you met the last shadow and it
+  shook first.
 - **The Tuftling** — a small tufty burrower of the meadows, mostly tail
   and opinion, and mad for Silverfin. Offer it one and it might decide
   you are its person (it keeps the fish either way; it is not a
