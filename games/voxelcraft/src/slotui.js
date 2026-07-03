@@ -4,14 +4,15 @@
 // and implements classic container-click semantics (pick/place/merge/swap,
 // right-click half/one, shift-click quick-move).
 //
-// Stacks may carry a per-instance `dur` field (tool wear) — every copy made
-// here goes through makeStack/copyStack so dur is never dropped. Tools have
-// a per-id stack ceiling of 1 (maxStackFor), so two tools never merge: a
-// left-click of one tool onto another of the same id swaps them instead.
+// Stacks may carry per-instance `dur` (tool wear) and `mod` (a woven
+// thread) fields — every copy made here goes through makeStack/copyStack so
+// neither is ever dropped. Tools have a per-id stack ceiling of 1
+// (maxStackFor), so two tools never merge: a left-click of one tool onto
+// another of the same id swaps them instead.
 
 import { maxStackFor, makeStack } from "./inventory.js";
 
-const copyStack = (s, count = s.count) => makeStack(s.id, count, s.dur);
+const copyStack = (s, count = s.count) => makeStack(s.id, count, s.dur, s.mod);
 
 // region: { name, size, get(i), set(i, stack|null), palette?, takeOnly?,
 //           accepts?(i, stack) } — accepts gates what may be PLACED into a

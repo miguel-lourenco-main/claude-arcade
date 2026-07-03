@@ -166,19 +166,24 @@ specific item vocabulary.
   basin and bedded in worked stone. Gleam pools in the hollow, and a
   steady pair of hand-feet can weave it THROUGH a tool or a worn piece
   as a Thread: the **Keen Thread** (a blade that bites two deeper), the
-  **Flint Thread** (a digger half again as eager), the **Oak Thread**
-  (wear that lands half as often), the **Ward Thread** (a worn piece
-  that argues a little harder). One thread per item, and it never comes
-  out — weaving is a promise, not a coat of paint.
+  **Flint Thread** (a digger half again as eager), the **Knotwood
+  Thread** (wear that lands half as often — named for the wood that
+  refuses to split), the **Ward Thread** (a worn piece that argues a
+  little harder), and the **Dusk Thread** (a pearl's dark woven into an
+  edge: three deeper still, and the struck carry the Dimmed whim). One
+  thread per item, and it never comes out — weaving is a promise, not a
+  coat of paint.
 - **The Whims** — the Upturn's moods, worn briefly. A broth or a bad bite
   can leave one on you for a minute: **Fleetfoot** (the Sunwisp lightness
   takes to your feet), **Emberglow** (a warm ember heals you and asks
   nothing of the satchel), **Mire-rot** (the Mirewalker's gift — a gnaw
   that armor can't argue with, though it politely stops at half a heart),
-  and **Kelpguard** (kelp-salve that shaves every hurt and washes the rot
-  right out). The broths simmer in any kiln: an Emberbell for the glow, a
-  Sunwisp for the feet, and a Mirewalker's own **Kelp Gland** for the
-  salve — the disease carries its cure, which the bog considers fair.
+  **Kelpguard** (the salve's steadying — every hurt shaved, the rot
+  washed right out), and **Dimmed** (the dark leaning on you; only one
+  thing in the Upturn hits hard enough to leave it). The broths simmer
+  in any kiln: an Emberbell for the glow, a Sunwisp for the feet, and a
+  Mirewalker's own **Kelp Gland** rendered down into **Kelpsalve** — the
+  disease carries its cure, which the bog considers fair.
 - **Gleam** — the light that clings to work. When the stars drowned, their
   light didn't all go out; some of it soaked into the ground and the
   beasts and the making of things, and it sheds as tiny motes when work

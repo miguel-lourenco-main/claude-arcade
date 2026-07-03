@@ -28,8 +28,9 @@ export const THREADS = {
     levels: 3,
     mats: [[COAL_ORE, 4]],
   },
-  oak: {
-    name: "Oak Thread",
+  // named for the Upturn's own tough wood — there is no oak here
+  knot: {
+    name: "Knotwood Thread",
     blurb: "wear lands half as often",
     fits: (def) => !!def.tool || !!def.armor,
     levels: 2,
@@ -86,4 +87,10 @@ export function weave(key, stack, gleam, inventory) {
 export function threadName(stack) {
   const t = stack && stack.mod && THREADS[stack.mod];
   return t ? t.name : null;
+}
+
+// the Knotwood Thread's mercy: does THIS wear tick land? One rule for
+// tools (main.js onToolUse) and armor (player.js _absorb) alike.
+export function wearSkips(stack) {
+  return !!stack && stack.mod === "knot" && Math.random() < 0.5;
 }

@@ -18,7 +18,9 @@ import { craft } from "./craft.js";
 import { dailyOffers, executeTrade } from "./trade.js";
 import { makeKiln, tickKilns } from "./kiln.js";
 import { Gleam } from "./gleam.js";
-import { THREADS, threadsFor, weaveBlocker, weave, threadName } from "./loom.js";
+import {
+  THREADS, threadsFor, weaveBlocker, weave, threadName, wearSkips,
+} from "./loom.js";
 import {
   PlayerModel, buildHeldFoot, buildHeldTool, buildHeldCompass, buildHeldClock,
   setHeldSkinLight,
@@ -32,7 +34,7 @@ import {
   KILN as KILN_ID, WORKBENCH as WORKBENCH_ID,
   IRON_INGOT as IRON_INGOT_ID, GLOAM_INGOT as GLOAM_INGOT_ID,
   STARGLASS as STARGLASS_ID, QUILL as QUILL_ID,
-  MURK_LANTERN as MURK_LANTERN_ID,
+  MURK_LANTERN as MURK_LANTERN_ID, LOOMSTONE as LOOMSTONE_ID,
 } from "./blocks.js";
 import { makeGenerator, findSpawn, findBiomeLocation } from "./terrain.js";
 import { findNearestRuin, ruinForChunk } from "./ruins.js";
@@ -599,7 +601,8 @@ const hud = new Hud(atlas.canvas, {
       // brick-spam, so bulk crafting can't farm it
       const outDef = BLOCKS[recipe.out[0]];
       if (outDef.tool || outDef.armor ||
-          recipe.out[0] === KILN_ID || recipe.out[0] === WORKBENCH_ID) {
+          recipe.out[0] === KILN_ID || recipe.out[0] === WORKBENCH_ID ||
+          recipe.out[0] === LOOMSTONE_ID) {
         awardGleam(1);
       }
     }
@@ -759,8 +762,8 @@ const interaction = new Interaction(world, player, scene, hud, {
     const s = inventory.get(hud.selected);
     const def = s && BLOCKS[s.id];
     if (!def || !def.tool) return;
-    // an Oak Thread woven through the haft: wear lands half as often
-    if (s.mod === "oak" && Math.random() < 0.5) return;
+    // a Knotwood Thread woven through the haft: wear lands half as often
+    if (wearSkips(s)) return;
     const left = (Number.isInteger(s.dur) ? s.dur : def.tool.maxDur) - 1;
     if (left <= 0) {
       inventory.set(hud.selected, null);
@@ -843,8 +846,9 @@ const interaction = new Interaction(world, player, scene, hud, {
     if (!kiln) { kiln = makeKiln(); world.kilns.set(key, kiln); }
     hud.openKiln(kiln);
   },
-  // the Murk Lantern: at night, on ground, it raises The Unshaken — by
-  // day it politely declines (and is never consumed on a refusal)
+  // the Murk Lantern: at night, on ground with headroom, it raises The
+  // Unshaken — every refusal path (day, boss already up, no room) happens
+  // BEFORE the lantern is consumed, so a declined summons costs nothing
   onSummon: (t) => {
     if (sky.lightLevel >= 0.45) {
       hud.announce("The lantern needs a proper dark.", 2600);
@@ -854,10 +858,15 @@ const interaction = new Interaction(world, player, scene, hud, {
       hud.announce("The dark is already up and walking.", 2600);
       return;
     }
-    if (player.mode === "survival" && !interaction.canConsume(MURK_LANTERN_ID)) return;
-    if (mobs.summonBoss(world, t.x + 0.5, t.z + 0.5)) {
-      hud.announce("The dark gathers itself…", 3200);
+    const boss = mobs.summonBoss(world, t.x + 0.5, t.y, t.z + 0.5);
+    if (!boss) {
+      hud.announce("The dark wants more room than this.", 2600);
+      return;
     }
+    // consume LAST: the routing guarantees the lantern is the selected
+    // stack, so this cannot fail between the click and here
+    if (player.mode === "survival") interaction.canConsume(MURK_LANTERN_ID);
+    hud.announce("The dark gathers itself…", 3200);
   },
   // right-click a Loomstone: the weaving window. The target is always the
   // SELECTED hotbar stack — the basin follows the belt.
@@ -995,12 +1004,10 @@ mobs.onSound = (kind) => sfx.creature(kind);
 mobs.onDrop = (x, y, z, id, n) => drops.spawn(x, y, z, id, n);
 mobs.onKill = (m) => {
   awardGleam(m.spec.gleam || 0);
-  if (m.spec.boss) hud.announce("The Unshaken comes apart into ordinary night.", 4200);
+  if (m.spec.deathLine) hud.announce(m.spec.deathLine, 4200);
 };
-mobs.onBossSplit = () =>
-  hud.announce("The shadow splits!", 2600);
-mobs.onBossGone = () =>
-  hud.announce("The shadow settles back into the ground.", 3200);
+mobs.onBossSplit = (spec) => hud.announce(spec.splitLine, 2600);
+mobs.onBossGone = (spec) => hud.announce(spec.goneLine, 3200);
 // a new Snufflet: a mote of gleam and a field note (life clings to work too)
 mobs.onBreed = () => {
   awardGleam(1);

@@ -111,11 +111,12 @@ export class Projectiles {
   }
 
   // point-vs-AABB against every mob, padded a touch so grazes still count
+  // (sizeMul: a Snufflet presents its pup-sized box, same as melee's rayHit)
   _mobAt(x, y, z) {
     for (const m of this.mobs.mobs) {
-      const hw = m.spec.halfW + 0.08;
+      const hw = m.spec.halfW * m.sizeMul + 0.08;
       if (x > m.x - hw && x < m.x + hw &&
-          y > m.y - 0.05 && y < m.y + m.spec.height + 0.05 &&
+          y > m.y - 0.05 && y < m.y + m.spec.height * m.sizeMul + 0.05 &&
           z > m.z - hw && z < m.z + hw) return m;
     }
     return null;

@@ -5,6 +5,7 @@ import {
   BLOCKS, isSolid, WATER, LAVA, isFluid, CACTUS, LADDER, ICE, SNOW_LAYER,
   MUD, armorProtection,
 } from "./blocks.js";
+import { wearSkips } from "./loom.js";
 
 const HALF_W = 0.3;
 const PLAYER_HEIGHT = 1.8;
@@ -199,8 +200,8 @@ export class Player {
       const s = wear[i];
       const a = s && BLOCKS[s.id] ? BLOCKS[s.id].armor : null;
       if (!a) continue;
-      // an Oak Thread woven through the piece: wear lands half as often
-      if (s.mod === "oak" && Math.random() < 0.5) continue;
+      // a Knotwood Thread woven through the piece: wear lands half as often
+      if (wearSkips(s)) continue;
       const left = (Number.isInteger(s.dur) ? s.dur : a.maxDur) - 1;
       if (left <= 0) {
         wear[i] = null;

@@ -69,6 +69,10 @@ export const SPECIES = {
     knockResist: 0.9, gleam: 40, boss: true, sound: "bellow",
     drops: [[DUSK_PEARL, 1], [STARSTONE, 2]],
     inflicts: ["dimmed", 5], // its hits hang the dark on you
+    // flavor lines main.js reads — a second boss brings its own words
+    deathLine: "The Unshaken comes apart into ordinary night.",
+    splitLine: "The shadow splits!",
+    goneLine: "The shadow settles back into the ground.",
   },
   // the Peddler: a wandering trader Wanderling, hunched under an enormous
   // patchwork backpack. Day-only (gone by dusk, the way the Murkling is gone
@@ -462,15 +466,17 @@ export class Mobs {
     return m.mode;
   }
 
-  // the nearest OTHER in-love adult snuffet within courting range
-  _nearestLove(m) {
-    let best = null, bestD = 8;
+  // the nearest other mob within range matching pred — the one proximity
+  // scan courting, pup-shadowing, and whatever comes next all share.
+  // Returns {mob, d} or null (d is reused by callers, never recomputed).
+  _nearest(m, range, pred) {
+    let best = null, bestD = range;
     for (const o of this.mobs) {
-      if (o === m || o.species !== "snuffet" || o.baby || o.loveT <= 0) continue;
+      if (o === m || !pred(o)) continue;
       const d = Math.hypot(o.x - m.x, o.z - m.z);
       if (d < bestD) { bestD = d; best = o; }
     }
-    return best;
+    return best ? { mob: best, d: bestD } : null;
   }
 
   count(speciesKey) {
@@ -520,11 +526,20 @@ export class Mobs {
     return mob;
   }
 
-  // the Murk Lantern's answer: raise The Unshaken from the ground near
-  // (x, z). Returns the boss, or null if one already stalks the world.
-  summonBoss(world, x, z) {
+  // the Murk Lantern's answer: raise The Unshaken from the ground at the
+  // CLICKED cell — a cave summon rises in the cave, not on the surface
+  // sixty blocks up. Returns the boss, or null if one already stalks the
+  // world (callers announce; consume-last discipline lives in main.js).
+  summonBoss(world, x, y, z) {
     for (const m of this.mobs) if (m.spec.boss) return null;
-    const sy = this._surfaceY(world, Math.floor(x), Math.floor(z));
+    // first open pair of cells above the clicked block (it needs headroom)
+    const bx = Math.floor(x), bz = Math.floor(z);
+    let sy = -1;
+    for (let cy = Math.floor(y); cy < Math.min(Math.floor(y) + 6, 93); cy++) {
+      if (world.getBlock(bx, cy + 1, bz) === AIR &&
+          world.getBlock(bx, cy + 2, bz) === AIR &&
+          world.getBlock(bx, cy + 3, bz) === AIR) { sy = cy; break; }
+    }
     if (sy < 0) return null;
     const boss = this.spawnAt(x, sy + 1.01, z, "unshaken");
     if (boss) {
@@ -674,7 +689,7 @@ export class Mobs {
       if (spec.boss) {
         m.farT = distToPlayer > 60 ? m.farT + dt : 0;
         if (player.dead || m.farT > 90) {
-          if (this.onBossGone) this.onBossGone();
+          if (this.onBossGone) this.onBossGone(spec);
           this._remove(i);
           continue;
         }
@@ -685,7 +700,9 @@ export class Mobs {
         if (spec.drops && !m.baby && this.onDrop) {
           for (const [id, n] of spec.drops) this.onDrop(m.x, m.y + 0.4, m.z, id, n);
         }
-        if (this.onKill) this.onKill(m); // gleam clings to a felled beast
+        // gleam clings to a felled WILD beast — never a pup (breeding would
+        // become a cull-farm) and never your own tamed companion
+        if (this.onKill && !m.baby && !m.tamed) this.onKill(m);
         this._remove(i);
         continue;
       }
@@ -742,7 +759,7 @@ export class Mobs {
                 m.z - Math.sin(m.yaw) * side * 1.4, "murkling");
             }
             if (this.onSound) this.onSound(spec.sound);
-            if (this.onBossSplit) this.onBossSplit();
+            if (this.onBossSplit) this.onBossSplit(spec);
           }
           if (m.split) {
             targetSpeed = spec.speed * 1.5;
@@ -798,28 +815,26 @@ export class Mobs {
       if (m.species === "snuffet" && !chasing && m.state !== "flee") {
         if (m.loveT > 0 && !m.baby) {
           m.loveT -= dt;
-          const mate = this._nearestLove(m);
+          const mate = this._nearest(m, 8, (o) =>
+            o.species === "snuffet" && !o.baby && o.loveT > 0);
           if (mate) {
-            m.yaw = Math.atan2(mate.x - m.x, mate.z - m.z);
+            m.yaw = Math.atan2(mate.mob.x - m.x, mate.mob.z - m.z);
             targetSpeed = spec.speed;
-            if (Math.hypot(mate.x - m.x, mate.z - m.z) < 1.2) {
-              m.loveT = 0; mate.loveT = 0;
-              m.breedCd = 120; mate.breedCd = 120;
-              const pup = this.spawnAt((m.x + mate.x) / 2, m.y + 0.1, (m.z + mate.z) / 2, "snuffet");
+            if (mate.d < 1.2) {
+              m.loveT = 0; mate.mob.loveT = 0;
+              m.breedCd = 120; mate.mob.breedCd = 120;
+              const pup = this.spawnAt((m.x + mate.mob.x) / 2, m.y + 0.1,
+                (m.z + mate.mob.z) / 2, "snuffet");
               if (pup) { pup.baby = true; pup.growT = 180; pup.sizeMul = 0.45; }
               if (this.onSound) this.onSound(spec.sound);
               if (this.onBreed) this.onBreed(m);
             }
           }
         } else if (m.baby) {
-          let adult = null, bestD = 12;
-          for (const o of this.mobs) {
-            if (o === m || o.species !== "snuffet" || o.baby) continue;
-            const d = Math.hypot(o.x - m.x, o.z - m.z);
-            if (d < bestD) { bestD = d; adult = o; }
-          }
-          if (adult && bestD > 4) {
-            m.yaw = Math.atan2(adult.x - m.x, adult.z - m.z);
+          const adult = this._nearest(m, 12, (o) =>
+            o.species === "snuffet" && !o.baby);
+          if (adult && adult.d > 4) {
+            m.yaw = Math.atan2(adult.mob.x - m.x, adult.mob.z - m.z);
             targetSpeed = spec.speed * 0.9;
           }
         }
@@ -902,8 +917,8 @@ export class Mobs {
         m.yaw = Math.atan2(t.x - m.x, t.z - m.z);
         if (d < m.spec.attackRange && m.attackCd <= 0 && Math.abs(t.y - m.y) < 2) {
           m.attackCd = 0.9;
+          // strike() fires onMobHurt itself — no extra call here
           this.strike(t, m.spec.damage, { x: m.x, z: m.z }, { byPet: true });
-          if (this.onMobHurt) this.onMobHurt(false);
         }
         return m.spec.speed;
       }

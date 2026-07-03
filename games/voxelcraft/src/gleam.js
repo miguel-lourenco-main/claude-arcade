@@ -8,7 +8,7 @@
 // jar. Costs grow linearly so early jars come quick and late jars mean
 // something. Death never spills gleam — the Upturn is polite about grief.
 
-export const GLEAM_CAP = 30; // nothing will ever cost more than a handful
+const GLEAM_CAP = 30; // nothing will ever cost more than a handful
 
 export class Gleam {
   constructor() {
@@ -16,8 +16,8 @@ export class Gleam {
     this.progress = 0; // motes toward the next jar
   }
 
-  // motes needed to fill the NEXT jar from `level` filled ones
-  costForLevel(l = this.level) { return 10 + 5 * l; }
+  // motes needed to fill the NEXT jar from the current count
+  costForLevel() { return 10 + 5 * this.level; }
 
   add(n) {
     if (n <= 0 || this.level >= GLEAM_CAP) return;

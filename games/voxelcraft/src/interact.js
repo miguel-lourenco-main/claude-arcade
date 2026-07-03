@@ -242,10 +242,16 @@ export class Interaction {
     this.particles.update(dt);
   }
 
+  // the selected hotbar stack, or null — the one place the defensive
+  // selectedStack ternary lives
+  _heldStack() {
+    return this.hotbar.selectedStack ? this.hotbar.selectedStack() : null;
+  }
+
   // the tool def on the selected hotbar stack, or null (bare feet, blocks,
   // food, and every other non-tool item mine at the bare-hand rate)
   _heldTool() {
-    const s = this.hotbar.selectedStack ? this.hotbar.selectedStack() : null;
+    const s = this._heldStack();
     const def = s && BLOCKS[s.id];
     return def && def.tool ? def.tool : null;
   }
@@ -316,16 +322,17 @@ export class Interaction {
   // cleanly when the stave leaves the hand or an interactive block is
   // targeted mid-pull.
   _updateDrawing(dt) {
-    const s = this.hotbar.selectedStack ? this.hotbar.selectedStack() : null;
+    const s = this._heldStack();
     const def = s && BLOCKS[s.id];
     const isStave = !!(def && def.tool && def.tool.kind === "stave");
-    const hasQuill = this.player.mode !== "survival" ||
-      (this.hasAmmo && this.hasAmmo(QUILL));
-    const wants = isStave && this.buttons.has(2) && !this._interactiveTarget() &&
-      hasQuill && !this.player.dead;
+    // the ammo scan (a full-satchel count) sits LAST in the chain so it only
+    // runs while a stave is actually held with the button down
+    const wants = isStave && this.buttons.has(2) && !this.player.dead &&
+      !this._interactiveTarget() &&
+      (this.player.mode !== "survival" || (this.hasAmmo && this.hasAmmo(QUILL)));
     if (!wants) {
-      // released is handled by onMouseUp (_loose); anything else is a cancel
-      if (this.drawing && !this.buttons.has(2)) return;
+      // a release is handled by onMouseUp (_loose) before this ever runs;
+      // reaching here un-wanted is a cancel (item switched, target changed)
       this.drawing = false;
       this.drawT = 0;
       return;
@@ -343,6 +350,12 @@ export class Interaction {
     this.drawing = false;
     this.drawT = 0;
     if (charge < 0.15) return; // a fumble, not a shot
+    // the stave must STILL be the selected stack: a hotbar scroll between
+    // the last update and this mouseup would otherwise loose the shot and
+    // charge the wear to whatever tool is now in hand
+    const s = this._heldStack();
+    const def = s && BLOCKS[s.id];
+    if (!def || !def.tool || def.tool.kind !== "stave") return;
     if (!this.onShoot) return;
     if (this.canThrowStone && !this.canThrowStone()) return; // flight cap
     if (this.player.mode === "survival" &&
@@ -432,6 +445,9 @@ export class Interaction {
     if (isDoor(t.id)) { this._breakDoor(t); return; }
     if (t.id === CHEST && this.onChestBreak) this.onChestBreak(t.x, t.y, t.z);
     if (t.id === KILN && this.onKilnBreak) this.onKilnBreak(t.x, t.y, t.z);
+    // sampled BEFORE the break writes this cell into the overlay: an edited
+    // cell means the block was player-placed, and placed ore sheds no gleam
+    const wasPlaced = this.world.hasEdit(t.x, t.y, t.z);
     const affected = this.world.setBlock(t.x, t.y, t.z, AIR);
     const above = this.world.getBlock(t.x, t.y + 1, t.z);
     let popped = null;
@@ -453,7 +469,13 @@ export class Interaction {
     if (!gated) {
       this._spawnBlockDrops(t.id, t.x + 0.5, t.y + 0.4, t.z + 0.5);
       // gleam clings to a mine that actually pays out (never a gated break)
-      if (BLOCKS[t.id].gleam > 0 && this.onGleam) this.onGleam(BLOCKS[t.id].gleam);
+      // — and only to the WORLD's own ore: a cell in the edit overlay was
+      // placed (or re-placed) by hand, and mining your own handiwork in a
+      // loop must not fill jars for free. wasPlaced is sampled before the
+      // break wrote this cell into the overlay (see above).
+      if (BLOCKS[t.id].gleam > 0 && !wasPlaced && this.onGleam) {
+        this.onGleam(BLOCKS[t.id].gleam);
+      }
     }
     if (popped !== null) {
       this._spawnBlockDrops(popped, t.x + 0.5, t.y + 1.3, t.z + 0.5);
