@@ -5,7 +5,7 @@ import * as THREE from "three";
 import {
   AIR, BEDROCK, CHEST, WORKBENCH, KILN, BED, LADDER, DOOR, DOOR_TOP, BLAST_KEG,
   GATE, GATE_OPEN, SEED_TO_SPROUT, DIRT, GRASS, MUD, FARMLAND, LOOMSTONE,
-  SLING_STONE, BOAT, WATER, FISHING_POLE, SNOW_LAYER, QUILL,
+  SLING_STONE, BOAT, WATER, FISHING_POLE, SNOW_LAYER, QUILL, ROOT_SEED,
   BLOCKS, isSolid, isPlant, isFluid, isDoor, isDoorLower, isGate, isSign,
   DOOR_TOGGLE, dropFor, yawToFacing,
 } from "./blocks.js";
@@ -689,6 +689,20 @@ export class Interaction {
       const lim = t ? Math.min(t.dist, reach) : reach;
       const m = this.mobs.rayHit(eye, dir, lim);
       if (m && m.spec.trades) { this.onTradeMob(m); return; }
+      // feeding a snuffet its favorite pips (courting — see mobs.feed):
+      // handled in the same pre-block mob-ray pass as trading. A snuffet in
+      // the ray always eats the click, so pips never plant THROUGH one —
+      // and consume-last discipline holds: an unfeedable snuffet (pup, or
+      // still on its courting cooldown) costs nothing.
+      if (m && m.species === "snuffet" &&
+          this.hotbar.selectedId() === ROOT_SEED) {
+        if (!m.baby && m.breedCd <= 0 && m.loveT <= 0 &&
+            this.canConsume(ROOT_SEED)) {
+          this.mobs.feed(m);
+          if (this.onEat) this.onEat("chew");
+        }
+        return;
+      }
     }
     // a sling stone throws instead of placing — unless an interactive block
     // is targeted (sneak-throw at a chest works, like sneak-place does)

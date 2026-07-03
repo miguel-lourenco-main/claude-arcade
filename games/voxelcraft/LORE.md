@@ -132,6 +132,12 @@ specific item vocabulary.
   the Notice Post still says, take what the chest offers, and leave the
   walls to their sulk. It's agreed this is a fair split.
 
+- **The Snufflet** — a snuffet pup: a loaf in training. Feed two grown
+  snuffets a pouch of Root Pips each (they snuffle seeds out of the tall
+  grass anyway — offering some by hand is just good manners) and they'll
+  find each other, touch noses, and shortly there is a smaller, rounder,
+  even more earnest snuffet learning to graze. Pups shadow the nearest
+  grown loaf until they're loaf-sized themselves.
 - **The Springstave & the Quill** — a green knotwood limb bent double and
   corded with moss-twine, and the whittled leaf-fletched darts it looses.
   Hold the draw and the stave remembers being a tree that wanted to

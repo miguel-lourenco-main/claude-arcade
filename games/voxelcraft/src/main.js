@@ -975,6 +975,11 @@ player.isEating = () => interaction.eating;
 mobs.onSound = (kind) => sfx.creature(kind);
 mobs.onDrop = (x, y, z, id, n) => drops.spawn(x, y, z, id, n);
 mobs.onKill = (m) => awardGleam(m.spec.gleam || 0);
+// a new Snufflet: a mote of gleam and a field note (life clings to work too)
+mobs.onBreed = () => {
+  awardGleam(1);
+  hud.announce("A Snufflet! A loaf in training.", 2600);
+};
 
 const stopAutosave = startAutosave(() => writeSave(world, player, sky, hud, inventory, {
   saplings: [...saplings].map(([key, due]) => {

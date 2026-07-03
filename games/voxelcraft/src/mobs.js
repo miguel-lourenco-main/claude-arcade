@@ -338,6 +338,26 @@ export class Mobs {
     }
   }
 
+  // feeding a snuffet its favorite pips: an adult with no courting
+  // cooldown starts looking fondly around. Returns whether the bite took.
+  feed(m) {
+    if (m.species !== "snuffet" || m.baby || m.breedCd > 0 || m.loveT > 0) return false;
+    m.loveT = 30;
+    if (this.onSound) this.onSound(m.spec.sound);
+    return true;
+  }
+
+  // the nearest OTHER in-love adult snuffet within courting range
+  _nearestLove(m) {
+    let best = null, bestD = 8;
+    for (const o of this.mobs) {
+      if (o === m || o.species !== "snuffet" || o.baby || o.loveT <= 0) continue;
+      const d = Math.hypot(o.x - m.x, o.z - m.z);
+      if (d < bestD) { bestD = d; best = o; }
+    }
+    return best;
+  }
+
   count(speciesKey) {
     let n = 0;
     for (const m of this.mobs) if (m.species === speciesKey) n++;
@@ -368,6 +388,12 @@ export class Mobs {
       callT: 4 + Math.random() * 10,
       onGround: false,
       hitWall: false,
+      // courting (snuffets): fed adults seek each other; pups grow up
+      loveT: 0,          // seconds left seeking a mate
+      breedCd: 0,        // seconds before this adult will court again
+      baby: false,
+      growT: 0,          // seconds until a pup is grown
+      sizeMul: 1,        // presentation + collision scale (pups 0.45)
     };
     this.mobs.push(mob);
     return mob;
@@ -488,7 +514,7 @@ export class Mobs {
       // death pays out BEFORE the dawn cleanup — a kill landed on the
       // dawn-crossing frame still drops its loot
       if (m.hp <= 0) {
-        if (spec.drops && this.onDrop) {
+        if (spec.drops && !m.baby && this.onDrop) {
           for (const [id, n] of spec.drops) this.onDrop(m.x, m.y + 0.4, m.z, id, n);
         }
         if (this.onKill) this.onKill(m); // gleam clings to a felled beast
@@ -506,6 +532,11 @@ export class Mobs {
       m.contactCd = Math.max(0, m.contactCd - dt);
       m.angryT = Math.max(0, m.angryT - dt);
       m.grudgeT = Math.max(0, m.grudgeT - dt);
+      m.breedCd = Math.max(0, m.breedCd - dt);
+      if (m.baby) {
+        m.growT -= dt;
+        if (m.growT <= 0) { m.baby = false; m.sizeMul = 1; }
+      }
 
       // --- behavior selection ---
       const aggro = spec.aggro || 0;
@@ -560,6 +591,39 @@ export class Mobs {
           }
         }
         if (m.state === "walk") targetSpeed = spec.speed * 0.7;
+      }
+
+      // snuffet courting: a fed adult seeks the nearest other fed adult;
+      // touching noses makes a Snufflet (a loaf in training). Pups loosely
+      // shadow the nearest adult so the meadow keeps its little families.
+      if (m.species === "snuffet" && !chasing && m.state !== "flee") {
+        if (m.loveT > 0 && !m.baby) {
+          m.loveT -= dt;
+          const mate = this._nearestLove(m);
+          if (mate) {
+            m.yaw = Math.atan2(mate.x - m.x, mate.z - m.z);
+            targetSpeed = spec.speed;
+            if (Math.hypot(mate.x - m.x, mate.z - m.z) < 1.2) {
+              m.loveT = 0; mate.loveT = 0;
+              m.breedCd = 120; mate.breedCd = 120;
+              const pup = this.spawnAt((m.x + mate.x) / 2, m.y + 0.1, (m.z + mate.z) / 2, "snuffet");
+              if (pup) { pup.baby = true; pup.growT = 180; pup.sizeMul = 0.45; }
+              if (this.onSound) this.onSound(spec.sound);
+              if (this.onBreed) this.onBreed(m);
+            }
+          }
+        } else if (m.baby) {
+          let adult = null, bestD = 12;
+          for (const o of this.mobs) {
+            if (o === m || o.species !== "snuffet" || o.baby) continue;
+            const d = Math.hypot(o.x - m.x, o.z - m.z);
+            if (d < bestD) { bestD = d; adult = o; }
+          }
+          if (adult && bestD > 4) {
+            m.yaw = Math.atan2(adult.x - m.x, adult.z - m.z);
+            targetSpeed = spec.speed * 0.9;
+          }
+        }
       }
 
       // neutral contact damage (leaning on a Prickleback is a mistake)
@@ -620,7 +684,8 @@ export class Mobs {
       m.group.rotation.y = m.yaw;
       // hurt flinch is a subtle swell; a falling crit lands with a real pop
       // that collapses over ~0.2s
-      m.group.scale.setScalar(1 + (m.hurtT > 0 ? 0.06 : 0) + m.critT * 1.1);
+      const lovePulse = m.loveT > 0 ? 0.04 + Math.sin(m.loveT * 7) * 0.04 : 0;
+      m.group.scale.setScalar(m.sizeMul * (1 + (m.hurtT > 0 ? 0.06 : 0) + m.critT * 1.1 + lovePulse));
     }
   }
 
@@ -657,7 +722,7 @@ export class Mobs {
     if (disp === 0) return;
     m[axis] += disp;
     const eps = 0.001;
-    const hw = m.spec.halfW, hh = m.spec.height;
+    const hw = m.spec.halfW * m.sizeMul, hh = m.spec.height * m.sizeMul;
     const x0 = Math.floor(m.x - hw), x1 = Math.floor(m.x + hw - eps);
     // one row below the feet too: tall blocks (fence/gate, colHeight 1.5)
     // reach into the cell above, so a hopping mob at +1.3 still hits them
@@ -687,7 +752,7 @@ export class Mobs {
   rayHit(origin, dir, maxDist) {
     let best = null, bestT = maxDist;
     for (const m of this.mobs) {
-      const hw = m.spec.halfW, hh = m.spec.height;
+      const hw = m.spec.halfW * m.sizeMul, hh = m.spec.height * m.sizeMul;
       const min = [m.x - hw, m.y, m.z - hw];
       const max = [m.x + hw, m.y + hh, m.z + hw];
       const o = [origin.x, origin.y, origin.z];
