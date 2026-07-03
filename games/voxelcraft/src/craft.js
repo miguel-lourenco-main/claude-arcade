@@ -16,6 +16,7 @@ import {
   STARSTONE, STAR_BLADE,
   GLOAM_INGOT, GLOAM_BLOCK, GLOAM_PICK, GLOAM_AXE, GLOAM_SHOVEL, GLOAM_BLADE,
   GLOAM_CROWN, GLOAM_JERKIN, GLOAM_LEGGINGS, GLOAM_TREADS,
+  PLANK_HOE, STONE_HOE, IRON_HOE,
 } from "./blocks.js";
 
 // in: [[blockId, count], ...]  out: [blockId, count]  note: extra recipe copy
@@ -64,6 +65,10 @@ export const RECIPES = [
   { in: [[COBBLE, 3], [PLANKS, 2]], out: [STONE_AXE, 1], note: "the planks are the haft" },
   { in: [[COBBLE, 1], [PLANKS, 2]], out: [STONE_SHOVEL, 1], note: "the planks are the haft" },
   { in: [[COBBLE, 2], [PLANKS, 2]], out: [STONE_BLADE, 1], note: "the planks are the haft" },
+  // the Furrower: the row-turning tine, one per tier that farms
+  { in: [[PLANKS, 4]], out: [PLANK_HOE, 1], note: "2 tine the row, 2 haft it" },
+  { in: [[COBBLE, 2], [PLANKS, 2]], out: [STONE_HOE, 1], note: "the planks are the haft" },
+  { in: [[IRON_INGOT, 2], [PLANKS, 2]], out: [IRON_HOE, 1], note: "the planks are the haft" },
   { in: [[IRON_INGOT, 3], [PLANKS, 2]], out: [IRON_PICK, 1], note: "the planks are the haft" },
   { in: [[IRON_INGOT, 3], [PLANKS, 2]], out: [IRON_AXE, 1], note: "the planks are the haft" },
   { in: [[IRON_INGOT, 1], [PLANKS, 2]], out: [IRON_SHOVEL, 1], note: "the planks are the haft" },

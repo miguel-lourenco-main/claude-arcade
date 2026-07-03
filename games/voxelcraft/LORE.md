@@ -132,6 +132,12 @@ specific item vocabulary.
   the Notice Post still says, take what the chest offers, and leave the
   walls to their sulk. It's agreed this is a fair split.
 
+- **The Furrower** — the fifth tool. The Cracker cracks, the Hewer hews,
+  the Scoop scoops, the Shiv settles arguments — and the Furrower asks
+  the ground politely to be a garden. One pass turns dirt, turf, or Mire
+  Sod into **Turned Earth**, the combed rows that pips and pods actually
+  agree to grow in. Turned Earth stays turned; the Upturn doesn't undo
+  a politeness once granted.
 - **The Mirelands** — where the flip wrung the land out and it never
   finished draining. The wettest country of the Upturn: Mire Sod
   underfoot (wet ground that sucks at the hand-feet — the bog is crossed

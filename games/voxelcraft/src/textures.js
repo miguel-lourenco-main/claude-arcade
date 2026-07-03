@@ -124,6 +124,11 @@ export const TILE = {
   MUD: 102,
   REEDS: 103,
   BOGBEAN_POD: 104,
+  // tilling: Turned Earth's furrowed top + the Furrower silhouettes
+  FARMLAND_TOP: 105,
+  HOE_PLANK: 106,
+  HOE_STONE: 107,
+  HOE_IRON: 108,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -1156,6 +1161,15 @@ function toolPainter(kind, pal) {
       }
       for (const [x, y] of [[10, 2], [11, 2], [9, 3], [9, 4]]) dot(x, y, pal.hi);
       for (const [x, y] of [[13, 4], [14, 4], [13, 5], [14, 5], [12, 6], [13, 6]]) dot(x, y, pal.lo);
+    } else if (kind === "hoe") {
+      // the Furrower: a swan-neck blade folding down off the tip — asks the
+      // ground politely to be a garden
+      for (const [x, y] of [[9, 2], [10, 2], [11, 2], [12, 3], [12, 4], [12, 5]]) {
+        dot(x, y, pal.mid);
+      }
+      for (const [x, y] of [[9, 1], [10, 1], [11, 2]]) dot(x, y, pal.hi);
+      for (const [x, y] of [[13, 4], [13, 5], [13, 6], [12, 6]]) dot(x, y, pal.lo);
+      dot(12, 6, pal.hi); // the tine's honed tip
     } else {
       // the Shiv: grip, a short cross-guard, and a long whittled sliver
       dot(1, 15, HAFT_WOOD.lo); // pommel knot
@@ -1187,6 +1201,22 @@ painters[TILE.PICK_GLOAM] = toolPainter("pick", TOOL_PALETTES.gloam);
 painters[TILE.AXE_GLOAM] = toolPainter("axe", TOOL_PALETTES.gloam);
 painters[TILE.SHOVEL_GLOAM] = toolPainter("shovel", TOOL_PALETTES.gloam);
 painters[TILE.BLADE_GLOAM] = toolPainter("blade", TOOL_PALETTES.gloam);
+painters[TILE.HOE_PLANK] = toolPainter("hoe", TOOL_PALETTES.plank);
+painters[TILE.HOE_STONE] = toolPainter("hoe", TOOL_PALETTES.stone);
+painters[TILE.HOE_IRON] = toolPainter("hoe", TOOL_PALETTES.iron);
+
+painters[TILE.FARMLAND_TOP] = (p) => {
+  // Turned Earth: dark worked soil combed into furrow rows
+  p.noiseFill([88, 64, 42], 10);
+  for (const y of [2, 6, 10, 14]) {
+    for (let x = 0; x < TILE_PX; x++) {
+      const d = (p.rand() * 2 - 1) * 6;
+      p.px(x, y, 58 + d, 42 + d, 28 + d);        // the furrow shadow
+      if (p.rand() < 0.5) p.px(x, y - 1, 112 + d, 84 + d, 54 + d); // the turned crest
+    }
+  }
+  p.speckle(6, [124, 96, 60], 8); // fresh crumbs
+};
 
 // --- Gloamgold ----------------------------------------------------------------
 // The fourth-tier metal: sky-iron FELL into the Upturn; gloamgold SANK. It

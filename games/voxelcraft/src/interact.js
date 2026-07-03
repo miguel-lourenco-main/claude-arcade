@@ -4,8 +4,8 @@
 import * as THREE from "three";
 import {
   AIR, BEDROCK, CHEST, WORKBENCH, KILN, BED, LADDER, DOOR, DOOR_TOP, BLAST_KEG,
-  GATE, GATE_OPEN, ROOT_SEED, CROP_SPROUT, DIRT, GRASS, SLING_STONE, BOAT, WATER,
-  FISHING_POLE, SNOW_LAYER,
+  GATE, GATE_OPEN, ROOT_SEED, CROP_SPROUT, DIRT, GRASS, MUD, FARMLAND,
+  SLING_STONE, BOAT, WATER, FISHING_POLE, SNOW_LAYER,
   BLOCKS, isSolid, isPlant, isFluid, isDoor, isDoorLower, isGate, isSign,
   DOOR_TOGGLE, dropFor, yawToFacing,
 } from "./blocks.js";
@@ -653,6 +653,20 @@ export class Interaction {
       this.onSleep(t.x, t.y, t.z);
       return;
     }
+    // the Furrower: right-click soil to turn it — dirt, turf, or Mire Sod
+    // with open air above becomes Turned Earth, and the tilling costs the
+    // tool one use (both modes; creative gardens too, it just doesn't pay)
+    const heldTool = this._heldTool();
+    if (heldTool && heldTool.kind === "hoe" &&
+        (t.id === DIRT || t.id === GRASS || t.id === MUD) &&
+        this.world.getBlock(t.x, t.y + 1, t.z) === AIR) {
+      const affected = this.world.setBlock(t.x, t.y, t.z, FARMLAND);
+      if (affected.length === 0) return;
+      this.onEdit(affected, { ids: [FARMLAND, t.id], x: t.x, y: t.y, z: t.z, placed: FARMLAND });
+      this.onSound("place", FARMLAND);
+      if (this.onToolUse) this.onToolUse("mine");
+      return;
+    }
     const id = this.hotbar.selectedId();
     if (id === AIR) return;
     const def = BLOCKS[id];
@@ -684,9 +698,9 @@ export class Interaction {
           !isSolid(this.world.getBlock(px, py, pz + 1)) &&
           !isSolid(this.world.getBlock(px, py, pz - 1))) return;
     } else if (id === ROOT_SEED) {
-      // root pips want WORKED soil — dirt or grass, never stone or sand
+      // root pips want TURNED EARTH now — the Furrower made farming a craft
       const below = this.world.getBlock(px, py - 1, pz);
-      if (below !== DIRT && below !== GRASS) return;
+      if (below !== FARMLAND) return;
     } else if (def.shape === "sign") {
       // a Notice Post stands on solid ground only — nobody trusts a notice
       // nailed to thin air

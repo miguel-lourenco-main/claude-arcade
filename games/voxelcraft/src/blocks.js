@@ -192,6 +192,13 @@ export const GLOAM_TREADS = 115;
 export const MUD = 116;
 export const REEDS = 117;
 export const BOGBEAN_POD = 118;
+// tilling: FARMLAND is Turned Earth, written by right-clicking soil with a
+// Furrower (the hoe — the fifth tool kind). Root pips and bogbean pods only
+// plant in it; interact.js owns the tilling routing.
+export const FARMLAND = 119;
+export const PLANK_HOE = 120;
+export const STONE_HOE = 121;
+export const IRON_HOE = 122;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -769,6 +776,13 @@ defTool(GLOAM_PICK, "Cracker", "pick", TOOL_TIERS[3], TILE.PICK_GLOAM);
 defTool(GLOAM_AXE, "Hewer", "axe", TOOL_TIERS[3], TILE.AXE_GLOAM);
 defTool(GLOAM_SHOVEL, "Scoop", "shovel", TOOL_TIERS[3], TILE.SHOVEL_GLOAM);
 defTool(GLOAM_BLADE, "Shiv", "blade", TOOL_TIERS[3], TILE.BLADE_GLOAM);
+// the Furrower: asks the ground politely to be a garden (the hoe — a fifth
+// kind; "hoe" matches no block's toolKind, so it mines at the bare rate and
+// its real work is the tilling routing in interact.js). No gloam Furrower —
+// tier 4 is for the mines.
+defTool(PLANK_HOE, "Furrower", "hoe", TOOL_TIERS[0], TILE.HOE_PLANK);
+defTool(STONE_HOE, "Furrower", "hoe", TOOL_TIERS[1], TILE.HOE_STONE);
+defTool(IRON_HOE, "Furrower", "hoe", TOOL_TIERS[2], TILE.HOE_IRON);
 
 // the Sky-Iron Ingot: a carried bar, never placed (the kiln makes it from
 // sky-iron ore; four fold back into a Sky-Iron Block at the workbench)
@@ -973,6 +987,14 @@ BLOCKS[BOGBEAN_POD] = def("Bogbean Pods", { hardness: 0.05,
   opaque: false,
   sound: "plant",
   placeable: false,
+});
+
+// Turned Earth: worked soil, combed into rows. Stays turned (no reversion
+// busywork); digs back up as plain dirt.
+BLOCKS[FARMLAND] = def("Turned Earth", { hardness: 0.5, drops: DIRT,
+  toolKind: "shovel",
+  tiles: { top: TILE.FARMLAND_TOP, side: TILE.DIRT, bottom: TILE.DIRT },
+  sound: "dirt",
 });
 
 // --- Gloamgold: the fourth tier -------------------------------------------------
