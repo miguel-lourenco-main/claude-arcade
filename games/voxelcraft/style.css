@@ -48,6 +48,31 @@ body {
   font-size: 10px; color: rgba(255, 255, 255, 0.55);
 }
 
+/* ---- Gleam: the jar meter above the status rows ---- */
+
+#gleam {
+  position: absolute; left: 50%; bottom: 86px;
+  transform: translateX(-50%);
+  width: 452px;
+  display: flex; align-items: center; gap: 6px;
+}
+#gleam-bar {
+  flex: 1; height: 5px;
+  background: rgba(8, 14, 8, 0.7);
+  border: 1px solid rgba(150, 190, 110, 0.45);
+  border-radius: 3px; overflow: hidden;
+}
+#gleam-fill {
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, #8fce5e, #e2f7a6);
+  transition: width 0.15s ease-out;
+}
+#gleam-jars {
+  min-width: 16px; text-align: center;
+  font: bold 12px monospace; color: #d9f2a8;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+
 /* ---- survival status (hearts + air) ---- */
 
 #status {

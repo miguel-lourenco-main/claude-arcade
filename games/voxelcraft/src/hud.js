@@ -341,6 +341,9 @@ export class Hud {
 
   _buildStatus() {
     this.statusEl = document.getElementById("status");
+    this.gleamEl = document.getElementById("gleam");
+    this.gleamFillEl = document.getElementById("gleam-fill");
+    this.gleamJarsEl = document.getElementById("gleam-jars");
     const hearts = document.getElementById("hearts");
     const bubbles = document.getElementById("bubbles");
     const hunger = document.getElementById("hunger");
@@ -384,10 +387,21 @@ export class Hud {
     }
   }
 
+  // the Gleam meter: a slim jar-fill bar over the status rows + jar count
+  setGleam(level, frac) {
+    const pct = Math.round(frac * 100);
+    const state = level * 200 + pct;
+    if (state === this._lastGleam) return;
+    this._lastGleam = state;
+    this.gleamFillEl.style.width = pct + "%";
+    this.gleamJarsEl.textContent = String(level);
+  }
+
   setMode(mode) {
     this.gameMode = mode;
     this.modeBtn.textContent = mode === "survival" ? "Mode: Survival" : "Mode: Creative";
     this.statusEl.classList.toggle("hidden", mode !== "survival");
+    this.gleamEl.classList.toggle("hidden", mode !== "survival");
     this._lastHealth = -1;
     this._lastBubbles = -1;
     this._lastHunger = -1;

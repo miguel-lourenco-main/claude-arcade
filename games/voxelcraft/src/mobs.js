@@ -24,29 +24,29 @@ const TORCH_SAFE_DIST = 12; // hostiles won't spawn near torchlight
 export const SPECIES = {
   snuffet: {
     name: "Snuffet", hp: 3, speed: 1.4, behavior: "passive", habitat: "meadow",
-    cap: 4, halfW: 0.35, height: 0.85, sound: "snuffle",
+    cap: 4, halfW: 0.35, height: 0.85, sound: "snuffle", gleam: 1,
     drops: [[SNUFFET_LOIN, 1], [MOSS_CLUMP, 1]], // loin + the moss off its back
   },
   murkling: {
     name: "Murkling", hp: 6, speed: 2.6, behavior: "hostile", habitat: "night",
     cap: 4, halfW: 0.25, height: 1.35, damage: 2, aggro: 14, attackRange: 1.3,
-    drops: [[COAL_ORE, 1]], sound: "rasp",
+    drops: [[COAL_ORE, 1]], sound: "rasp", gleam: 3,
   },
   stalkid: {
     name: "Stalkid", hp: 8, speed: 3.1, behavior: "ambush", habitat: "cave",
     cap: 3, halfW: 0.38, height: 0.6, damage: 4, aggro: 4.5, attackRange: 1.3,
-    drops: [[COAL_ORE, 1]], sound: "clicks",
+    drops: [[COAL_ORE, 1]], sound: "clicks", gleam: 4,
   },
   prickleback: {
     name: "Prickleback", hp: 10, speed: 0.9, behavior: "neutral", habitat: "desert",
     cap: 2, halfW: 0.45, height: 0.75, damage: 3, contactDamage: 1,
-    attackRange: 1.5, knockResist: 0.5, sound: "rustle",
+    attackRange: 1.5, knockResist: 0.5, sound: "rustle", gleam: 4,
   },
   mirewalker: {
     name: "Mirewalker", hp: 20, speed: 1.0, behavior: "hostile", habitat: "shore",
     cap: 1, halfW: 0.35, height: 1.9, damage: 5, aggro: 10, attackRange: 1.7,
     knockResist: 0.85, drops: [[COAL_ORE, 3], [TORCH, 4]], rareChance: 0.15,
-    sound: "bellow",
+    sound: "bellow", gleam: 8,
   },
   // the Peddler: a wandering trader Wanderling, hunched under an enormous
   // patchwork backpack. Day-only (gone by dusk, the way the Murkling is gone
@@ -490,6 +490,7 @@ export class Mobs {
         if (spec.drops && this.onDrop) {
           for (const [id, n] of spec.drops) this.onDrop(m.x, m.y + 0.4, m.z, id, n);
         }
+        if (this.onKill) this.onKill(m); // gleam clings to a felled beast
         this._remove(i);
         continue;
       }

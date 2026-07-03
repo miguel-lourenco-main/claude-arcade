@@ -101,6 +101,7 @@ export class Interaction {
     this.onKilnBreak = opts.onKilnBreak;   // (x, y, z) => spill kiln slots
     this.onEat = opts.onEat;               // (kind) => chew/swallow sfx
     this.onToolUse = opts.onToolUse;       // (use: 'mine'|'hit') => tool wear
+    this.onGleam = opts.onGleam;           // (n) => motes of Gleam earned
     this.onDoor = opts.onDoor;             // (opened) => hinge-creak sfx
     this.onThrow = opts.onThrow;           // () => launch a sling stone
     this.canThrowStone = opts.canThrow;    // () => bool (projectile cap)
@@ -365,7 +366,11 @@ export class Interaction {
     const tool = this._heldTool();
     const need = BLOCKS[t.id].needsPick;
     const gated = need > 0 && !(tool && tool.kind === "pick" && tool.tier >= need);
-    if (!gated) this._spawnBlockDrops(t.id, t.x + 0.5, t.y + 0.4, t.z + 0.5);
+    if (!gated) {
+      this._spawnBlockDrops(t.id, t.x + 0.5, t.y + 0.4, t.z + 0.5);
+      // gleam clings to a mine that actually pays out (never a gated break)
+      if (BLOCKS[t.id].gleam > 0 && this.onGleam) this.onGleam(BLOCKS[t.id].gleam);
+    }
     if (popped !== null) {
       this._spawnBlockDrops(popped, t.x + 0.5, t.y + 1.3, t.z + 0.5);
     }

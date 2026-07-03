@@ -245,6 +245,7 @@ const def = (name, opts) => ({
   toolKind: null,    // which tool kind mines this block fast ('pick'|'axe'|'shovel')
   needsPick: 0,      // survival: drops NOTHING unless mined with a pick of
                      // at least this tier (0 = drops for anyone, bare feet too)
+  gleam: 0,          // motes of Gleam a successful survival mine awards
   ...opts,
 });
 
@@ -329,9 +330,9 @@ BLOCKS[LEAVES_COLD] = def("Rimewood Leaves", { hardness: 0.3, drops: null,
   randomDrop: { id: SAPLING, chance: 0.1 },
   tiles: cube(TILE.LEAVES_COLD), sound: "plant" });
 BLOCKS[COAL_ORE] = def("Coal Ore", { hardness: 2.8, tiles: cube(TILE.COAL_ORE),
-  toolKind: "pick", needsPick: 1 });
+  toolKind: "pick", needsPick: 1, gleam: 1 });
 BLOCKS[IRON_ORE] = def("Sky-Iron Ore", { hardness: 3.2, tiles: cube(TILE.IRON_ORE),
-  toolKind: "pick", needsPick: 2 }); // sky-iron asks for a stone pick at least
+  toolKind: "pick", needsPick: 2, gleam: 2 }); // sky-iron asks for a stone pick at least
 BLOCKS[TORCH] = def("Torch", { hardness: 0.05,
   tiles: cube(TILE.TORCH),
   kind: "cross",
@@ -941,6 +942,7 @@ BLOCKS[STARSTONE] = def("Starstone", {
   toolKind: "pick",
   needsPick: 2,
   lightEmit: 13,
+  gleam: 5, // prying loose a drowned star sheds a proper pinch of it
 });
 // Starglass: starstone run molten in the kiln — a glowing pane, glass-like
 // (cutout + cullSame, exactly the common-glass mesh rules) but too precious
@@ -1064,7 +1066,7 @@ BLOCKS[FARMLAND] = def("Turned Earth", { hardness: 0.5, drops: DIRT,
 // last rung before the metal itself takes over
 BLOCKS[GLOAM_ORE] = def("Gloamgold Ore", { hardness: 4.0,
   tiles: cube(TILE.GLOAM_ORE),
-  toolKind: "pick", needsPick: 3,
+  toolKind: "pick", needsPick: 3, gleam: 3,
 });
 // the Gloamgold Ingot: a carried bar, never placed (the kiln raises it
 // from the ore; four fold into a Gloamgold Block at the workbench)

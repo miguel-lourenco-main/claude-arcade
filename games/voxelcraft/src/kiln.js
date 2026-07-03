@@ -56,7 +56,8 @@ function canSmelt(k) {
 // Advance every kiln by dt seconds. Returns true if any SLOT content changed
 // (fuel consumed or an item smelted) — the caller re-renders an open kiln
 // window on that signal; timer-only ticks don't need a grid repaint.
-export function tickKilns(kilns, dt) {
+// onSmelt(outId) fires once per completed smelt (the Gleam hook).
+export function tickKilns(kilns, dt, onSmelt) {
   let changed = false;
   for (const k of kilns.values()) {
     const smeltable = canSmelt(k);
@@ -86,6 +87,7 @@ export function tickKilns(kilns, dt) {
           if (out) out.count += 1;
           else k.slots[2] = { id: outId, count: 1 };
           changed = true;
+          if (onSmelt) onSmelt(outId);
         }
       } else {
         k.progress = 0; // nothing (valid) on the fire — heat escapes

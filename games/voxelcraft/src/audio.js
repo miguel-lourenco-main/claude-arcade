@@ -289,5 +289,25 @@ export class Sfx {
     osc.stop(now + 0.1);
   }
 
+  // the Gleam chime: a small glassy ping, throttled so a mining streak
+  // reads as sparkle rather than an alarm
+  gleam() {
+    if (!this.enabled || !this._ensure()) return;
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    if (this._lastGleamAt !== undefined && now - this._lastGleamAt < 0.18) return;
+    this._lastGleamAt = now;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(1160 + Math.random() * 240, now);
+    osc.frequency.exponentialRampToValueAtTime(1760, now + 0.07);
+    g.gain.setValueAtTime(0.045, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+    osc.connect(g).connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.18);
+  }
+
   click() { this._noiseBurst(2200, 0.04, 0.08); }
 }

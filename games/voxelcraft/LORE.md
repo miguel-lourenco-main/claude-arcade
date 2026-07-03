@@ -132,6 +132,15 @@ specific item vocabulary.
   the Notice Post still says, take what the chest offers, and leave the
   walls to their sulk. It's agreed this is a fair split.
 
+- **Gleam** — the light that clings to work. When the stars drowned, their
+  light didn't all go out; some of it soaked into the ground and the
+  beasts and the making of things, and it sheds as tiny motes when work
+  gets properly finished — ore cracked loose, a beast felled, the kiln's
+  pour, a tool trued at the bench. A Wanderling bottles it without
+  thinking about it (the satchel has a jar row for exactly this), and a
+  full jar is a quiet, warm feeling with a number on it. What the jars
+  are FOR, the weavers say, is coming. Death never spills them — the
+  Upturn is polite about grief.
 - **The Furrower** — the fifth tool. The Cracker cracks, the Hewer hews,
   the Scoop scoops, the Shiv settles arguments — and the Furrower asks
   the ground politely to be a garden. One pass turns dirt, turf, or Mire

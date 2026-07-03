@@ -17,6 +17,7 @@ import { SignBoards } from "./signs.js";
 import { craft } from "./craft.js";
 import { dailyOffers, executeTrade } from "./trade.js";
 import { makeKiln, tickKilns } from "./kiln.js";
+import { Gleam } from "./gleam.js";
 import {
   PlayerModel, buildHeldFoot, buildHeldTool, buildHeldCompass, buildHeldClock,
   setHeldSkinLight,
@@ -27,6 +28,9 @@ import {
   SAPLING, LOG, LEAVES, LEAVES_COLD, BED, WATER as WATER_ID, LAVA as LAVA_ID,
   dropFor, cropStagesFor, isCrop, SEED_TO_SPROUT, SLING_STONE, BOAT,
   FISHING_POLE, isSign, COMPASS, CLOCK, SNOW_LAYER,
+  KILN as KILN_ID, WORKBENCH as WORKBENCH_ID,
+  IRON_INGOT as IRON_INGOT_ID, GLOAM_INGOT as GLOAM_INGOT_ID,
+  STARGLASS as STARGLASS_ID,
 } from "./blocks.js";
 import { makeGenerator, findSpawn, findBiomeLocation } from "./terrain.js";
 import { findNearestRuin, ruinForChunk } from "./ruins.js";
@@ -175,6 +179,17 @@ if (save && Array.isArray(save.wear)) {
 player.wear = wearSlots;
 
 const drops = new ItemDrops(scene, materials);
+
+// Gleam: the light that clings to work (gleam.js). Earned by mining ores,
+// felling beasts, the kiln's heat, and finishing gear at the bench; spent
+// (eventually) at the Loomstone. Additive save field; death keeps it.
+const gleam = new Gleam();
+if (save && save.gleam) gleam.load(save.gleam);
+function awardGleam(n) {
+  if (player.mode !== "survival" || n <= 0) return;
+  gleam.add(n);
+  sfx.gleam();
+}
 
 // retry pendingOverflow against the satchel; called on a slow timer from the
 // game loop, so freed slots gradually recover everything that once overflowed
@@ -556,7 +571,16 @@ const hud = new Hud(atlas.canvas, {
       crafted = true;
       if (leftover > 0) spillStack({ id: recipe.out[0], count: leftover });
     } while (max);
-    if (crafted) sfx.craft();
+    if (crafted) {
+      sfx.craft();
+      // gleam clings to finished GEAR (tools, armor, stations) — never to
+      // brick-spam, so bulk crafting can't farm it
+      const outDef = BLOCKS[recipe.out[0]];
+      if (outDef.tool || outDef.armor ||
+          recipe.out[0] === KILN_ID || recipe.out[0] === WORKBENCH_ID) {
+        awardGleam(1);
+      }
+    }
   },
   onSpillCursor: (stack) => spillStack(stack),
   onSlotsChanged: () => { sfx.click(); drainOverflow(); refreshArmor(); },
@@ -675,6 +699,7 @@ const interaction = new Interaction(world, player, scene, hud, {
   },
   onSound: (kind, id) => sfx.block(kind, id),
   onHint: (text) => hud.announce(text, 2600),
+  onGleam: (n) => awardGleam(n),
   onEat: (kind) => sfx.eat(kind),
   onDoor: (opened) => sfx.door(opened),
   onPick: (id) => hud.pickBlock(id),
@@ -857,6 +882,7 @@ mobs.onMobHurt = (crit) => (crit ? sfx.critHit() : sfx.mobHurt());
 player.isEating = () => interaction.eating;
 mobs.onSound = (kind) => sfx.creature(kind);
 mobs.onDrop = (x, y, z, id, n) => drops.spawn(x, y, z, id, n);
+mobs.onKill = (m) => awardGleam(m.spec.gleam || 0);
 
 const stopAutosave = startAutosave(() => writeSave(world, player, sky, hud, inventory, {
   saplings: [...saplings].map(([key, due]) => {
@@ -884,6 +910,8 @@ const stopAutosave = startAutosave(() => writeSave(world, player, sky, hud, inve
   chart: wayfinder.serializeChart(), // additive: the Field Chart's inked leaf
   // additive: the Murmur's settings [on, volume] — defaults on absence
   music: [music.enabled ? 1 : 0, Math.round(music.volume * 100) / 100],
+  // additive: Gleam [jars, progress] — absent in older saves (a fresh jar)
+  gleam: gleam.serialize(),
 }));
 
 // --- held item (first-person hand) — its own scene + depth-cleared pass ------
@@ -1287,7 +1315,11 @@ function tick(now) {
   // kilns burn whenever the game is up — including while a window is open
   // (the whole point: watch the smelt arrow fill). Paused = time stops.
   if (!hud.paused) {
-    if (tickKilns(world.kilns, frameDt) && hud.kilnOpen) hud.slotUI.renderAll();
+    // metals and starglass shed more gleam than a baked root does
+    const changed = tickKilns(world.kilns, frameDt, (outId) =>
+      awardGleam(outId === IRON_INGOT_ID || outId === GLOAM_INGOT_ID ||
+        outId === STARGLASS_ID ? 2 : 1));
+    if (changed && hud.kilnOpen) hud.slotUI.renderAll();
     hud.updateKilnView();
   }
 
@@ -1295,6 +1327,7 @@ function tick(now) {
     hud.setHealth(player.health);
     hud.setHunger(player.hunger);
     hud.setAir(player.air, player.maxAir, player.eyeInWater);
+    hud.setGleam(gleam.level, gleam.frac());
   }
 
   // void safety net (creative only — in survival the void deals damage and
@@ -1451,7 +1484,7 @@ if (NO_LOCK) {
   window.voxelcraft = {
     player, world, hud, sky, terrain, interaction, mobs, drops, saplings, crops,
     inventory, kegs, stones, boats, fishing, signBoards, wayfinder, meteors,
-    wear: wearSlots, playerModel,
+    wear: wearSlots, playerModel, gleam,
     rain: rainFx, sfx, music, camera,
     // torch-light probe (the same BFS the mesher bakes) — lets tests assert
     // that a landed starstone's glow actually propagates to its neighbors
