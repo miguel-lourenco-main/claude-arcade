@@ -30,6 +30,7 @@ import {
 } from "./blocks.js";
 import { makeGenerator, findSpawn, findBiomeLocation } from "./terrain.js";
 import { findNearestRuin, ruinForChunk } from "./ruins.js";
+import { findNearestDelve, delveForChunk } from "./delvings.js";
 import {
   buildMaterials, meshChunk, disposeChunkMeshes, setDayLight, buildBlockGeometry,
   sampleBlockLight,
@@ -206,6 +207,8 @@ if (save && save.signs) world.loadSigns(save.signs); // additive v2 field
 // additive v2 field: ruin chunks whose loot was already dealt — must load
 // before any chunk generates, or a looted stead would re-seed its chest
 if (save && save.ruins) world.loadRuins(save.ruins);
+// same contract for the Delvings-Under's stores
+if (save && save.delves) world.loadDelves(save.delves);
 // the Notice Posts' text boards — synced against world.signs every frame
 const signBoards = new SignBoards(scene, world);
 
@@ -450,6 +453,15 @@ function teleportTo(kind) {
       x: ruin.x + 0.5,
       y: terrain.heightAt(ruin.x, ruin.z + 5) + 2.5,
       z: ruin.z + 5.5,
+    };
+  } else if (kind === "delve") {
+    // land beside the head-frame; the rungs take it from there
+    const delve = findNearestDelve(terrain, player.pos.x, player.pos.z);
+    if (!delve) return { ok: false, message: "No delving found within 1000 blocks of here." };
+    dest = {
+      x: delve.x + 0.5,
+      y: terrain.heightAt(delve.x, delve.z + 2) + 2.5,
+      z: delve.z + 2.5,
     };
   } else {
     dest = findBiomeLocation(terrain, kind, player.pos.x, player.pos.z);
@@ -1415,5 +1427,8 @@ if (NO_LOCK) {
     // the Steads-Before: placement prediction, for ruin tests
     findNearestRuin: (x, z) => findNearestRuin(terrain, x, z),
     ruinForChunk: (cx, cz) => ruinForChunk(terrain, cx, cz),
+    // the Delvings-Under: same prediction pair
+    findNearestDelve: (x, z) => findNearestDelve(terrain, x, z),
+    delveForChunk: (cx, cz) => delveForChunk(terrain, cx, cz),
   };
 }

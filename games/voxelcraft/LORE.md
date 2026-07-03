@@ -132,6 +132,15 @@ specific item vocabulary.
   the Notice Post still says, take what the chest offers, and leave the
   walls to their sulk. It's agreed this is a fair split.
 
+- **The Delvings-Under** — the Steads-Before didn't just farm; they dug.
+  Timbered galleries chasing sky-iron down into the old-sky dark, rung
+  shafts up to little head-frames that have mostly given up standing
+  straight. The crews left mid-swing — the ground got opinionated — and
+  their stores wait where they set them: torches, coal, spare heads, and
+  now and then the good metal itself. Wanderlings read the notice, climb
+  down, take what the chest offers, and leave the timbers to their work
+  of slowly becoming ground. The seam, it's agreed, is still singing.
+
 Generic category words (Dirt, Sand, Stone, Gravel, Water, Glass, Torch,
 Chest, Workbench, Bricks, Sandstone, Coal Ore, Tall Grass, Cactus) stay
 plain — Wanderlings are practical about the basics.

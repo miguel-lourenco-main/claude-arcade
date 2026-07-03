@@ -12,6 +12,7 @@ import {
 import { CHUNK, HEIGHT, SEA_LEVEL } from "./world.js";
 import { Perlin, hash2 } from "./noise.js";
 import { ruinForChunk, stampRuin, seedRuinState } from "./ruins.js";
+import { delveForChunk, stampDelve, seedDelveState } from "./delvings.js";
 
 const TREE_CELL = 5;   // one tree candidate per 5x5-column cell (grid jitter)
 const TREE_MARGIN = 3; // canopy radius 2 + 1 safety
@@ -247,10 +248,15 @@ export function makeGenerator(seed) {
       }
     }
 
-    // pass 3: the Steads-Before — ~1 chunk in 40 carries a homestead ruin
-    // (see ruins.js). Stamped last so it clears any tree/plant that wandered
-    // into its footprint; strictly chunk-local, so every other chunk
-    // generates exactly as it always did.
+    // pass 3: buried and surface structures, both strictly chunk-local.
+    // The Delvings-Under stamp first, the Steads-Before second — on the
+    // rare chunk that draws both, the stead wins the surface (the delve
+    // keeps its gallery; only the head-frame risks a trim).
+    const delve = delveForChunk(t, chunk.cx, chunk.cz);
+    if (delve) {
+      stampDelve(chunk, delve);
+      seedDelveState(world, delve);
+    }
     const ruin = ruinForChunk(t, chunk.cx, chunk.cz);
     if (ruin) {
       stampRuin(chunk, ruin);

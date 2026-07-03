@@ -77,6 +77,7 @@ export class World {
     this.ruinsSeeded = new Set();     // "cx,cz" ruin chunks whose chest/sign
                                       // state was seeded (once per world — a
                                       // regenerated chunk never re-deals loot)
+    this.delvesSeeded = new Set();    // same contract for the Delvings-Under
     this.generator = null;            // set by terrain.js
     this._lastChunk = null;           // 1-entry lookup cache (meshing/physics locality)
   }
@@ -176,6 +177,21 @@ export class World {
     for (const key of arr) {
       if (typeof key === "string" && /^-?\d+,-?\d+$/.test(key)) {
         this.ruinsSeeded.add(key);
+      }
+    }
+  }
+
+  // delve seeding markers (additive save field): the Delvings-Under's
+  // once-per-world chest/sign dealing, exactly like the ruins pair
+  serializeDelves() {
+    return [...this.delvesSeeded];
+  }
+
+  loadDelves(arr) {
+    if (!Array.isArray(arr)) return;
+    for (const key of arr) {
+      if (typeof key === "string" && /^-?\d+,-?\d+$/.test(key)) {
+        this.delvesSeeded.add(key);
       }
     }
   }
