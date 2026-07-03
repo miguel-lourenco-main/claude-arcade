@@ -5,7 +5,7 @@ import * as THREE from "three";
 import {
   AIR, BEDROCK, CHEST, WORKBENCH, KILN, BED, LADDER, DOOR, DOOR_TOP, BLAST_KEG,
   GATE, GATE_OPEN, ROOT_SEED, CROP_SPROUT, DIRT, GRASS, SLING_STONE, BOAT, WATER,
-  FISHING_POLE, SNOW_LAYER,
+  FISHING_POLE, SNOW_LAYER, GLEAM_MOSS,
   BLOCKS, isSolid, isPlant, isDoor, isDoorLower, isGate, isSign, DOOR_TOGGLE,
   dropFor, yawToFacing,
 } from "./blocks.js";
@@ -694,6 +694,15 @@ export class Interaction {
       // never on a slab's half rise or a fence's shoulders)
       const below = BLOCKS[this.world.getBlock(px, py - 1, pz)];
       if (!below.solid || below.shape || below.colHeight !== 1) return;
+    } else if (id === GLEAM_MOSS) {
+      // gleam moss presses onto ANY solid face — floor, wall, or cave
+      // ceiling (unlike a torch, which only stands on top of a block)
+      if (!isSolid(this.world.getBlock(px, py - 1, pz)) &&
+          !isSolid(this.world.getBlock(px, py + 1, pz)) &&
+          !isSolid(this.world.getBlock(px + 1, py, pz)) &&
+          !isSolid(this.world.getBlock(px - 1, py, pz)) &&
+          !isSolid(this.world.getBlock(px, py, pz + 1)) &&
+          !isSolid(this.world.getBlock(px, py, pz - 1))) return;
     } else if (def.kind === "cross" && !isSolid(this.world.getBlock(px, py - 1, pz))) {
       return; // plants need soil
     }

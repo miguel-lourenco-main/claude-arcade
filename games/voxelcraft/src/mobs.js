@@ -4,7 +4,7 @@
 // and a rare shoreline bruiser. One shared physics/AI core.
 
 import * as THREE from "three";
-import { BLOCKS, GRASS, SAND, WATER, COAL_ORE, TORCH, SNUFFET_LOIN, MOSS_CLUMP, AIR, isSolid } from "./blocks.js";
+import { BLOCKS, GRASS, SAND, WATER, COAL_ORE, TORCH, SNUFFET_LOIN, MOSS_CLUMP, AIR, LEAVES, LEAVES_COLD, isSolid } from "./blocks.js";
 import { mulberry32 } from "./noise.js";
 
 const SPAWN_INTERVAL = 4;   // seconds between spawn attempts
@@ -377,14 +377,37 @@ export class Mobs {
     for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
       const c = world.getChunk(cx + dx, cz + dz);
       if (!c || c.emitters.size === 0) continue;
-      for (const [idx] of c.emitters) {
+      for (const [idx, level] of c.emitters) {
         const lx = idx % 16, lz = ((idx / 16) | 0) % 16, ly = (idx / 256) | 0;
         const ex = c.cx * 16 + lx, ez = c.cz * 16 + lz;
         const d2 = (ex - x) ** 2 + (ly - y) ** 2 + (ez - z) ** 2;
-        if (d2 < r2) return true;
+        // the safety radius scales with the emitter's strength: a torch (14)
+        // keeps the full watch; a seeded gleam moss tuft (7) only guards its
+        // own small pool of light, so deep caves stay dangerous between them
+        const safe = TORCH_SAFE_DIST * (level / 14);
+        if (d2 < Math.min(r2, safe * safe)) return true;
       }
     }
     return false;
+  }
+
+  // is this cell roofed over from the sky? (mirrors the mesher's skylight
+  // column rule: leaves never block the sky, so a forest floor is still day)
+  _skyCovered(world, x, y, z) {
+    for (let yy = y + 1; yy < 96; yy++) {
+      const id = world.getBlock(x, yy, z);
+      if (id !== AIR && BLOCKS[id].opaque && id !== LEAVES && id !== LEAVES_COLD) return true;
+    }
+    return false;
+  }
+
+  // the spawn-light gate for the creatures of the old sky (murkling,
+  // stalkid): they need darkness — night anywhere, or, at any hour, a cell
+  // the sky can't see (a cave). A nearby emitter (torch, starstone, gleam
+  // moss) vetoes the cell either way. Exposed on the test handle via `mobs`.
+  canHostileSpawnAt(world, x, y, z, night) {
+    if (this._nearTorch(world, x + 0.5, y, z + 0.5)) return false;
+    return !!night || this._skyCovered(world, Math.floor(x), Math.floor(y), Math.floor(z));
   }
 
   _surfaceY(world, x, z) {
@@ -422,14 +445,19 @@ export class Mobs {
       }
       if (shore) candidates.push("mirewalker");
     }
-    // cave pocket below the surface for the Stalkid
+    // cave pocket below the surface: the Stalkid at any hour — and by day
+    // the Murkling too (a dark cave is night enough for the old sky's
+    // leftovers; the light gate below has the final word)
     let caveY = -1;
     for (let tries = 0; tries < 6; tries++) {
       const y = 8 + ((Math.random() * Math.max(4, surfaceY - 16)) | 0);
       if (world.getBlock(x, y, z) === AIR && world.getBlock(x, y + 1, z) === AIR &&
           isSolid(world.getBlock(x, y - 1, z))) { caveY = y; break; }
     }
-    if (caveY > 0) candidates.push("stalkid");
+    if (caveY > 0) {
+      candidates.push("stalkid");
+      if (!night) candidates.push("murkling");
+    }
 
     // filter at candidate time: a capped or rare-roll-failed species must not
     // soak the whole 4-second attempt and starve the others
@@ -444,8 +472,14 @@ export class Mobs {
     const spec = SPECIES[pick];
 
     const hostile = spec.behavior === "hostile" || spec.behavior === "ambush";
-    const spawnY = pick === "stalkid" ? caveY : surfaceY + 1;
-    if (hostile && this._nearTorch(world, x + 0.5, spawnY, z + 0.5)) return;
+    const inCave = pick === "stalkid" || (pick === "murkling" && !night);
+    const spawnY = inCave ? caveY : surfaceY + 1;
+    // creatures of the old sky (murkling/stalkid) pass the full darkness
+    // gate — light at the CELL, not just the hour; other hostiles (the
+    // Mirewalker walks in daylight) only respect torch pools, as before
+    if (pick === "murkling" || pick === "stalkid") {
+      if (!this.canHostileSpawnAt(world, x, spawnY, z, night)) return;
+    } else if (hostile && this._nearTorch(world, x + 0.5, spawnY, z + 0.5)) return;
 
     this.spawnAt(x + 0.5, spawnY + 0.01, z + 0.5, pick);
   }
@@ -479,9 +513,13 @@ export class Mobs {
         this._remove(i);
         continue;
       }
-      // creatures of the old sky are gone by dawn, as if embarrassed —
-      // and the Peddler is gone by dusk, as if he knows something
-      if (!night && spec.habitat === "night") { this._remove(i); continue; }
+      // creatures of the old sky are gone by dawn, as if embarrassed — but
+      // only where dawn can SEE them: one deep in a cave keeps its post.
+      // The Peddler is gone by dusk, as if he knows something.
+      if (!night && spec.habitat === "night" &&
+          !this._skyCovered(world, Math.floor(m.x), Math.floor(m.y + 0.5), Math.floor(m.z))) {
+        this._remove(i); continue;
+      }
       if (night && spec.habitat === "day") { this._remove(i); continue; }
       if (!world.isGenerated(Math.floor(m.x) >> 4, Math.floor(m.z) >> 4)) continue;
       m.hurtT = Math.max(0, m.hurtT - dt);

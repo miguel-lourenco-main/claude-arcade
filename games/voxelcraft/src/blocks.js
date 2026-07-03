@@ -144,8 +144,9 @@ export const IRON_JERKIN = 95;
 export const IRON_LEGGINGS = 96;
 export const IRON_TREADS = 97;
 // the Pearlfall's gifts (see meteors.js): STARSTONE is the landed pearl of
-// the old sky — a glowing block delivered by meteor landings, never found in
-// terrain. The kiln runs it molten into STARGLASS (a pane that keeps the
+// the old sky — a glowing block delivered by meteor landings, plus the very
+// rare buried one the flip left in the deep cave skin (see oreAt in
+// terrain.js). The kiln runs it molten into STARGLASS (a pane that keeps the
 // glow), and the workbench hones one onto a sky-iron blade as the
 // STAR_BLADE, the tier-4 Star-Edge Shiv.
 export const STARSTONE = 98;
@@ -159,6 +160,12 @@ export const STAR_BLADE = 100;
 // was hiding.
 export const SNOW_LAYER = 101;
 export const ICE = 102;
+// Gleam Moss: the old-sky caves' own lamp — a soft moss that took root where
+// sunlight was never reintroduced and learned to make its own (a faint
+// lightEmit-7 gleam). Worldgen seeds it on cave floors and ceilings; it
+// pinches loose instantly, drops itself, and presses back onto ANY solid
+// face — floor, wall, or ceiling (see the placement rule in interact.js).
+export const GLEAM_MOSS = 103;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -869,6 +876,20 @@ BLOCKS[ICE] = def("River Glass", {
   cullSame: true,
   toolKind: "pick",
   sound: "glass",
+});
+
+// Gleam Moss: cross-kind like the flowers (so it pinches loose in a kick and
+// pops off a broken support), but it emits — the block-light BFS in mesher.js
+// spreads its faint glow, and Chunk.set registers the seeded emitters.
+BLOCKS[GLEAM_MOSS] = def("Gleam Moss", {
+  tiles: cube(TILE.GLEAM_MOSS),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  hardness: 0.05,
+  sound: "plant",
+  lightEmit: 7,
 });
 
 // total damage-reduction fraction of a wear-slot array (entries are stacks or

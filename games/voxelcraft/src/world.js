@@ -55,7 +55,14 @@ export class Chunk {
   }
   set(lx, y, lz, id) {
     if (y < 0 || y >= HEIGHT) return;
-    this.data[blockIndex(lx, y, lz)] = id;
+    const idx = blockIndex(lx, y, lz);
+    this.data[idx] = id;
+    // keep the emitter registry current here, at the one write everything
+    // funnels through: worldgen seeds glowing blocks now (gleam moss,
+    // buried starstone), and a later stamp (tree, ruin) that overwrites
+    // one must clear its glow
+    if (BLOCKS[id].lightEmit > 0) this.emitters.set(idx, BLOCKS[id].lightEmit);
+    else if (this.emitters.size > 0) this.emitters.delete(idx);
   }
 }
 
@@ -203,12 +210,7 @@ export class World {
     if (!chunk || !chunk.generated) return [];
     const lx = x - (cx << 4), lz = z - (cz << 4);
     const idx = blockIndex(lx, y, lz);
-    const prev = chunk.data[idx];
-    chunk.set(lx, y, lz, id);
-
-    // keep the chunk's light-emitter registry current
-    if (BLOCKS[prev].lightEmit > 0) chunk.emitters.delete(idx);
-    if (BLOCKS[id].lightEmit > 0) chunk.emitters.set(idx, BLOCKS[id].lightEmit);
+    chunk.set(lx, y, lz, id); // Chunk.set keeps the emitter registry current
 
     const key = chunkKey(cx, cz);
     let overlay = this.edits.get(key);
@@ -250,14 +252,17 @@ export class World {
       chunk = new Chunk(cx, cz);
       this.chunks.set(key, chunk);
     }
-    this.generator(this, chunk);
-    // apply persisted player edits on top of the generated terrain
     chunk.emitters.clear();
+    this.generator(this, chunk); // seeds emitters via Chunk.set (gleam moss)
+    // apply persisted player edits on top of the generated terrain
     const overlay = this.edits.get(key);
     if (overlay) {
       for (const [idx, id] of overlay) {
         chunk.data[idx] = id;
+        // the overlay overrides seeded emitters too: a mined gleam moss
+        // must not keep glowing out of its regenerated cell
         if (BLOCKS[id].lightEmit > 0) chunk.emitters.set(idx, BLOCKS[id].lightEmit);
+        else chunk.emitters.delete(idx);
       }
     }
     chunk.generated = true;

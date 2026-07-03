@@ -103,6 +103,8 @@ export const TILE = {
   BLADE_STAR: 87,
   // River Glass: the Rimelands' frozen lid over water (ICE block)
   ICE: 88,
+  // Gleam Moss: the old-sky caves' own faint lamp (see LORE.md)
+  GLEAM_MOSS: 89,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -1436,6 +1438,34 @@ painters[TILE.ICE] = (p) => {
   }
   // a frosted glint near one corner
   p.px(3, 3, 240, 248, 254); p.px(4, 3, 240, 248, 254); p.px(3, 4, 226, 238, 248);
+};
+
+painters[TILE.GLEAM_MOSS] = (p) => {
+  // Gleam Moss: low tufts of cave moss that learned to make their own light
+  // down where sunlight was never reintroduced. Dim marsh-teal strands rise
+  // from the bottom AND hang from the top (it takes floors and ceilings
+  // alike; the cross mesh shows whichever way it grew), dusted with pale
+  // nacre motes — the same drowned-star light the starstone keeps.
+  p.clear();
+  for (let t = 0; t < 7; t++) {
+    const x = 1 + ((p.rand() * 14) | 0);
+    const hgt = 3 + ((p.rand() * 4) | 0);
+    const fromTop = t % 2 === 1;
+    const lean = p.rand() < 0.5 ? -1 : 1;
+    for (let i = 0; i < hgt; i++) {
+      const d = (p.rand() * 2 - 1) * 10;
+      const y = fromTop ? i : 15 - i;
+      p.px(x + (i > hgt - 2 ? lean : 0), y, 58 + d, 116 + d, 92 + d);
+    }
+  }
+  // the gleam: nacre motes caught in the strands
+  for (let i = 0; i < 5; i++) {
+    const x = 1 + ((p.rand() * 14) | 0), y = 2 + ((p.rand() * 12) | 0);
+    p.px(x, y, 186, 234, 212);
+    if (p.rand() < 0.6) p.px(x, y + 1, 146, 204, 182, 180);
+  }
+  // two bright cores — the pinches worth journaling
+  p.px(4, 13, 224, 255, 236); p.px(11, 3, 224, 255, 236);
 };
 
 export function buildAtlas(seed = 1337) {

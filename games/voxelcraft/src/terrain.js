@@ -6,7 +6,7 @@
 import {
   GRASS, DIRT, STONE, SAND, GRAVEL, LOG, LEAVES, LEAVES_COLD, WATER, BEDROCK,
   SNOWY_GRASS, TALLGRASS, POPPY, DANDELION, CACTUS, SANDSTONE, COAL_ORE,
-  IRON_ORE, BERRY_BUSH, SNOW_LAYER, ICE, AIR,
+  IRON_ORE, BERRY_BUSH, SNOW_LAYER, ICE, AIR, STARSTONE, GLEAM_MOSS,
 } from "./blocks.js";
 import { CHUNK, HEIGHT, SEA_LEVEL } from "./world.js";
 import { Perlin, hash2 } from "./noise.js";
@@ -14,6 +14,13 @@ import { ruinForChunk, stampRuin, seedRuinState } from "./ruins.js";
 
 const TREE_CELL = 5;   // one tree candidate per 5x5-column cell (grid jitter)
 const TREE_MARGIN = 3; // canopy radius 2 + 1 safety
+
+// cave mouths: one candidate per MOUTH_CELL x MOUTH_CELL columns; a ramp's
+// horizontal reach (len + r, at most ~23) stays under one cell, so a 3x3
+// cell scan around any column sees every mouth that could touch it
+const MOUTH_CELL = 48;
+const CAVE_TOP_ROOF = 6;  // caves keep this much roof below the surface...
+const CAVE_FLOOR = 6;     // ...and never sink below this (World's Back safety)
 
 function smoothstep(a, b, t) {
   t = Math.min(1, Math.max(0, (t - a) / (b - a)));
@@ -30,6 +37,7 @@ export class Terrain {
     this.moisture = new Perlin(seed ^ 0xef0123);
     this.cave1 = new Perlin(seed ^ 0x456789);
     this.cave2 = new Perlin(seed ^ 0x9abcde);
+    this._mouthCache = new Map(); // "cmx,cmz" -> mouth descriptor | null
   }
 
   heightAt(x, z) {
@@ -58,20 +66,98 @@ export class Terrain {
     return "plains";
   }
 
-  isCave(x, y, z) {
+  // the carve field at a cell: 0 solid stone, 1 shell (the stone skin right
+  // around a cave — walls, floors, ceilings — where the Upturn concentrates
+  // its riches; see oreAt), 2 cave air
+  caveAt(x, y, z) {
     // spaghetti tunnels: near-zero surfaces of two independent noises
     const n1 = this.cave1.fbm3(x * 0.02, y * 0.028, z * 0.02, 2);
     const n2 = this.cave2.fbm3(x * 0.02 + 400, y * 0.028 - 400, z * 0.02 + 800, 2);
-    if (n1 * n1 + n2 * n2 < 0.008) return true;
-    // occasional larger caverns deeper down
-    if (y < 26 && this.cave1.fbm3(x * 0.045, y * 0.05, z * 0.045, 3) > 0.56) return true;
-    return false;
+    const q = n1 * n1 + n2 * n2;
+    if (q < 0.008) return 2;
+    let shell = q < 0.02;
+    // occasional larger chambers deeper down
+    if (y < 26) {
+      const c = this.cave1.fbm3(x * 0.045, y * 0.05, z * 0.045, 3);
+      if (c > 0.56) return 2;
+      if (c > 0.49) shell = true;
+    }
+    return shell ? 1 : 0;
   }
 
-  oreAt(x, y, z, h) {
+  isCave(x, y, z) { return this.caveAt(x, y, z) === 2; }
+
+  // A cave mouth candidate for one MOUTH_CELL grid cell: a straight sloped
+  // tube that breaches the surface on dry land and ramps down into the cave
+  // band, so caves are discoverable on foot. Deterministic from the seed and
+  // memoized (heightAt is the expensive part).
+  mouthAt(cmx, cmz) {
+    const key = cmx + "," + cmz;
+    const cached = this._mouthCache.get(key);
+    if (cached !== undefined) return cached;
+    let m = null;
+    if (hash2(cmx, cmz, this.seed ^ 0xca4e) < 0.45) {
+      // jitter keeps the whole ramp inside this cell's 3x3 neighborhood
+      const mx = cmx * MOUTH_CELL + 8 +
+        Math.floor(hash2(cmx, cmz, this.seed ^ 0x33cc) * (MOUTH_CELL - 16));
+      const mz = cmz * MOUTH_CELL + 8 +
+        Math.floor(hash2(cmx, cmz, this.seed ^ 0x44dd) * (MOUTH_CELL - 16));
+      const h = this.heightAt(mx, mz);
+      // dry land only — a mouth must never open under (or into) the water
+      if (h > SEA_LEVEL + 3 && h < HEIGHT - 14) {
+        const ang = hash2(cmx, cmz, this.seed ^ 0x55ee) * Math.PI * 2;
+        const slope = 0.55 + hash2(cmx, cmz, this.seed ^ 0x66ff) * 0.25;
+        // long enough to always ramp past the cave roof band
+        const len = Math.max(12 + hash2(cmx, cmz, this.seed ^ 0x7710) * 8,
+          (CAVE_TOP_ROOF + 4) / slope);
+        const r = 1.7 + hash2(cmx, cmz, this.seed ^ 0x8821) * 0.7;
+        m = { mx, mz, ux: Math.cos(ang), uz: Math.sin(ang), slope, len, r, h };
+      }
+    }
+    this._mouthCache.set(key, m);
+    return m;
+  }
+
+  // the y-interval (inclusive [lo, hi]) a cave mouth carves out of this
+  // column, or null. Also the "is a mouth here" test for spawn/tree safety.
+  mouthCarveAt(x, z) {
+    const cmx = Math.floor(x / MOUTH_CELL), cmz = Math.floor(z / MOUTH_CELL);
+    let lo = Infinity, hi = -Infinity;
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const m = this.mouthAt(cmx + dx, cmz + dz);
+        if (!m) continue;
+        const px = x - m.mx, pz = z - m.mz;
+        const t = px * m.ux + pz * m.uz;    // distance along the ramp
+        if (t < -m.r || t > m.len + m.r) continue;
+        const tc = Math.min(m.len, Math.max(0, t));
+        const qx = px - m.ux * tc, qz = pz - m.uz * tc;
+        const perp2 = qx * qx + qz * qz;
+        if (perp2 >= m.r * m.r) continue;
+        // rounded tube: full headroom on the centerline, tapering sides
+        const bulge = Math.sqrt(1 - perp2 / (m.r * m.r));
+        const cy = m.h + 0.6 - m.slope * tc;
+        lo = Math.min(lo, Math.round(cy - 1.1 * bulge));
+        hi = Math.max(hi, Math.round(cy + 0.9 + 1.5 * bulge));
+      }
+    }
+    return hi >= lo ? [lo, hi] : null;
+  }
+
+  // nearCave: shell cells (cave walls/ceilings/floors) carry a strong ore
+  // bonus, so delving a cave beats strip-mining blind stone
+  oreAt(x, y, z, h, nearCave = false) {
     if (y >= h - 3) return 0;
-    if (this.cave1.fbm3(x * 0.13 + 911, y * 0.13, z * 0.13 - 911, 2) > 0.58) return COAL_ORE;
-    if (y < 28 && this.cave2.fbm3(x * 0.15 - 911, y * 0.15, z * 0.15 + 911, 2) > 0.62) return IRON_ORE;
+    if (this.cave1.fbm3(x * 0.13 + 911, y * 0.13, z * 0.13 - 911, 2) >
+        (nearCave ? 0.44 : 0.58)) return COAL_ORE;
+    if (y < 28 && this.cave2.fbm3(x * 0.15 - 911, y * 0.15, z * 0.15 + 911, 2) >
+        (nearCave ? 0.48 : 0.62)) return IRON_ORE;
+    // a very rare starstone singleton in the deep cave skin — a pearl the
+    // flip buried, the patient delver's alternative to a Pearlfall night
+    if (nearCave && y < 14 &&
+        hash2(x * 13 + y * 7, z * 13 - y * 5, this.seed ^ 0x57a2) < 0.0006) {
+      return STARSTONE;
+    }
     return 0;
   }
 
@@ -83,6 +169,7 @@ export class Terrain {
     const jz = cz5 * TREE_CELL + Math.floor(hash2(cx5, cz5, this.seed ^ 0x22bb) * TREE_CELL);
     const h = this.heightAt(jx, jz);
     if (h <= SEA_LEVEL + 1 || h >= HEIGHT - 12) return null;
+    if (this.mouthCarveAt(jx, jz)) return null; // no trunk over a cave mouth
     const biome = this.biomeAt(jx, jz, h);
     const density = biome === "forest" ? 0.55 : biome === "plains" ? 0.1 : biome === "snow" ? 0.2 : 0;
     if (roll >= density) return null;
@@ -135,28 +222,42 @@ export function makeGenerator(seed) {
         // lowest neighboring column floor: a cave cell at or below a
         // neighbor's water line would open a hole into static water
         const minNbH = Math.min(hAt(lx - 1, lz), hAt(lx + 1, lz), hAt(lx, lz - 1), hAt(lx, lz + 1));
+        // the cave-mouth ramp interval through this column, if any (mouths
+        // exist on dry land only — mouthAt guarantees the center; the column
+        // guard below keeps a ramp's tail from nicking a shoreline)
+        const mouth = h > SEA_LEVEL + 2 ? t.mouthCarveAt(x, z) : null;
 
         for (let y = 0; y <= h; y++) {
           let id;
           if (y === 0 || (y <= 2 && hash2(x * 3 + y, z * 3, seed ^ 0xbed) < 0.6)) {
             id = BEDROCK;
-          } else if (y > 3 && y < h - 2 && (y > SEA_LEVEL || minNbH >= y) && t.isCave(x, y, z)) {
-            id = AIR;
-          } else if (biome === "desert") {
-            if (y > h - 4) id = SAND;
-            else if (y > h - 9) id = SANDSTONE;
-            else id = STONE;
-          } else if (y === h) {
-            if (beach) id = h >= SEA_LEVEL ? SAND : GRAVEL;
-            else if (h < SEA_LEVEL - 1) id = GRAVEL; // lake/ocean floor
-            else if (biome === "snow") id = SNOWY_GRASS;
-            else id = GRASS;
-          } else if (y > h - 4) {
-            id = beach || h < SEA_LEVEL ? SAND : DIRT;
           } else {
-            id = STONE;
+            // the carve field, sampled a touch past the carve band so the
+            // walls/floors/ceilings still read as ore-rich shell
+            const cv = y >= CAVE_FLOOR - 1 && y <= h - CAVE_TOP_ROOF + 2
+              ? t.caveAt(x, y, z) : 0;
+            const dry = y > SEA_LEVEL || minNbH >= y; // static-water guard
+            const carved = dry && y >= CAVE_FLOOR &&
+              ((cv === 2 && y <= h - CAVE_TOP_ROOF) ||
+               (mouth !== null && y >= mouth[0] && y <= mouth[1]));
+            if (carved) {
+              id = AIR;
+            } else if (biome === "desert") {
+              if (y > h - 4) id = SAND;
+              else if (y > h - 9) id = SANDSTONE;
+              else id = STONE;
+            } else if (y === h) {
+              if (beach) id = h >= SEA_LEVEL ? SAND : GRAVEL;
+              else if (h < SEA_LEVEL - 1) id = GRAVEL; // lake/ocean floor
+              else if (biome === "snow") id = SNOWY_GRASS;
+              else id = GRASS;
+            } else if (y > h - 4) {
+              id = beach || h < SEA_LEVEL ? SAND : DIRT;
+            } else {
+              id = STONE;
+            }
+            if (id === STONE) id = t.oreAt(x, y, z, h, cv > 0) || STONE;
           }
-          if (id === STONE) id = t.oreAt(x, y, z, h) || STONE;
           if (id !== AIR) chunk.set(lx, y, lz, id);
         }
 
@@ -165,6 +266,21 @@ export function makeGenerator(seed) {
         if (h < SEA_LEVEL) {
           for (let y = h + 1; y <= SEA_LEVEL; y++) chunk.set(lx, y, lz, WATER);
           if (biome === "snow") chunk.set(lx, SEA_LEVEL, lz, ICE);
+        }
+
+        // gleam moss: sparse glowing tufts on the floors and ceilings of
+        // the old-sky caves — faint original waypoints for delvers (see
+        // LORE.md). Cave air below the surface can only border solid rock
+        // (the water guard sees to that), so a non-air neighbor is support.
+        for (let y = CAVE_FLOOR + 1; y <= h - 5; y++) {
+          if (chunk.get(lx, y, lz) !== AIR) continue;
+          const below = chunk.get(lx, y - 1, lz);
+          const floor = below !== AIR && below !== GLEAM_MOSS; // no moss stacks
+          const ceiling = chunk.get(lx, y + 1, lz) !== AIR;
+          if (!floor && !ceiling) continue;
+          if (hash2(x * 3 + y * 61, z * 3 - y * 17, seed ^ 0x91ee) < 0.02) {
+            chunk.set(lx, y, lz, GLEAM_MOSS); // Chunk.set registers the glow
+          }
         }
       }
     }
@@ -269,6 +385,7 @@ export function makeGenerator(seed) {
 function safeColumn(terrain, x, z) {
   const h = terrain.heightAt(x, z);
   if (h <= SEA_LEVEL + 1 || h >= HEIGHT - 20) return null;
+  if (terrain.mouthCarveAt(x, z)) return null; // never spawn over a cave mouth
   if (terrain.treeNear(x, z, 2)) return null; // canopies span 2 blocks from the trunk
   if (terrain.cactusAt(x, z, terrain.biomeAt(x, z, h), h) > 0) return null;
   return { x: x + 0.5, y: h + 2.5, z: z + 0.5 };

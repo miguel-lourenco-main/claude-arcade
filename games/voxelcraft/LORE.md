@@ -92,6 +92,13 @@ specific item vocabulary.
 - **Sky-Iron** — all iron of the Upturn (ore, ingot, block, tools); it fell
   from the old seabed-sky as meteor-stone, which is why it's found in the
   deep old-sky caves.
+- **Gleam Moss** — the old-sky caves' answer to the torch question: a low
+  moss that took root down where sunlight was never reintroduced and learned
+  to make its own — a faint nacre-green gleam, the same light the drowned
+  stars give. It comes away at a pinch and presses onto any stone face —
+  floor, wall, or ceiling — so delvers leave little constellations behind
+  them to find the way back out. Its glow is company, not protection: it
+  keeps only its own small pool, and the dark between pools keeps its knees.
 - **The Pearlfall** — some clear nights the old sky sheds a few of its
   pearls: streaks across the dome, and now and then one dives all the way
   down and lands. It falls the way everything in the Upturn behaves — the
