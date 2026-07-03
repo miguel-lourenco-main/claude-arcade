@@ -15,6 +15,13 @@ const HOP_SPEED = 9.2;      // clears a 1-block step at any framerate
 const MAX_STEP = 0.4;
 const TORCH_SAFE_DIST = 12; // hostiles won't spawn near torchlight
 
+// the Prowl (prowl.js): siege spawns come in closer than the ambient band,
+// under an elevated-but-hard cap and a total-population perf bound
+const PROWL_MIN = 12, PROWL_MAX = 30;
+const PROWL_CAP = 10;       // tagged prowlers alive at once (baseline
+                            // hostile caps: 4 murklings + 3 stalkids)
+const MOB_BOUND = 40;       // total mobs — the whole-roster safety valve
+
 // the bondling (a berry-bonded Snuffet — see LORE.md): companion tuning
 const BOND_CAP = 3;         // a Wanderling keeps at most three
 const BOND_MAX_HP = 8;      // the bond toughens the little grazer
@@ -376,6 +383,10 @@ export class Mobs {
       state: spec.behavior === "ambush" ? "wait" : "idle",
       stateT: 1 + Math.random() * 2,
       walkPhase: 0,
+      // the Prowl's tags (prowl.js): a tagged hunter is faster and homes on
+      // the player from any range; harmless defaults for everything else
+      prowler: false,
+      speedMul: 1,
       hp: spec.hp,
       hurtT: 0,
       critT: 0,            // falling-crit pop timer (drives the scale burst)
@@ -641,6 +652,47 @@ export class Mobs {
     this.spawnAt(x + 0.5, spawnY + 0.01, z + 0.5, pick);
   }
 
+  // --- the Prowl's spawn attempts (prowl.js drives the ~1.33s cadence) --------
+
+  prowlerCount() {
+    let n = 0;
+    for (const m of this.mobs) if (m.prowler) n++;
+    return n;
+  }
+
+  // one siege spawn attempt: a murkling or stalkid (the stalkids leave their
+  // posts on a Prowl night) seated on a dark surface cell near the player,
+  // tagged, +20% fast, and player-seeking. Safety valves live HERE so no
+  // caller can flood the world: a hard prowler cap, a total-mob bound, and
+  // the same dark-cell gate (torch/starstone/gleam-moss denial) every
+  // creature of the old sky obeys — a lit, walled stead stays defensible.
+  trySpawnProwler(world, player, terrain) {
+    if (this.prowlerCount() >= PROWL_CAP || this.mobs.length >= MOB_BOUND) return null;
+    const a = Math.random() * Math.PI * 2;
+    const r = PROWL_MIN + Math.random() * (PROWL_MAX - PROWL_MIN);
+    const x = Math.floor(player.pos.x + Math.cos(a) * r);
+    const z = Math.floor(player.pos.z + Math.sin(a) * r);
+    if (!world.isGenerated(x >> 4, z >> 4)) return null;
+    const surfaceY = this._surfaceY(world, x, z);
+    if (surfaceY < 0) return null;
+    if (!isSolid(world.getBlock(x, surfaceY, z))) return null; // no water seats
+    if (terrain.biomeAt(x, z, surfaceY) === "ocean") return null;
+    const spawnY = surfaceY + 1;
+    // the full darkness gate: the Prowl is a night event, but the CELL must
+    // be dark too — heavy torchlight refuses prowlers outright
+    if (!this.canHostileSpawnAt(world, x, spawnY, z, true)) return null;
+    // weighted to whichever the biome allows: murklings walk everywhere at
+    // night; the stony lurkers make up more of the press in open country
+    const pick = Math.random() < 0.7 ? "murkling" : "stalkid";
+    const m = this.spawnAt(x + 0.5, spawnY + 0.01, z + 0.5, pick);
+    if (m) {
+      m.prowler = true;
+      m.speedMul = 1.2;
+      if (m.spec.behavior === "ambush") m.state = "hunt"; // no waiting tonight
+    }
+    return m;
+  }
+
   // --- per-frame update ---------------------------------------------------------
 
   update(dt, { world, player, sfx, terrain, night }) {
@@ -672,11 +724,16 @@ export class Mobs {
           continue;
         }
         if (spec.drops && this.onDrop) {
-          for (const [id, n] of spec.drops) this.onDrop(m.x, m.y + 0.4, m.z, id, n);
+          // a prowler carries double — the night pays for the trouble
+          const lootMul = m.prowler ? 2 : 1;
+          for (const [id, n] of spec.drops) this.onDrop(m.x, m.y + 0.4, m.z, id, n * lootMul);
         }
         this._remove(i);
         continue;
       }
+      // the Prowl's hunters are the night's own: ALL of them go at dawn,
+      // cave roof or no (prowl.js sounds the relieved sting as it ends)
+      if (!night && m.prowler) { this._remove(i); continue; }
       // creatures of the old sky are gone by dawn, as if embarrassed — but
       // only where dawn can SEE them: one deep in a cave keeps its post.
       // The Peddler is gone by dusk, as if he knows something.
@@ -727,6 +784,9 @@ export class Mobs {
           }
         }
         if (spec.behavior === "neutral" && m.angryT > 0) chasing = true;
+        // a prowler never idles: it homes on the player from ANY range —
+        // the seeking bias that makes a Prowl night a siege, not weather
+        if (m.prowler) { chasing = true; if (m.state === "wait") m.state = "hunt"; }
       }
       if (tgtMob) chasing = true; // the feud stands even at the player's back
 
@@ -826,9 +886,9 @@ export class Mobs {
         }
       }
 
-      // --- movement ---
-      const tx = Math.sin(m.yaw) * targetSpeed;
-      const tz = Math.cos(m.yaw) * targetSpeed;
+      // --- movement --- (speedMul: the Prowl's +20%; 1 for everything else)
+      const tx = Math.sin(m.yaw) * targetSpeed * m.speedMul;
+      const tz = Math.cos(m.yaw) * targetSpeed * m.speedMul;
       m.vx += (tx - m.vx) * Math.min(1, 10 * dt);
       m.vz += (tz - m.vz) * Math.min(1, 10 * dt);
 

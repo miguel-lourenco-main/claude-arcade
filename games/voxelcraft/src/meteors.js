@@ -23,6 +23,14 @@ import { AIR, WATER, BEDROCK, STARSTONE, BLOCKS, isPlant, dropFor } from "./bloc
 import { HEIGHT, chunkKey, blockIndex } from "./world.js";
 
 const SHOWER_CHANCE = 0.34;        // ~1 night in 3
+
+// does (seed, day)'s night get a shower? The first draw of the same seeded
+// stream _planFor uses (keep the two formulas in lockstep). Exported so the
+// Prowl (prowl.js) can refuse to share a night with a Pearlfall.
+export function nightHasShower(seed, day) {
+  const rand = mulberry32(((seed >>> 0) ^ Math.imul(day + 1, 0x85297a4d)) >>> 0);
+  return rand() < SHOWER_CHANCE;
+}
 const NIGHT_START = 0.55;          // sky.time window a shower may begin in
 const NIGHT_END = 0.9;
 const START_WINDOW = 0.04;         // ~24s of day-fraction to catch the start
@@ -124,7 +132,8 @@ export class MeteorShowers {
     return mesh;
   }
 
-  // one plan per calendar night, seeded — deterministic in (seed, day)
+  // one plan per calendar night, seeded — deterministic in (seed, day).
+  // The first draw is exactly nightHasShower's (same stream, same formula).
   _planFor(day) {
     if (this._plan && this._plan.day === day) return this._plan;
     const rand = mulberry32((this.seed ^ Math.imul(day + 1, 0x85297a4d)) >>> 0);

@@ -127,6 +127,16 @@ specific item vocabulary.
   down when asked, and headbutts — with surprising conviction — anything
   that lays a hand on its Wanderling. Keeping more than three is considered
   showing off.
+- **The Prowl** — most nights the dark keeps to its pools and its caves.
+  Some nights it remembers the Upturn took its sky, gets up off its knees,
+  and walks. A low horn on the dusk wind is the only warning; then the
+  murklings come thick and purposeful, straight for anything carrying a
+  satchel, and the stalkids leave their posts to join the press. Torchlight
+  holds, as it always has — a well-lit wall is an argument the dark still
+  loses. It never walks on a Pearlfall night (even the dark won't talk over
+  the sky's gifts), and at dawn it lies back down. The morning after a stood
+  Prowl is the quietest, kindest morning there is; Wanderlings swear the
+  mending is real, and for once the Wanderlings are right.
 - **The Steads-Before** — the pre-Upturn homesteads: raised when the world
   faced the other way, and carried along when it turned. They came through
   the flip the way crockery comes through a move — mostly. What's left

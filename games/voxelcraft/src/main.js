@@ -11,6 +11,7 @@ import { PrimedKegs } from "./explosives.js";
 import { SlingStones } from "./projectiles.js";
 import { Mobs } from "./mobs.js";
 import { MeteorShowers } from "./meteors.js";
+import { Prowl } from "./prowl.js";
 import { Boats } from "./boats.js";
 import { Carts } from "./carts.js";
 import { reshapeRails, railShape } from "./rails.js";
@@ -861,6 +862,16 @@ const meteors = new MeteorShowers(scene, seed, {
   onAnnounce: (text) => hud.announce(text, 3200),
 });
 
+// the Prowl: the seeded night-siege event (prowl.js / LORE.md). Nothing of
+// it is saved — whether a night prowls re-derives from (seed, night), so a
+// mid-Prowl save simply resumes the siege on reload.
+const prowl = new Prowl(seed, {
+  mobs, world, player, terrain,
+  onAnnounce: (text, ms) => hud.announce(text, ms || 3200),
+  onHorn: () => sfx.prowlHorn(),
+  onDawn: () => sfx.prowlDawn(),
+});
+
 const stones = new SlingStones(scene, materials, {
   mobs,
   onSpawnDrop: (x, y, z, id) => drops.spawn(x, y, z, id),
@@ -1270,6 +1281,7 @@ function tick(now) {
       return accepted; // a full inventory keeps the rest on the ground
     });
     mobs.update(frameDt, { world, player, terrain, night: sky.lightLevel < 0.45 });
+    prowl.update(frameDt, sky); // reads the same night gate the mobs got
     boats.update(frameDt, world, player);
     carts.update(frameDt, world, player);
     kegs.update(frameDt, world, player);
@@ -1421,6 +1433,7 @@ function tick(now) {
     delve: player.pos.y < 24 || !skyOpen,
     cold: inColdBiome,
     rain: washLevel,
+    pulse: prowl.active, // the Prowl's low pulse under the night mood
   });
   setDayLight(materials, sky.lightLevel, sky.lightTint);
   setHeldSkinLight(sky.lightLevel, sky.lightTint);
@@ -1459,6 +1472,10 @@ if (NO_LOCK) {
   window.voxelcraft = {
     player, world, hud, sky, terrain, interaction, mobs, drops, saplings, crops,
     inventory, kegs, stones, boats, carts, fishing, signBoards, wayfinder, meteors,
+    // the Prowl: prowl.active / prowl.nightPlan(n) / prowl.quietT etc., plus
+    // the armer — forceProwl() marks the coming night regardless of the hash
+    prowl,
+    forceProwl: () => prowl.forceProwl(),
     // the waybar auto-shaper's oracle — lets tests assert what a cell wants
     railShape: (x, y, z) => railShape(world, x, y, z),
     wear: wearSlots, playerModel,

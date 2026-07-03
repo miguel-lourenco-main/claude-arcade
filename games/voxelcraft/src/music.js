@@ -8,7 +8,8 @@
 //   night  — slower, minor, an octave down, sparser still
 //   delve  — below y~24 or under a roofed-over head: a breathing drone
 //            (the old sky, humming in its caves) plus rare deep plinks
-// Rain overlays a soft filtered-noise wash on its own lane.
+// Rain overlays a soft filtered-noise wash on its own lane; a Prowl night
+// (prowl.js) adds a deep pulsing root tone on another.
 //
 // Scheduling uses AudioContext time exclusively (a 250ms lookahead pump), so
 // nothing drifts. The context is shared with audio.js's Sfx and, per browser
@@ -72,6 +73,8 @@ export class Music {
     this.mood = "day";
     this.moodTarget = "day"; // last mood update() computed (pre-start too)
     this.rainLevel = 0;
+    this.pulseLevel = 0;
+    this.pulseTarget = 0; // last pulse update() read (pre-start too)
     this.nextPhraseAt = 0;
     this._timer = null;
 
@@ -158,6 +161,26 @@ export class Music {
     lfo.connect(lfoG).connect(droneG.gain);
     lfo.start();
 
+    // the Prowl's low pulse (prowl.js): a deep root tone breathing on a slow
+    // tremolo, on its own lane like the rain wash — silent until the night
+    // remembers (main.js feeds setPulse each frame via update())
+    const pulseOsc = ctx.createOscillator();
+    pulseOsc.type = "sine";
+    pulseOsc.frequency.value = this.root * 0.25;
+    const pulseCar = ctx.createGain();
+    pulseCar.gain.value = 0.55; // tremolo base; the LFO swings ±0.45 of it
+    const trem = ctx.createOscillator();
+    trem.type = "sine";
+    trem.frequency.value = 0.9; // an uneasy heartbeat
+    const tremG = ctx.createGain();
+    tremG.gain.value = 0.45;
+    trem.connect(tremG).connect(pulseCar.gain);
+    this.pulseGain = ctx.createGain();
+    this.pulseGain.gain.value = 0;
+    pulseOsc.connect(pulseCar).connect(this.pulseGain).connect(this.tone);
+    pulseOsc.start();
+    trem.start();
+
     // rain wash: looped pre-softened noise on its own lane (any mood may rain)
     const frames = Math.floor(ctx.sampleRate * 2);
     const buffer = ctx.createBuffer(1, frames, ctx.sampleRate);
@@ -210,6 +233,17 @@ export class Music {
     }
   }
 
+  // the Prowl's pulse lane: eases in over a few seconds, like the crossfades
+  setPulse(level) {
+    level = Math.min(1, Math.max(0, level || 0));
+    if (level === this.pulseLevel) return;
+    this.pulseLevel = level;
+    if (this.pulseGain) {
+      this.pulseGain.gain.setTargetAtTime(
+        level * 0.06, this.ctx.currentTime, 2.5);
+    }
+  }
+
   // called every frame by main.js with the game's read of the world.
   // Priority: the delve owns underground; the cold sparkle owns the
   // Rimelands (day or night — frost doesn't keep office hours); then the
@@ -219,6 +253,7 @@ export class Music {
     const mood = state.delve ? "delve" : state.cold ? "cold"
       : state.night ? "night" : "day";
     this.moodTarget = mood;
+    this.pulseTarget = state.pulse ? 1 : 0; // the Prowl's low pulse
     if (!this.started) return;
     if (mood !== this.mood) {
       this.mood = mood;
@@ -230,6 +265,7 @@ export class Music {
       this.nextPhraseAt = Math.min(this.nextPhraseAt, now + 5 + this._rand() * 6);
     }
     this.setRain(state.rain);
+    this.setPulse(this.pulseTarget);
   }
 
   // the lookahead pump: fires every 250ms, schedules in AudioContext time —

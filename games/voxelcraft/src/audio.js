@@ -273,6 +273,59 @@ export class Sfx {
     setTimeout(() => this._noiseBurst(60, 0.6, 0.18), 140); // the roll-off
   }
 
+  // the Prowl's dusk warning (prowl.js): an uneasy low horn — two reeds
+  // tuned a beat apart so the chord shivers — swelling under a rising wind,
+  // then gone. The dark clearing its throat.
+  prowlHorn() {
+    if (!this.enabled || !this._ensure()) return;
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    const DUR = 2.2;
+    for (const [freq, det, amt] of [[92, 0, 0.085], [92, 11, 0.07], [138, -6, 0.035]]) {
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = "triangle";
+      osc.frequency.value = freq;
+      osc.detune.value = det;
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.linearRampToValueAtTime(amt, now + 0.7);
+      g.gain.setValueAtTime(amt, now + 1.2);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + DUR);
+      osc.connect(g).connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + DUR + 0.05);
+    }
+    // the wind under it: a slow-swelling lowpassed noise gust
+    const frames = Math.floor(ctx.sampleRate * DUR);
+    const buffer = ctx.createBuffer(1, frames, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    let lastS = 0;
+    for (let i = 0; i < frames; i++) {
+      lastS = lastS * 0.9 + (Math.random() * 2 - 1) * 0.2;
+      data[i] = lastS;
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.setValueAtTime(300, now);
+    filter.frequency.linearRampToValueAtTime(900, now + 1.1);
+    filter.frequency.linearRampToValueAtTime(250, now + DUR);
+    const wg = ctx.createGain();
+    wg.gain.setValueAtTime(0.0001, now);
+    wg.gain.linearRampToValueAtTime(0.12, now + 1.0);
+    wg.gain.exponentialRampToValueAtTime(0.0001, now + DUR);
+    src.connect(filter).connect(wg).connect(ctx.destination);
+    src.start(now);
+  }
+
+  // ...and the dawn after: two soft bells stepping UP — the relieved
+  // inversion of the mourning chime. The dark lay back down.
+  prowlDawn() {
+    this._bellTone(523, 0.8, 0.05);
+    setTimeout(() => this._bellTone(659, 1.2, 0.045), 260);
+  }
+
   // the Blast Keg's fuse: a dry, urgent little tick...
   kegTick() { this._noiseBurst(2400, 0.03, 0.09); }
 
