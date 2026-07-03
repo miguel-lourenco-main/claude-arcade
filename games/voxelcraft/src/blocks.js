@@ -185,6 +185,13 @@ export const GLOAM_CROWN = 112;
 export const GLOAM_JERKIN = 113;
 export const GLOAM_LEGGINGS = 114;
 export const GLOAM_TREADS = 115;
+// the Mirelands (see LORE.md): the bog country. MUD is Mire Sod — wet
+// ground that drags the stride; REEDS are Marsh Reeds, which rarely hand
+// over BOGBEAN_POD (the bog's seed pouch — planting arrives with the
+// bogbean farming wave, so for now it's a curiosity worth keeping).
+export const MUD = 116;
+export const REEDS = 117;
+export const BOGBEAN_POD = 118;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -941,6 +948,31 @@ BLOCKS[WISPCAP] = def("Wispcap", { hardness: 0.05,
   opaque: false,
   sound: "plant",
   lightEmit: 8,
+});
+
+// --- the Mirelands ---------------------------------------------------------------
+BLOCKS[MUD] = def("Mire Sod", { hardness: 0.6, toolKind: "shovel",
+  tiles: cube(TILE.MUD), sound: "dirt",
+});
+BLOCKS[REEDS] = def("Marsh Reed", { hardness: 0.05, drops: null,
+  randomDrop: { id: BOGBEAN_POD, chance: 0.3 },
+  tiles: cube(TILE.REEDS),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  sound: "plant",
+});
+// the pod is an item for now (placeable: false) — the bogbean farming wave
+// wires it into the Turned Earth planting flow
+BLOCKS[BOGBEAN_POD] = def("Bogbean Pods", { hardness: 0.05,
+  tiles: cube(TILE.BOGBEAN_POD),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  sound: "plant",
+  placeable: false,
 });
 
 // --- Gloamgold: the fourth tier -------------------------------------------------

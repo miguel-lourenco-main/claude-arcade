@@ -7,7 +7,7 @@ import {
   GRASS, DIRT, STONE, SAND, GRAVEL, LOG, LEAVES, LEAVES_COLD, WATER, BEDROCK,
   SNOWY_GRASS, TALLGRASS, POPPY, DANDELION, CACTUS, SANDSTONE, COAL_ORE,
   IRON_ORE, GLOAM_ORE, BERRY_BUSH, SNOW_LAYER, ICE, AIR, LAVA, WISPCAP,
-  isSolid,
+  MUD, REEDS, isSolid,
 } from "./blocks.js";
 import { CHUNK, HEIGHT, SEA_LEVEL } from "./world.js";
 import { Perlin, hash2 } from "./noise.js";
@@ -63,6 +63,10 @@ export class Terrain {
     const { temp, moist } = this.climateAt(x, z, h);
     if (temp < 0.32) return "snow";
     if (temp > 0.62 && moist < 0.42) return "desert";
+    // the Mirelands: the wettest band of what used to be deep forest —
+    // existing saves' unedited terrain re-decorates there on regeneration
+    // (player edits ride the overlay), the same trade the Rimelands made
+    if (moist > 0.72) return "bog";
     if (moist > 0.55) return "forest";
     return "plains";
   }
@@ -97,7 +101,8 @@ export class Terrain {
     const h = this.heightAt(jx, jz);
     if (h <= SEA_LEVEL + 1 || h >= HEIGHT - 12) return null;
     const biome = this.biomeAt(jx, jz, h);
-    const density = biome === "forest" ? 0.55 : biome === "plains" ? 0.1 : biome === "snow" ? 0.2 : 0;
+    const density = biome === "forest" ? 0.55 : biome === "plains" ? 0.1
+      : biome === "snow" ? 0.2 : biome === "bog" ? 0.06 : 0;
     if (roll >= density) return null;
     const trunk = 4 + Math.floor(hash2(jx, jz, this.seed ^ 0x1e00) * 3); // 4..6
     return { x: jx, z: jz, h, trunk, leaves: biome === "snow" ? LEAVES_COLD : LEAVES };
@@ -169,12 +174,16 @@ export function makeGenerator(seed) {
             else if (y > h - 9) id = SANDSTONE;
             else id = STONE;
           } else if (y === h) {
-            if (beach) id = h >= SEA_LEVEL ? SAND : GRAVEL;
+            if (biome === "bog" && h >= SEA_LEVEL - 1 && h <= SEA_LEVEL + 3) {
+              // the bog's low ground: sodden Mire Sod patches through the
+              // turf, and its shorelines are mud, never sand
+              id = beach || hash2(x, z, seed ^ 0xb06) < 0.35 ? MUD : GRASS;
+            } else if (beach) id = h >= SEA_LEVEL ? SAND : GRAVEL;
             else if (h < SEA_LEVEL - 1) id = GRAVEL; // lake/ocean floor
             else if (biome === "snow") id = SNOWY_GRASS;
             else id = GRASS;
           } else if (y > h - 4) {
-            id = beach || h < SEA_LEVEL ? SAND : DIRT;
+            id = beach || h < SEA_LEVEL ? (biome === "bog" ? DIRT : SAND) : DIRT;
           } else {
             id = STONE;
           }
@@ -227,6 +236,19 @@ export function makeGenerator(seed) {
           if (rs < 0.3 && chunk.get(lx, h, lz) === SNOWY_GRASS &&
               chunk.get(lx, h + 1, lz) === AIR) {
             chunk.set(lx, h + 1, lz, SNOW_LAYER);
+          }
+          continue;
+        }
+
+        // the Mirelands' growth: reeds crowd the low wet ground, brambles
+        // come three times as thick as a forest's, tall grass fills between
+        if (biome === "bog" && h > SEA_LEVEL && h + 1 < HEIGHT) {
+          const surf = chunk.get(lx, h, lz);
+          if ((surf === GRASS || surf === MUD) && chunk.get(lx, h + 1, lz) === AIR) {
+            const rr = hash2(x, z, seed ^ 0xb0663);
+            if (h <= SEA_LEVEL + 3 && rr < 0.06) chunk.set(lx, h + 1, lz, REEDS);
+            else if (rr >= 0.06 && rr < 0.084) chunk.set(lx, h + 1, lz, BERRY_BUSH);
+            else if (rr >= 0.084 && rr < 0.15 && surf === GRASS) chunk.set(lx, h + 1, lz, TALLGRASS);
           }
           continue;
         }
@@ -307,7 +329,7 @@ function safeColumn(terrain, x, z) {
 export function findBiomeLocation(terrain, kind, fromX = 0, fromZ = 0, maxRadius = 3000) {
   const matches = (x, z, h) => {
     switch (kind) {
-      case "forest": case "plains": case "desert": case "snow":
+      case "forest": case "plains": case "desert": case "snow": case "bog":
         return h > SEA_LEVEL + 1 && h < HEIGHT - 20 && terrain.biomeAt(x, z, h) === kind;
       case "mountain": return h >= 50; // realistic peak range tops out mid-50s
       case "ocean": return h < SEA_LEVEL - 6;

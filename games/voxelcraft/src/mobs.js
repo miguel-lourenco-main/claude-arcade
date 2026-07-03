@@ -4,7 +4,10 @@
 // and a rare shoreline bruiser. One shared physics/AI core.
 
 import * as THREE from "three";
-import { BLOCKS, GRASS, SAND, WATER, COAL_ORE, TORCH, SNUFFET_LOIN, MOSS_CLUMP, AIR, isSolid } from "./blocks.js";
+import {
+  BLOCKS, GRASS, SAND, MUD, WATER, COAL_ORE, TORCH, SNUFFET_LOIN, MOSS_CLUMP,
+  AIR, isSolid,
+} from "./blocks.js";
 import { mulberry32 } from "./noise.js";
 
 const SPAWN_INTERVAL = 4;   // seconds between spawn attempts
@@ -419,8 +422,9 @@ export class Mobs {
     }
     if (night && isSolid(topId)) candidates.push("murkling");
     if (biome === "desert" && topId === SAND) candidates.push("prickleback");
-    if (topId === SAND || topId === GRASS) {
-      // shoreline: standing water within 3 blocks
+    if (topId === SAND || topId === GRASS || topId === MUD) {
+      // shoreline: standing water within 3 blocks (the Mirelands' Mire Sod
+      // counts as shore ground — the bog is Mirewalker country)
       let shore = false;
       for (let dz = -3; dz <= 3 && !shore; dz++) for (let dx = -3; dx <= 3; dx++) {
         if (world.getBlock(x + dx, surfaceY, z + dz) === WATER) { shore = true; break; }

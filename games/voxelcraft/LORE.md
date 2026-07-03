@@ -132,6 +132,18 @@ specific item vocabulary.
   the Notice Post still says, take what the chest offers, and leave the
   walls to their sulk. It's agreed this is a fair split.
 
+- **The Mirelands** — where the flip wrung the land out and it never
+  finished draining. The wettest country of the Upturn: Mire Sod
+  underfoot (wet ground that sucks at the hand-feet — the bog is crossed
+  at three-quarter pace), Marsh Reeds nodding along every water line,
+  bramble thick enough to make the berrying easy, and Mirewalkers
+  patrolling like they pay rent. Wanderlings like the Mirelands the way
+  they like a story with weather in it: from slightly higher ground.
+- **Mire Sod** — the bog's wet dark earth. Scoops like dirt, drags like
+  guilt.
+- **Marsh Reed** — the tall seed-headed reed of the Mirelands. Some
+  stalks keep a twist of **Bogbean Pods** — fat speckled beans the bog
+  folk swore by, and swear they'll plant again someday.
 - **The Delvings-Under** — the Steads-Before didn't just farm; they dug.
   Timbered galleries chasing sky-iron down into the old-sky dark, rung
   shafts up to little head-frames that have mostly given up standing

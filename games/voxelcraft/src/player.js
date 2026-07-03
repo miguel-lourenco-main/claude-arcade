@@ -3,7 +3,7 @@
 
 import {
   BLOCKS, isSolid, WATER, LAVA, isFluid, CACTUS, LADDER, ICE, SNOW_LAYER,
-  armorProtection,
+  MUD, armorProtection,
 } from "./blocks.js";
 
 const HALF_W = 0.3;
@@ -395,14 +395,16 @@ export class Player {
         this.vel.y = WATER_EXIT_BOOST;
       }
     } else {
-      // frost-country footing: River Glass halves traction (starts and stops
-      // alike — the slide), a Snowdrift drags the stride to 0.9x
+      // footing: River Glass halves traction (starts and stops alike — the
+      // slide), a Snowdrift drags the stride to 0.9x, and Mire Sod sucks at
+      // the hand-feet — the bog is crossed at three-quarter pace
       let traction = 1, stride = 1;
       if (this.onGround) {
         const below = this.world.getBlock(
           Math.floor(this.pos.x), Math.floor(this.pos.y - 0.05), Math.floor(this.pos.z));
         if (below === ICE) traction = 0.5;
         else if (below === SNOW_LAYER) stride = 0.9;
+        else if (below === MUD) stride = 0.75;
       }
       const accel = (this.onGround ? (hasInput ? ACCEL_GROUND : FRICTION_GROUND) * traction
         : ACCEL_AIR) * dt;

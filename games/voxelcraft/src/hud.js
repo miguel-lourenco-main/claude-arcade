@@ -135,10 +135,12 @@ function drawDurabilityBar(ctx, def, stack) {
   ctx.fillRect(5, ICON - 4, Math.max(1, Math.round((ICON - 10) * ratio)), 2);
 }
 
-const TELEPORTS = ["spawn", "forest", "plains", "desert", "snow", "mountain", "ocean", "ruin", "delve"];
+const TELEPORTS = ["spawn", "forest", "plains", "desert", "snow", "bog", "mountain", "ocean", "ruin", "delve"];
 // folk names on the buttons where one exists (the biome KEY stays stable —
 // saves, terrain.js, and the search itself all speak "snow")
-const TELEPORT_LABELS = { snow: "Rimelands", ruin: "Nearest ruin", delve: "Nearest delving" };
+const TELEPORT_LABELS = {
+  snow: "Rimelands", bog: "Mirelands", ruin: "Nearest ruin", delve: "Nearest delving",
+};
 
 // tiny pixel-art status icons, drawn once and reused as data URLs
 function pixelIcon(rows, colorFor) {

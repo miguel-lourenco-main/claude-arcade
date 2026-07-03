@@ -120,6 +120,10 @@ export const TILE = {
   JERKIN_GLOAM: 99,
   LEGGINGS_GLOAM: 100,
   TREADS_GLOAM: 101,
+  // the Mirelands: bog-country ground and growth
+  MUD: 102,
+  REEDS: 103,
+  BOGBEAN_POD: 104,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -1496,6 +1500,46 @@ painters[TILE.ICE] = (p) => {
   }
   // a frosted glint near one corner
   p.px(3, 3, 240, 248, 254); p.px(4, 3, 240, 248, 254); p.px(3, 4, 226, 238, 248);
+};
+
+painters[TILE.MUD] = (p) => {
+  // Mire Sod: wet dark earth with a sheen — puddle glints and rot flecks
+  p.noiseFill([74, 60, 44], 10);
+  p.speckle(14, [52, 42, 30], 8);   // sodden clods
+  p.speckle(8, [104, 92, 70], 6);   // drier crumbs
+  p.speckle(5, [96, 104, 96], 4);   // the wet sheen catching light
+};
+
+painters[TILE.REEDS] = (p) => {
+  // Marsh Reed: tall thin stalks with seed-heads nodding off the tops
+  p.clear();
+  for (const [sx, sway] of [[4, 0], [8, 1], [12, -1]]) {
+    for (let y = 3; y < 16; y++) {
+      const x = sx + (y < 8 ? sway : 0);
+      const d = (p.rand() * 2 - 1) * 10;
+      p.px(x, y, 96 + d, 134 + d, 74 + d);
+    }
+    // the seed-head: a fat brown tip
+    const hx = sx + sway;
+    p.px(hx, 2, 122, 92, 58); p.px(hx, 3, 134, 100, 62); p.px(hx, 4, 122, 92, 58);
+  }
+};
+
+painters[TILE.BOGBEAN_POD] = (p) => {
+  // Bogbean Pods: a little burlap twist of fat speckled beans
+  p.clear();
+  for (let y = 8; y <= 12; y++) {
+    for (let x = 5; x <= 10; x++) {
+      const edge = x === 5 || x === 10 || y === 12;
+      const d = (p.rand() * 2 - 1) * 8;
+      p.px(x, y, (edge ? 118 : 150) + d, (edge ? 96 : 124) + d, (edge ? 62 : 82) + d);
+    }
+  }
+  p.px(7, 7, 150, 124, 82); p.px(8, 7, 150, 124, 82); // the tied twist
+  p.px(7, 6, 96, 76, 50); p.px(8, 6, 96, 76, 50);
+  // beans peeking out of the mouth
+  p.px(6, 9, 168, 178, 120); p.px(9, 10, 158, 170, 112); p.px(7, 11, 148, 160, 104);
+  p.px(6, 10, 120, 134, 84);
 };
 
 painters[TILE.WISPCAP] = (p) => {
