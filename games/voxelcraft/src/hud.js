@@ -437,6 +437,16 @@ export class Hud {
     row.classList.toggle("hidden", list.length === 0);
   }
 
+  // the Springstave draw: the crosshair pinches toward full pull
+  setDraw(charge) {
+    const step = Math.round(charge * 10);
+    if (step === this._lastDraw) return;
+    this._lastDraw = step;
+    const el = document.getElementById("crosshair");
+    el.style.transform = `translate(-50%, -50%) scale(${1 - 0.35 * charge})`;
+    el.style.opacity = String(0.8 + 0.2 * charge);
+  }
+
   // the Gleam meter: a slim jar-fill bar over the status rows + jar count
   setGleam(level, frac) {
     const pct = Math.round(frac * 100);

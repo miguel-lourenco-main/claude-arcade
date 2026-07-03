@@ -309,5 +309,24 @@ export class Sfx {
     osc.stop(now + 0.18);
   }
 
+  // the Springstave's loose: a cord twang, deeper the harder the draw
+  twang(charge = 1) {
+    if (!this.enabled || !this._ensure()) return;
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = "triangle";
+    const base = 320 - 140 * charge; // a full pull sings lower
+    osc.frequency.setValueAtTime(base, now);
+    osc.frequency.exponentialRampToValueAtTime(base * 0.6, now + 0.12);
+    g.gain.setValueAtTime(0.09, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+    osc.connect(g).connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.18);
+    this._noiseBurst(1500, 0.03, 0.05); // the cord's snap
+  }
+
   click() { this._noiseBurst(2200, 0.04, 0.08); }
 }

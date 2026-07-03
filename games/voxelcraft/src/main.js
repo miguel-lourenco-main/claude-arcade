@@ -8,7 +8,7 @@ import { World, CHUNK, HEIGHT } from "./world.js";
 import { Inventory, makeStack, stackToSave } from "./inventory.js";
 import { ItemDrops } from "./entities.js";
 import { PrimedKegs } from "./explosives.js";
-import { SlingStones } from "./projectiles.js";
+import { Projectiles } from "./projectiles.js";
 import { Mobs } from "./mobs.js";
 import { MeteorShowers } from "./meteors.js";
 import { Boats } from "./boats.js";
@@ -31,7 +31,7 @@ import {
   FISHING_POLE, isSign, COMPASS, CLOCK, SNOW_LAYER,
   KILN as KILN_ID, WORKBENCH as WORKBENCH_ID,
   IRON_INGOT as IRON_INGOT_ID, GLOAM_INGOT as GLOAM_INGOT_ID,
-  STARGLASS as STARGLASS_ID,
+  STARGLASS as STARGLASS_ID, QUILL as QUILL_ID,
 } from "./blocks.js";
 import { makeGenerator, findSpawn, findBiomeLocation } from "./terrain.js";
 import { findNearestRuin, ruinForChunk } from "./ruins.js";
@@ -800,6 +800,30 @@ const interaction = new Interaction(world, player, scene, hud, {
       dir);
     sfx.whip();
   },
+  // the Springstave's loose: charge scales speed and bite (a full second's
+  // draw lands 6 — between a stone's 3 and a gloam blade's melee)
+  onShoot: (charge) => {
+    const dir = player.lookDir();
+    stones.throw(
+      player.pos.x + dir.x * 0.2, player.eyeY + dir.y * 0.2, player.pos.z + dir.z * 0.2,
+      dir, {
+        itemId: QUILL_ID,
+        speed: 14 + 18 * charge,
+        gravity: 18,
+        damage: Math.ceil(2 + 4 * charge),
+        surviveChance: 0.4,
+        scale: 0.3,
+      });
+    sfx.twang(charge);
+  },
+  // quills are consumed from ANYWHERE in the satchel (the stave holds the
+  // selected slot), so the seed-slot canConsume doesn't fit here
+  hasAmmo: (id) => inventory.count(id) > 0,
+  consumeAmmo: (id) => {
+    const ok = inventory.removeCount(id, 1);
+    if (ok) hud.refreshHotbarRow();
+    return ok;
+  },
   // priming swaps the keg BLOCK for a primed keg ENTITY (see explosives.js);
   // `kegs` is a later const, but this callback only fires at runtime
   onPrimeKeg: (x, y, z) => {
@@ -933,7 +957,7 @@ const meteors = new MeteorShowers(scene, seed, {
   onAnnounce: (text) => hud.announce(text, 3200),
 });
 
-const stones = new SlingStones(scene, materials, {
+const stones = new Projectiles(scene, materials, {
   mobs,
   onSpawnDrop: (x, y, z, id) => drops.spawn(x, y, z, id),
   onImpact: (x, y, z, shattered) => {
@@ -1482,6 +1506,8 @@ function tick(now) {
   }
 
   interaction.update(frameDt);
+  // the crosshair pinches as the Springstave draws (0 = at rest)
+  hud.setDraw(interaction.drawing ? interaction.drawT : 0);
   // the fishing line hangs from a camera-space rod-tip anchor — rewrite it
   // after the camera has settled for this frame (bob, third-person boom)
   fishing.updateLine(camera);

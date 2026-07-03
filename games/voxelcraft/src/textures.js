@@ -143,6 +143,9 @@ export const TILE = {
   // the Loomstone: the basin top and the pearl-seamed sides
   LOOMSTONE_TOP: 118,
   LOOMSTONE_SIDE: 119,
+  // the Springstave and its Quills
+  QUILL: 120,
+  SPRINGSTAVE: 121,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -1389,6 +1392,36 @@ painters[TILE.LOOMSTONE_SIDE] = (p) => {
   }
   p.speckle(8, [88, 90, 102], 8);
   p.px(4, 5, 240, 238, 255); p.px(11, 5, 240, 238, 255); // seam glints
+};
+
+painters[TILE.QUILL] = (p) => {
+  // a whittled dart on the diagonal: pale shaft, iron-dark tip, leaf fletch
+  p.clear();
+  for (let i = 0; i < 9; i++) {
+    const d = (p.rand() * 2 - 1) * 8;
+    p.px(3 + i, 12 - i, 206 + d, 178 + d, 128 + d); // the shaft
+  }
+  p.px(12, 3, 120, 126, 140); p.px(13, 2, 96, 102, 116); // the tip
+  // leaf-scrap fletching at the tail
+  p.px(2, 13, 96, 150, 70); p.px(3, 14, 84, 138, 62);
+  p.px(2, 14, 108, 160, 78); p.px(4, 13, 90, 144, 66);
+};
+painters[TILE.SPRINGSTAVE] = (p) => {
+  // the bent stave: a knotwood arc with a taut moss-twine cord
+  p.clear();
+  const arc = [[4, 2], [3, 3], [2, 4], [2, 6], [2, 8], [2, 10], [3, 12], [4, 13], [5, 14]];
+  for (const [x, y] of arc) {
+    const d = (p.rand() * 2 - 1) * 10;
+    p.px(x, y, 156 + d, 118 + d, 66 + d);
+    p.px(x + 1, y, 128 + d, 96 + d, 54 + d); // the shaded belly
+  }
+  // the grip wrap mid-arc
+  p.px(2, 7, 106, 78, 44); p.px(3, 7, 106, 78, 44);
+  // the cord: taut from horn to horn
+  for (let i = 0; i < 12; i++) {
+    const x = 5 + Math.round(i * 0.55), y = 2 + i;
+    p.px(Math.min(12, x), y, 148, 170, 132, 220);
+  }
 };
 
 painters[TILE.FARMLAND_TOP] = (p) => {

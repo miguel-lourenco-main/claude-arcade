@@ -132,6 +132,11 @@ specific item vocabulary.
   the Notice Post still says, take what the chest offers, and leave the
   walls to their sulk. It's agreed this is a fair split.
 
+- **The Springstave & the Quill** — a green knotwood limb bent double and
+  corded with moss-twine, and the whittled leaf-fletched darts it looses.
+  Hold the draw and the stave remembers being a tree that wanted to
+  stand back up; let go and it says so, loudly, in the direction you
+  were looking. The polite ranged answer to an impolite distance.
 - **The Loomstone & the Threads** — a landed starstone hollowed like a
   basin and bedded in worked stone. Gleam pools in the hollow, and a
   steady pair of hand-feet can weave it THROUGH a tool or a worn piece

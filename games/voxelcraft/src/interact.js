@@ -5,7 +5,7 @@ import * as THREE from "three";
 import {
   AIR, BEDROCK, CHEST, WORKBENCH, KILN, BED, LADDER, DOOR, DOOR_TOP, BLAST_KEG,
   GATE, GATE_OPEN, SEED_TO_SPROUT, DIRT, GRASS, MUD, FARMLAND, LOOMSTONE,
-  SLING_STONE, BOAT, WATER, FISHING_POLE, SNOW_LAYER,
+  SLING_STONE, BOAT, WATER, FISHING_POLE, SNOW_LAYER, QUILL,
   BLOCKS, isSolid, isPlant, isFluid, isDoor, isDoorLower, isGate, isSign,
   DOOR_TOGGLE, dropFor, yawToFacing,
 } from "./blocks.js";
@@ -106,6 +106,9 @@ export class Interaction {
     this.onDoor = opts.onDoor;             // (opened) => hinge-creak sfx
     this.onThrow = opts.onThrow;           // () => launch a sling stone
     this.canThrowStone = opts.canThrow;    // () => bool (projectile cap)
+    this.onShoot = opts.onShoot;           // (charge 0..1) => loose a quill
+    this.hasAmmo = opts.hasAmmo;           // (id) => any in the WHOLE satchel
+    this.consumeAmmo = opts.consumeAmmo;   // (id) => take one from anywhere
     this.mobs = opts.mobs;           // Mobs instance (punching)
     this.onTradeMob = opts.onTradeMob; // (mob) => open the Peddler's trade window
     this.boats = opts.boats;         // Boats instance (board/deploy/kick)
@@ -131,6 +134,11 @@ export class Interaction {
 
     // throwing state (right-click with a sling stone selected)
     this._nextThrow = 0;
+    // drawing state (hold right-click with a Springstave selected): drawT
+    // climbs to 1 over a second; onMouseUp looses. Exposed for the HUD's
+    // crosshair pinch and the hand animation.
+    this.drawing = false;
+    this.drawT = 0;
     // fishing state: cast/reel fire once per PHYSICAL press (armed on
     // mousedown, spent by _fish) — the hold-repeat must never toggle the
     // line, and two quick real clicks must both land (cast, then reel)
@@ -167,9 +175,18 @@ export class Interaction {
   onMouseUp(button) {
     this.buttons.delete(button);
     if (button === 0) this._lastBreakKey = null;
-    if (button === 2) this._fishArmed = false;
+    if (button === 2) {
+      this._fishArmed = false;
+      if (this.drawing) this._loose();
+    }
   }
-  clearInput() { this.buttons.clear(); this._lastBreakKey = null; this._fishArmed = false; }
+  clearInput() {
+    this.buttons.clear();
+    this._lastBreakKey = null;
+    this._fishArmed = false;
+    this.drawing = false;
+    this.drawT = 0;
+  }
 
   update(dt) {
     if (this.player.dead) {
@@ -193,11 +210,13 @@ export class Interaction {
     }
 
     const now = performance.now();
+    this._updateDrawing(dt);
     if (survival) {
       this._updateMining(dt);
       this._updateEating(dt);
-      // place repeat still applies in survival (eating owns the button)
-      if (!this.eating && this.buttons.has(2) && now >= this._nextAction) {
+      // place repeat still applies in survival (eating and drawing own the
+      // button while they run)
+      if (!this.eating && !this.drawing && this.buttons.has(2) && now >= this._nextAction) {
         this._place();
         this._nextAction = now + ACTION_REPEAT_MS;
       }
@@ -288,6 +307,48 @@ export class Interaction {
         this.eating = false;
       }
     }
+  }
+
+  // hold RMB with a Springstave selected to draw it; onMouseUp looses. Works
+  // in both modes (creative just doesn't pay quills). The draw cancels
+  // cleanly when the stave leaves the hand or an interactive block is
+  // targeted mid-pull.
+  _updateDrawing(dt) {
+    const s = this.hotbar.selectedStack ? this.hotbar.selectedStack() : null;
+    const def = s && BLOCKS[s.id];
+    const isStave = !!(def && def.tool && def.tool.kind === "stave");
+    const hasQuill = this.player.mode !== "survival" ||
+      (this.hasAmmo && this.hasAmmo(QUILL));
+    const wants = isStave && this.buttons.has(2) && !this._interactiveTarget() &&
+      hasQuill && !this.player.dead;
+    if (!wants) {
+      // released is handled by onMouseUp (_loose); anything else is a cancel
+      if (this.drawing && !this.buttons.has(2)) return;
+      this.drawing = false;
+      this.drawT = 0;
+      return;
+    }
+    if (!this.drawing) {
+      this.drawing = true;
+      this.drawT = 0;
+    }
+    this.drawT = Math.min(1, this.drawT + dt);
+  }
+
+  // release the draw: a real pull looses a quill along the look ray
+  _loose() {
+    const charge = this.drawT;
+    this.drawing = false;
+    this.drawT = 0;
+    if (charge < 0.15) return; // a fumble, not a shot
+    if (!this.onShoot) return;
+    if (this.canThrowStone && !this.canThrowStone()) return; // flight cap
+    if (this.player.mode === "survival" &&
+        !(this.consumeAmmo && this.consumeAmmo(QUILL))) return;
+    this.onShoot(charge);
+    // the stave wears per loosed quill (main.js owns the dur)
+    if (this.onToolUse) this.onToolUse("hit");
+    if (this.onSwing) this.onSwing();
   }
 
   // survival: hold LMB on a block until its hardness timer completes
@@ -443,6 +504,7 @@ export class Interaction {
     }
     // survival LMB is handled by the mining loop, not instant breaking
     if (button === 0 && this.player.mode !== "survival") this._break();
+    else if (button === 2 && this.drawing) { /* the draw owns the button */ }
     else if (button === 1 && this.target) {
       // any door half picks as the one user-visible door item; stair facing
       // variants pick as their canonical (north) id

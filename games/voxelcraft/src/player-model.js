@@ -437,6 +437,22 @@ export function buildHeldTool(kind, tier, seed = 0x5eed) {
     const tine = box(0.055, 0.18, 0.055, headMat);
     tine.position.set(0, 0.29, 0.19);
     g.add(tine);
+  } else if (kind === "stave") {
+    // the Springstave: two bent limbs off the grip and a taut cord — the
+    // haft box is the grip; the limbs curve fore and aft
+    for (const side of [-1, 1]) {
+      const limb = box(0.05, 0.34, 0.05, headMat);
+      limb.position.set(0, side * 0.3, 0.05);
+      limb.rotation.x = side * -0.35;
+      g.add(limb);
+      const tip = box(0.04, 0.12, 0.04, headMat);
+      tip.position.set(0, side * 0.52, 0.12);
+      tip.rotation.x = side * -0.7;
+      g.add(tip);
+    }
+    const cord = box(0.015, 1.06, 0.015, haftMat);
+    cord.position.set(0, 0, 0.16);
+    g.add(cord);
   } else {
     // the Shiv: cross-guard over the grip, then a long tapering sliver
     const guard = box(0.2, 0.045, 0.1, haftMat);

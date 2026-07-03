@@ -218,6 +218,11 @@ export const KELPSALVE = 131;
 // the Loomstone: a starstone basin that weaves gleam into gear as Threads
 // (loom.js). Right-click a placed one with a tool/armor piece selected.
 export const LOOMSTONE = 132;
+// the Springstave and its Quills: a bent knotwood stave with a moss-twine
+// cord. Hold right-click to draw, release to loose — interact.js owns the
+// draw, projectiles.js the flight. Quills are whittled darts, stackable.
+export const QUILL = 133;
+export const SPRINGSTAVE = 134;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -792,6 +797,35 @@ BLOCKS[LOOMSTONE] = def("Loomstone", { hardness: 3.0,
   tiles: { top: TILE.LOOMSTONE_TOP, side: TILE.LOOMSTONE_SIDE, bottom: TILE.STONE },
   toolKind: "pick", needsPick: 2,
   lightEmit: 8,
+});
+
+// the Quill: a whittled dart, fletched with leaf-scrap — ammunition, never
+// placed. The Springstave looses them; a landed one often survives to
+// collect (a dart is sturdier than a shattering stone).
+BLOCKS[QUILL] = def("Quill", {
+  tiles: cube(TILE.QUILL),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  hardness: 0.05,
+  placeable: false,
+  sound: "wood",
+});
+// the Springstave: a pseudo-tool so the whole dur/wear-bar machinery works
+// unchanged — "stave" matches no block's toolKind, so it digs at the bare
+// rate, and its damage rides the quill (interact.js scales it by the draw).
+BLOCKS[SPRINGSTAVE] = def("Springstave", {
+  tiles: cube(TILE.SPRINGSTAVE),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  hardness: 0.05,
+  placeable: false,
+  sound: "wood",
+  maxStack: 1,
+  tool: { kind: "stave", tier: 1, speed: 1, damage: 0, maxDur: 128 },
 });
 
 export const CROP_STAGES = [CROP_SPROUT, CROP_HALF, CROP_RIPE];

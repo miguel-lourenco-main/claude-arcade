@@ -17,6 +17,7 @@ import {
   GLOAM_INGOT, GLOAM_BLOCK, GLOAM_PICK, GLOAM_AXE, GLOAM_SHOVEL, GLOAM_BLADE,
   GLOAM_CROWN, GLOAM_JERKIN, GLOAM_LEGGINGS, GLOAM_TREADS,
   PLANK_HOE, STONE_HOE, IRON_HOE, MEAL_ROOT, BOGBEAN, POTTAGE, LOOMSTONE,
+  QUILL, SPRINGSTAVE,
 } from "./blocks.js";
 
 // in: [[blockId, count], ...]  out: [blockId, count]  note: extra recipe copy
@@ -30,6 +31,8 @@ export const RECIPES = [
   // the Dib-Pole: three planks whittled and lashed into a springy rod —
   // shoreline gear is field gear, so it crafts anywhere
   { in: [[PLANKS, 3]], out: [FISHING_POLE, 1], basic: true },
+  // quills: whittled darts, fletched with leaf-scrap — field ammunition
+  { in: [[PLANKS, 1]], out: [QUILL, 4], basic: true },
   // the Notice Post: a post and a planed board — Wanderlings journal in the
   // field, so notices are field gear too and craft anywhere
   { in: [[PLANKS, 3]], out: [SIGN, 2], basic: true },
@@ -40,6 +43,8 @@ export const RECIPES = [
   { in: [[PLANKS, 6]], out: [DOOR, 1] },
   // the Reed Skiff: five planks lashed into a shallow hull (workbench)
   { in: [[PLANKS, 5]], out: [BOAT, 1] },
+  // the Springstave: bent green, corded with moss-twine (workbench)
+  { in: [[PLANKS, 3], [MOSS_CLUMP, 1]], out: [SPRINGSTAVE, 1], note: "bent green, corded with moss-twine" },
   { in: [[COAL_ORE, 4], [SAND, 5]], out: [BLAST_KEG, 1] },
   // Wanderer's Pottage: the mire and the meadow, in one pot (workbench)
   { in: [[MEAL_ROOT, 1], [BOGBEAN, 2]], out: [POTTAGE, 1], note: "the mire and the meadow, in one pot" },
