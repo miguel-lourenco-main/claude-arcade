@@ -6,7 +6,8 @@
 import {
   GRASS, DIRT, STONE, SAND, GRAVEL, LOG, LEAVES, LEAVES_COLD, WATER, BEDROCK,
   SNOWY_GRASS, TALLGRASS, POPPY, DANDELION, CACTUS, SANDSTONE, COAL_ORE,
-  IRON_ORE, BERRY_BUSH, SNOW_LAYER, ICE, AIR, LAVA, WISPCAP, isSolid,
+  IRON_ORE, GLOAM_ORE, BERRY_BUSH, SNOW_LAYER, ICE, AIR, LAVA, WISPCAP,
+  isSolid,
 } from "./blocks.js";
 import { CHUNK, HEIGHT, SEA_LEVEL } from "./world.js";
 import { Perlin, hash2 } from "./noise.js";
@@ -77,6 +78,10 @@ export class Terrain {
 
   oreAt(x, y, z, h) {
     if (y >= h - 3) return 0;
+    // gloamgold: rarer and deeper than sky-iron, seamed right through the
+    // Emberwash band — the pools ARE the ore's guard. Checked first so the
+    // deep cells prefer the deep metal.
+    if (y < 14 && this.cave1.fbm3(x * 0.16 + 577, y * 0.17, z * 0.16 - 577, 2) > 0.63) return GLOAM_ORE;
     if (this.cave1.fbm3(x * 0.13 + 911, y * 0.13, z * 0.13 - 911, 2) > 0.58) return COAL_ORE;
     if (y < 28 && this.cave2.fbm3(x * 0.15 - 911, y * 0.15, z * 0.15 + 911, 2) > 0.62) return IRON_ORE;
     return 0;

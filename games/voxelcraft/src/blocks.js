@@ -170,6 +170,21 @@ export const LAVA = 103;
 // caves; kicks loose in one hit and replants anywhere solid — a dim,
 // farmable light for delve camps (emit 8: a mushroom, not a campfire).
 export const WISPCAP = 104;
+// Gloamgold: the fourth-tier metal. Sky-iron FELL into the Upturn;
+// gloamgold SANK — it only shows below the Emberwash line (terrain.js
+// oreAt, y < 14), where the pools stand guard over the seams. Iron-pick
+// gated; the kiln renders the ore down to ingots.
+export const GLOAM_ORE = 105;
+export const GLOAM_INGOT = 106;
+export const GLOAM_BLOCK = 107;
+export const GLOAM_PICK = 108;
+export const GLOAM_AXE = 109;
+export const GLOAM_SHOVEL = 110;
+export const GLOAM_BLADE = 111;
+export const GLOAM_CROWN = 112;
+export const GLOAM_JERKIN = 113;
+export const GLOAM_LEGGINGS = 114;
+export const GLOAM_TREADS = 115;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -703,11 +718,14 @@ export const DOOR_TOGGLE = {
 // the STACK ({id, count: 1, dur}) — absent dur means factory-fresh.
 //
 // tier 1 plank: 2× speed, 64 uses; tier 2 stone: 4×, 128; tier 3 sky-iron:
-// 6×, 256 — the field-journal stamp counts (×64) go up the tiers.
+// 6×, 256; tier 4 gloamgold: 8×, 384 — the field-journal stamp counts (×64)
+// go up the tiers. The Star-Edge Shiv (damage 7) stays the apex BLADE;
+// gloamgold wins everywhere else.
 const TOOL_TIERS = [
   { adj: "Plank", tier: 1, speed: 2, damage: 3, maxDur: 64 },
   { adj: "Stone", tier: 2, speed: 4, damage: 4, maxDur: 128 },
   { adj: "Sky-Iron", tier: 3, speed: 6, damage: 5, maxDur: 256 },
+  { adj: "Gloamgold", tier: 4, speed: 8, damage: 6, maxDur: 384 },
 ];
 const defTool = (id, kindName, kind, t, tile) => {
   BLOCKS[id] = def(`${t.adj} ${kindName}`, {
@@ -739,6 +757,11 @@ defTool(IRON_SHOVEL, "Scoop", "shovel", TOOL_TIERS[2], TILE.SHOVEL_IRON);
 defTool(PLANK_BLADE, "Shiv", "blade", TOOL_TIERS[0], TILE.BLADE_PLANK);
 defTool(STONE_BLADE, "Shiv", "blade", TOOL_TIERS[1], TILE.BLADE_STONE);
 defTool(IRON_BLADE, "Shiv", "blade", TOOL_TIERS[2], TILE.BLADE_IRON);
+// the gloamgold set: tier 4 — mined out from under the Emberwash
+defTool(GLOAM_PICK, "Cracker", "pick", TOOL_TIERS[3], TILE.PICK_GLOAM);
+defTool(GLOAM_AXE, "Hewer", "axe", TOOL_TIERS[3], TILE.AXE_GLOAM);
+defTool(GLOAM_SHOVEL, "Scoop", "shovel", TOOL_TIERS[3], TILE.SHOVEL_GLOAM);
+defTool(GLOAM_BLADE, "Shiv", "blade", TOOL_TIERS[3], TILE.BLADE_GLOAM);
 
 // the Sky-Iron Ingot: a carried bar, never placed (the kiln makes it from
 // sky-iron ore; four fold back into a Sky-Iron Block at the workbench)
@@ -779,15 +802,21 @@ BLOCKS[CHART] = instrument("Field Chart", TILE.FIELD_CHART, "wood");
 export const WEAR_KINDS = ["crown", "jerkin", "leggings", "treads"];
 
 // per-piece damage-reduction shares. A full bark set totals 0.25, a full
-// sky-iron set 0.60 (also the hard cap in armorProtection) — the jerkin
-// carries the most plate, the treads the least.
-//   bark:     crown .05  jerkin .08  leggings .07  treads .05   (Σ .25)
-//   sky-iron: crown .12  jerkin .20  leggings .16  treads .12   (Σ .60)
+// sky-iron set 0.60, a full gloamgold set 0.70 — the jerkin carries the
+// most plate, the treads the least. ARMOR_CAP (0.75) is the hard ceiling
+// in armorProtection, leaving a little headroom above full gloamgold for
+// whatever enhancement the Loomstone weaves later.
+//   bark:      crown .05  jerkin .08  leggings .07  treads .05   (Σ .25)
+//   sky-iron:  crown .12  jerkin .20  leggings .16  treads .12   (Σ .60)
+//   gloamgold: crown .14  jerkin .24  leggings .19  treads .13   (Σ .70)
+export const ARMOR_CAP = 0.75;
 const ARMOR_TIERS = {
   bark: { adj: "Bark", maxDur: 64, sound: "wood",
     prot: { crown: 0.05, jerkin: 0.08, leggings: 0.07, treads: 0.05 } },
   iron: { adj: "Sky-Iron", maxDur: 256, sound: "stone",
     prot: { crown: 0.12, jerkin: 0.2, leggings: 0.16, treads: 0.12 } },
+  gloam: { adj: "Gloamgold", maxDur: 384, sound: "stone",
+    prot: { crown: 0.14, jerkin: 0.24, leggings: 0.19, treads: 0.13 } },
 };
 const defArmor = (id, kindName, kind, tierKey, tile) => {
   const t = ARMOR_TIERS[tierKey];
@@ -812,6 +841,10 @@ defArmor(IRON_CROWN, "Crown", "crown", "iron", TILE.CROWN_IRON);
 defArmor(IRON_JERKIN, "Jerkin", "jerkin", "iron", TILE.JERKIN_IRON);
 defArmor(IRON_LEGGINGS, "Leggings", "leggings", "iron", TILE.LEGGINGS_IRON);
 defArmor(IRON_TREADS, "Treads", "treads", "iron", TILE.TREADS_IRON);
+defArmor(GLOAM_CROWN, "Crown", "crown", "gloam", TILE.CROWN_GLOAM);
+defArmor(GLOAM_JERKIN, "Jerkin", "jerkin", "gloam", TILE.JERKIN_GLOAM);
+defArmor(GLOAM_LEGGINGS, "Leggings", "leggings", "gloam", TILE.LEGGINGS_GLOAM);
+defArmor(GLOAM_TREADS, "Treads", "treads", "gloam", TILE.TREADS_GLOAM);
 
 // --- the Pearlfall's gifts ------------------------------------------------------
 // Starstone: a landed pearl of the old sky, dense and still glowing. It only
@@ -910,11 +943,35 @@ BLOCKS[WISPCAP] = def("Wispcap", { hardness: 0.05,
   lightEmit: 8,
 });
 
+// --- Gloamgold: the fourth tier -------------------------------------------------
+// the ore asks for a sky-iron Cracker (needsPick 3) — the gate ladder's
+// last rung before the metal itself takes over
+BLOCKS[GLOAM_ORE] = def("Gloamgold Ore", { hardness: 4.0,
+  tiles: cube(TILE.GLOAM_ORE),
+  toolKind: "pick", needsPick: 3,
+});
+// the Gloamgold Ingot: a carried bar, never placed (the kiln raises it
+// from the ore; four fold into a Gloamgold Block at the workbench)
+BLOCKS[GLOAM_INGOT] = def("Gloamgold Ingot", {
+  tiles: cube(TILE.GLOAM_INGOT),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  hardness: 0.05,
+  placeable: false,
+  sound: "stone",
+});
+BLOCKS[GLOAM_BLOCK] = def("Gloamgold Block", { hardness: 3.4,
+  tiles: cube(TILE.GLOAM_BLOCK),
+  toolKind: "pick", needsPick: 3,
+});
+
 // total damage-reduction fraction of a wear-slot array (entries are stacks or
-// null), capped at 0.60. Falls are a special case: armor helps a fall at only
-// 25% of its value — EXCEPT the treads, which count in full (it's the
+// null), capped at ARMOR_CAP. Falls are a special case: armor helps a fall at
+// only 25% of its value — EXCEPT the treads, which count in full (it's the
 // hand-feet that take the landing). Full sky-iron: 0.60 vs hits, 0.24 vs
-// falls; full bark: 0.25 vs hits, 0.10 vs falls.
+// falls; full gloamgold: 0.70 vs hits, 0.28 vs falls; full bark: 0.25 / 0.10.
 export function armorProtection(slots, fall = false) {
   let total = 0;
   for (const s of slots || []) {
@@ -922,7 +979,7 @@ export function armorProtection(slots, fall = false) {
     if (!a) continue;
     total += fall ? a.prot * (a.kind === "treads" ? 1 : 0.25) : a.prot;
   }
-  return Math.min(0.6, total);
+  return Math.min(ARMOR_CAP, total);
 }
 
 // a cross block that pops off / is replaced in place when built over (plants;

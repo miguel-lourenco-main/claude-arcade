@@ -12,9 +12,10 @@ const SKIN = [126, 200, 178];
 const TUNIC = [188, 92, 48];
 const TRIM = [214, 176, 74];
 const TROUSER = [52, 56, 66];
-// armor overlay tints: boiled knotwood-bark plate and pale sky-iron
+// armor overlay tints: boiled knotwood-bark plate, pale sky-iron, dusk-gold
 const ARMOR_BARK = [118, 90, 54];
 const ARMOR_IRON = [196, 204, 218];
+const ARMOR_GLOAM = [198, 156, 82];
 
 function paintTexture(seed, base, decorate) {
   const canvas = document.createElement("canvas");
@@ -185,6 +186,17 @@ export class PlayerModel {
         ctx.fillStyle = "rgba(120,128,146,0.85)";
         ctx.fillRect(0, 7, 16, 1);
         ctx.fillStyle = "rgb(232,238,248)";
+        for (let i = 0; i < 5; i++) {
+          ctx.fillRect((rand() * 15) | 0, (rand() * 15) | 0, 1, 1);
+        }
+        ctx.fillStyle = `rgb(${TRIM[0]},${TRIM[1]},${TRIM[2]})`;
+        ctx.fillRect(7, 12, 2, 1); // mustard lashing
+      }), reg),
+      gloam: mat(paintTexture(seed ^ 10, ARMOR_GLOAM, (ctx, rand) => {
+        // dusk-gold plate: a violet-shadowed seam and bright cast gleams
+        ctx.fillStyle = "rgba(110,80,96,0.85)";
+        ctx.fillRect(0, 7, 16, 1);
+        ctx.fillStyle = "rgb(252,226,140)";
         for (let i = 0; i < 5; i++) {
           ctx.fillRect((rand() * 15) | 0, (rand() * 15) | 0, 1, 1);
         }

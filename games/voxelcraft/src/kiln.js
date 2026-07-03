@@ -10,7 +10,7 @@
 import {
   SAND, GLASS, COBBLE, STONE, IRON_ORE, IRON_INGOT, SNUFFET_LOIN, ROAST_LOIN,
   MEAL_ROOT, BAKED_ROOT, SILVERFIN, SEARED_SILVERFIN, COAL_ORE, LOG, PLANKS,
-  STARSTONE, STARGLASS,
+  STARSTONE, STARGLASS, GLOAM_ORE, GLOAM_INGOT,
 } from "./blocks.js";
 import { MAX_STACK } from "./inventory.js";
 
@@ -21,6 +21,9 @@ export const SMELTS = {
   // ore renders down to the Sky-Iron Ingot — the head material of the iron
   // tool tier; four ingots fold back into an Iron Block at the workbench
   [IRON_ORE]: IRON_INGOT,
+  // the deep metal renders down the same way — the head material of the
+  // gloamgold tier (mined under the Emberwash, iron-pick gated)
+  [GLOAM_ORE]: GLOAM_INGOT,
   [SNUFFET_LOIN]: ROAST_LOIN,
   [MEAL_ROOT]: BAKED_ROOT,
   [SILVERFIN]: SEARED_SILVERFIN,

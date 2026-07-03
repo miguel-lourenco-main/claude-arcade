@@ -14,6 +14,8 @@ import {
   BARK_CROWN, BARK_JERKIN, BARK_LEGGINGS, BARK_TREADS,
   IRON_CROWN, IRON_JERKIN, IRON_LEGGINGS, IRON_TREADS,
   STARSTONE, STAR_BLADE,
+  GLOAM_INGOT, GLOAM_BLOCK, GLOAM_PICK, GLOAM_AXE, GLOAM_SHOVEL, GLOAM_BLADE,
+  GLOAM_CROWN, GLOAM_JERKIN, GLOAM_LEGGINGS, GLOAM_TREADS,
 } from "./blocks.js";
 
 // in: [[blockId, count], ...]  out: [blockId, count]  note: extra recipe copy
@@ -69,6 +71,11 @@ export const RECIPES = [
   // the Star-Edge Shiv: a landed pearl of the old sky (the Pearlfall
   // delivers them — see meteors.js), honed onto a finished sky-iron blade
   { in: [[STARSTONE, 1], [IRON_BLADE, 1]], out: [STAR_BLADE, 1], note: "a pearl's edge on a sky-iron spine" },
+  // gloamgold tools: the deep metal, hafted on knotwood like all the rest
+  { in: [[GLOAM_INGOT, 3], [PLANKS, 2]], out: [GLOAM_PICK, 1], note: "the planks are the haft" },
+  { in: [[GLOAM_INGOT, 3], [PLANKS, 2]], out: [GLOAM_AXE, 1], note: "the planks are the haft" },
+  { in: [[GLOAM_INGOT, 1], [PLANKS, 2]], out: [GLOAM_SHOVEL, 1], note: "the planks are the haft" },
+  { in: [[GLOAM_INGOT, 2], [PLANKS, 2]], out: [GLOAM_BLADE, 1], note: "the planks are the haft" },
   // --- armor (workbench). Classic piece shapes: crown 5, jerkin 8,
   // leggings 7, treads 4 of the material. The bark set is planks boiled and
   // beaten back into stiff bark plate (cheap, modest); the sky-iron set is
@@ -81,9 +88,16 @@ export const RECIPES = [
   { in: [[IRON_INGOT, 8]], out: [IRON_JERKIN, 1], note: "hammered plate, lashed at the seam" },
   { in: [[IRON_INGOT, 7]], out: [IRON_LEGGINGS, 1], note: "iron greaves for the walking legs" },
   { in: [[IRON_INGOT, 4]], out: [IRON_TREADS, 1], note: "iron wraps for the hand-feet" },
+  { in: [[GLOAM_INGOT, 5]], out: [GLOAM_CROWN, 1], note: "the sunken metal, bent to the brow" },
+  { in: [[GLOAM_INGOT, 8]], out: [GLOAM_JERKIN, 1], note: "dusk-gold plate, lashed at the seam" },
+  { in: [[GLOAM_INGOT, 7]], out: [GLOAM_LEGGINGS, 1], note: "gloam greaves for the walking legs" },
+  { in: [[GLOAM_INGOT, 4]], out: [GLOAM_TREADS, 1], note: "gloam wraps for the hand-feet" },
   // sky-iron, folded and unfolded: four ingots to the block and back
   { in: [[IRON_INGOT, 4]], out: [IRON_BLOCK, 1] },
   { in: [[IRON_BLOCK, 1]], out: [IRON_INGOT, 4] },
+  // gloamgold, the same fold
+  { in: [[GLOAM_INGOT, 4]], out: [GLOAM_BLOCK, 1] },
+  { in: [[GLOAM_BLOCK, 1]], out: [GLOAM_INGOT, 4] },
   // --- the wayfinding kit (workbench). Sky-iron instruments: four ingots
   // case each; a swinging sling stone points the Needle, soot marks the
   // Dial's hours, and eight planks board a Chart around the Needle that

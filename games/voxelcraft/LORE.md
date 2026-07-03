@@ -105,6 +105,12 @@ specific item vocabulary.
   which is technically true.
 - **Star-Edge** — a starstone edge honed onto a sky-iron shiv; the keenest
   blade a Wanderling can carry, and it hums very faintly on clear nights.
+- **Gloamgold** — the fourth metal, and the shy one. Sky-iron FELL into
+  the Upturn; gloamgold SANK — it keeps to the gloam, the deep dark under
+  the Emberwash line where the drowned light pooled and never drained.
+  Dusk-gold with a violet shadow it never quite sheds, harder and keener
+  than sky-iron, and mined only by those willing to work with molten
+  neighbors. Ore, ingot, block, the full tool set, the full wear set.
 - **Wispcap** — a squat pale mushroom of the deep caves, cousin (the
   botanists insist) of the Sunwisp: when the world flipped, some of the
   old daylight got buried, and it grows back up through the stone as a

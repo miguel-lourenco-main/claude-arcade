@@ -14,7 +14,7 @@ import { CHUNK, HEIGHT, SEA_LEVEL, clampSignText } from "./world.js";
 import {
   AIR, DIRT, COBBLE, PLANKS, LOG, CHEST, LADDER, MOSS_CLUMP, PLANK_SLAB,
   SIGN_S, WATER, ICE, BLOCKS, TORCH, COAL_ORE, SLING_STONE, BERRIES,
-  ROOT_SEED, IRON_INGOT, IRON_PICK, STARSTONE,
+  ROOT_SEED, IRON_INGOT, IRON_PICK, STARSTONE, GLOAM_INGOT,
   BARK_CROWN, BARK_JERKIN, BARK_LEGGINGS, BARK_TREADS,
 } from "./blocks.js";
 
@@ -95,6 +95,8 @@ export function ruinLoot(ruin) {
   roll(0.5, BERRIES, 3, 7);
   roll(0.4, ROOT_SEED, 2, 5);
   roll(0.18, IRON_INGOT, 1, 2);
+  // a whisper of the tier below the Emberwash, long before anyone can mine it
+  roll(0.06, GLOAM_INGOT, 1, 1);
   if (rng() < 0.12) {
     put([BARK_CROWN, BARK_JERKIN, BARK_LEGGINGS, BARK_TREADS][Math.floor(rng() * 4)], 1);
   }

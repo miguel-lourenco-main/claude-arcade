@@ -107,6 +107,19 @@ export const TILE = {
   LAVA: 89,
   // the Wispcap: pale glowing deep-cave mushroom (cross sprite)
   WISPCAP: 90,
+  // Gloamgold: the fourth tier — the metal that sank when sky-iron fell.
+  // Ore, ingot, block, four tool silhouettes, four armor silhouettes.
+  GLOAM_ORE: 91,
+  GLOAM_INGOT: 92,
+  GLOAM_BLOCK: 93,
+  PICK_GLOAM: 94,
+  AXE_GLOAM: 95,
+  SHOVEL_GLOAM: 96,
+  BLADE_GLOAM: 97,
+  CROWN_GLOAM: 98,
+  JERKIN_GLOAM: 99,
+  LEGGINGS_GLOAM: 100,
+  TREADS_GLOAM: 101,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -1089,6 +1102,9 @@ const TOOL_PALETTES = {
   plank: { hi: [206, 170, 110], mid: [176, 142, 88], lo: [126, 98, 58] },
   stone: { hi: [178, 180, 188], mid: [138, 140, 148], lo: [92, 94, 102] },
   iron: { hi: [234, 240, 250], mid: [196, 204, 218], lo: [138, 146, 164] },
+  // gloamgold: dusk-gold — a warm bright face falling into violet shadow
+  // (the gloam it was mined out of never quite lets go of it)
+  gloam: { hi: [248, 214, 118], mid: [198, 156, 82], lo: [118, 86, 92] },
 };
 const HAFT_WOOD = { hi: [174, 138, 86], mid: [148, 112, 62], lo: [110, 82, 46] };
 
@@ -1163,6 +1179,38 @@ painters[TILE.SHOVEL_IRON] = toolPainter("shovel", TOOL_PALETTES.iron);
 painters[TILE.BLADE_PLANK] = toolPainter("blade", TOOL_PALETTES.plank);
 painters[TILE.BLADE_STONE] = toolPainter("blade", TOOL_PALETTES.stone);
 painters[TILE.BLADE_IRON] = toolPainter("blade", TOOL_PALETTES.iron);
+painters[TILE.PICK_GLOAM] = toolPainter("pick", TOOL_PALETTES.gloam);
+painters[TILE.AXE_GLOAM] = toolPainter("axe", TOOL_PALETTES.gloam);
+painters[TILE.SHOVEL_GLOAM] = toolPainter("shovel", TOOL_PALETTES.gloam);
+painters[TILE.BLADE_GLOAM] = toolPainter("blade", TOOL_PALETTES.gloam);
+
+// --- Gloamgold ----------------------------------------------------------------
+// The fourth-tier metal: sky-iron FELL into the Upturn; gloamgold SANK. It
+// only shows below the Emberwash line, gold veins in violet-shadowed stone.
+painters[TILE.GLOAM_ORE] = (p) => {
+  p.noiseFill([104, 100, 112], 9); // deep stone, cooler than the common gray
+  for (const [bx, by] of [[4, 3], [10, 5], [3, 10], [11, 11], [7, 8]]) {
+    for (let i = 0; i < 4; i++) {
+      const d = (p.rand() * 2 - 1) * 14;
+      p.px(bx + ((p.rand() * 2) | 0), by + ((p.rand() * 2) | 0), 236 + d, 196 + d, 96 + d);
+    }
+    // each nugget trails a violet shadow pixel — the gloam holding on
+    p.px(bx + 1, by + 2, 96, 72, 104);
+  }
+};
+painters[TILE.GLOAM_BLOCK] = (p) => {
+  // poured plate: warm brushed gold with dusk-violet seams
+  for (let y = 0; y < TILE_PX; y++) {
+    for (let x = 0; x < TILE_PX; x++) {
+      const d = (p.rand() * 2 - 1) * 5;
+      const brush = y % 3 === 1 ? 7 : 0;
+      p.px(x, y, 210 + d + brush, 168 + d + brush, 88 + d);
+    }
+  }
+  for (const y of [0, 15]) for (let x = 0; x < TILE_PX; x++) p.px(x, y, 128, 96, 96);
+  for (const x of [0, 15]) for (let y = 0; y < TILE_PX; y++) p.px(x, y, 128, 96, 96);
+  p.px(2, 2, 252, 226, 140); p.px(13, 13, 252, 226, 140); // cast gleams
+};
 
 // --- the Pearlfall's gifts ----------------------------------------------------
 // Starstone reads as nacre over slate — a fallen pearl of the old sky, still
@@ -1223,6 +1271,7 @@ painters[TILE.BLADE_STAR] = (p) => {
 const ARMOR_PALETTES = {
   bark: { hi: [150, 116, 72], mid: [118, 90, 54], lo: [82, 62, 38] },
   iron: TOOL_PALETTES.iron,
+  gloam: TOOL_PALETTES.gloam,
 };
 const TRIM_MUSTARD = [214, 176, 74];
 
@@ -1299,6 +1348,10 @@ painters[TILE.CROWN_IRON] = armorPainter("crown", ARMOR_PALETTES.iron);
 painters[TILE.JERKIN_IRON] = armorPainter("jerkin", ARMOR_PALETTES.iron);
 painters[TILE.LEGGINGS_IRON] = armorPainter("leggings", ARMOR_PALETTES.iron);
 painters[TILE.TREADS_IRON] = armorPainter("treads", ARMOR_PALETTES.iron);
+painters[TILE.CROWN_GLOAM] = armorPainter("crown", ARMOR_PALETTES.gloam);
+painters[TILE.JERKIN_GLOAM] = armorPainter("jerkin", ARMOR_PALETTES.gloam);
+painters[TILE.LEGGINGS_GLOAM] = armorPainter("leggings", ARMOR_PALETTES.gloam);
+painters[TILE.TREADS_GLOAM] = armorPainter("treads", ARMOR_PALETTES.gloam);
 
 // --- the wayfinding kit -----------------------------------------------------
 painters[TILE.COMPASS] = (p) => {
@@ -1386,11 +1439,10 @@ painters[TILE.FIELD_CHART] = (p) => {
   p.px(11, 14, 150, 48, 34); p.px(13, 14, 150, 48, 34);
 };
 
-painters[TILE.IRON_INGOT] = (p) => {
-  // the Sky-Iron Ingot: a squat cast bar, bright-topped, stamped like a
-  // field-journal specimen — the sky that fell, folded and poured
+// a squat cast bar, bright-topped, stamped like a field-journal specimen —
+// one painter per metal (pal picks the material, stamp its foundry mark)
+const ingotPainter = (pal, stamp) => (p) => {
   p.clear();
-  const pal = TOOL_PALETTES.iron;
   const dot = (x, y, c, j = 6) => {
     const d = (p.rand() * 2 - 1) * j;
     p.px(x, y, c[0] + d, c[1] + d, c[2] + d);
@@ -1403,8 +1455,12 @@ painters[TILE.IRON_INGOT] = (p) => {
   }
   for (let x = 4; x <= 11; x++) dot(x, 10, pal.lo);     // the shaded underside
   // the foundry stamp: a two-pip mark, counted like everything else
-  p.px(7, 8, 96, 104, 122); p.px(9, 8, 96, 104, 122);
+  p.px(7, 8, ...stamp); p.px(9, 8, ...stamp);
 };
+// the Sky-Iron Ingot: the sky that fell, folded and poured
+painters[TILE.IRON_INGOT] = ingotPainter(TOOL_PALETTES.iron, [96, 104, 122]);
+// the Gloamgold Ingot: the metal that sank, raised and poured
+painters[TILE.GLOAM_INGOT] = ingotPainter(TOOL_PALETTES.gloam, [110, 78, 96]);
 
 painters[TILE.ICE] = (p) => {
   // River Glass: milky pale blue with darker old-water depths leaning

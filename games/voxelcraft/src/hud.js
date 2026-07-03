@@ -1,7 +1,9 @@
 // DOM HUD: hotbar with fake-isometric block icons, block picker, debug
 // overlay, pause overlay, underwater tint.
 
-import { BLOCKS, PLACEABLE, AIR, WEAR_KINDS, armorProtection } from "./blocks.js";
+import {
+  BLOCKS, PLACEABLE, AIR, WEAR_KINDS, armorProtection, ARMOR_CAP,
+} from "./blocks.js";
 import { clampSignText, SIGN_LINES, SIGN_COLS } from "./world.js";
 import { shapeBoxes } from "./mesher.js";
 import { ATLAS_TILES, TILE_PX } from "./textures.js";
@@ -367,10 +369,10 @@ export class Hud {
   }
 
   // the shield-pips row above the hearts: pips proportional to the current
-  // damage reduction (10 pips = the 60% cap, so a full sky-iron set fills
-  // the row and a full bark set shows ~4). Hidden with nothing worn.
+  // damage reduction (10 pips = the ARMOR_CAP ceiling, so only a woven
+  // gloamgold set fills the row; full sky-iron shows 8). Hidden bare.
   setArmor(reduction) {
-    const pips = reduction > 0 ? Math.max(1, Math.round((reduction / 0.6) * 10)) : 0;
+    const pips = reduction > 0 ? Math.max(1, Math.round((reduction / ARMOR_CAP) * 10)) : 0;
     if (pips === this._lastArmorPips) return;
     this._lastArmorPips = pips;
     document.getElementById("shields").classList.toggle("hidden", pips === 0);
