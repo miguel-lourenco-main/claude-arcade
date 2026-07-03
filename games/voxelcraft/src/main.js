@@ -24,9 +24,9 @@ import {
 import { Wayfinder, bearingYaw, normAngle } from "./wayfinding.js";
 import { PlayerViewer } from "./player-viewer.js";
 import {
-  SAPLING, LOG, LEAVES, LEAVES_COLD, BED, WATER as WATER_ID, dropFor,
-  CROP_SPROUT, CROP_RIPE, CROP_STAGES, isCrop, SLING_STONE, BOAT, FISHING_POLE,
-  isSign, COMPASS, CLOCK, SNOW_LAYER,
+  SAPLING, LOG, LEAVES, LEAVES_COLD, BED, WATER as WATER_ID, LAVA as LAVA_ID,
+  dropFor, CROP_SPROUT, CROP_RIPE, CROP_STAGES, isCrop, SLING_STONE, BOAT,
+  FISHING_POLE, isSign, COMPASS, CLOCK, SNOW_LAYER,
 } from "./blocks.js";
 import { makeGenerator, findSpawn, findBiomeLocation } from "./terrain.js";
 import { findNearestRuin, ruinForChunk } from "./ruins.js";
@@ -260,24 +260,40 @@ function growTree(x, y, z) {
     }
     for (const c of world.setBlock(x, y + dy, z, LOG)) affected.add(c);
   }
-  lightAwareRemesh([...affected], lightTouched);
+  lightAwareRemesh([...affected], lightTouched, { x, y, z });
+}
+
+// does any emitter in the 3x3 ring around this chunk sit within block-light
+// reach of the edited cell? Without a location, any emitter counts (the old,
+// conservative answer). The distance check matters now that the Emberwash
+// seeds emitters through half the map's deep chunks — a surface edit forty
+// blocks above a pool must NOT pay the 9-chunk wide remesh.
+const LIGHT_REACH2 = 16 * 16; // BFS range 14, plus a block of margin
+function emitterNearEdit(cx, cz, at) {
+  for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+    const c = world.getChunk(cx + dx, cz + dz);
+    if (!c || c.emitters.size === 0) continue;
+    if (!at) return true;
+    for (const [idx] of c.emitters) {
+      const lx = idx % 16, lz = ((idx / 16) | 0) % 16, ly = (idx / 256) | 0;
+      const ex = c.cx * 16 + lx, ez = c.cz * 16 + lz;
+      const d2 = (ex - at.x) ** 2 + (ly - at.y) ** 2 + (ez - at.z) ** 2;
+      if (d2 < LIGHT_REACH2) return true;
+    }
+  }
+  return false;
 }
 
 // remesh after a world edit: widen to the full 3x3 ring when the edit adds/
 // removes an emitter or happens near one (occluders change the light BFS).
 // Handles multi-chunk edit lists (explosions) with each chunk meshed once.
-function lightAwareRemesh(chunks, lightTouched) {
+// `at` ({x, y, z} of the edited cell) narrows the near-emitter test.
+function lightAwareRemesh(chunks, lightTouched, at = null) {
   if (chunks.length === 0) return;
   const toMesh = new Set();
   for (const chunk of chunks) {
     const { cx, cz } = chunk;
-    let wide = lightTouched;
-    if (!wide) {
-      outer: for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
-        const c = world.getChunk(cx + dx, cz + dz);
-        if (c && c.emitters.size > 0) { wide = true; break outer; }
-      }
-    }
+    const wide = lightTouched || emitterNearEdit(cx, cz, at);
     if (wide) {
       for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
         const c = world.getChunk(cx + dx, cz + dz);
@@ -335,7 +351,7 @@ function updateCrops() {
     const stage = CROP_STAGES.indexOf(world.getBlock(x, y, z));
     if (stage === -1 || stage === CROP_STAGES.length - 1) continue;
     const next = CROP_STAGES[stage + 1];
-    lightAwareRemesh(world.setBlock(x, y, z, next), false);
+    lightAwareRemesh(world.setBlock(x, y, z, next), false, { x, y, z });
     if (next !== CROP_RIPE) registerCrop(x, y, z);
   }
 }
@@ -381,7 +397,8 @@ function settleSnow() {
     if (!support.solid || support.shape || support.colHeight !== 1) continue;
     // never rework a player-edited cell (or bury something player-placed)
     if (world.hasEdit(bx, y, bz) || world.hasEdit(bx, y + 1, bz)) continue;
-    lightAwareRemesh(world.setBlock(bx, y + 1, bz, SNOW_LAYER), false);
+    lightAwareRemesh(world.setBlock(bx, y + 1, bz, SNOW_LAYER), false,
+      { x: bx, y: y + 1, z: bz });
     return;
   }
 }
@@ -602,7 +619,7 @@ const interaction = new Interaction(world, player, scene, hud, {
     if (chunks.length === 0) return;
     const lightTouched = !!(info && info.ids &&
       info.ids.some((id) => id != null && BLOCKS[id].lightEmit > 0));
-    lightAwareRemesh(chunks, lightTouched);
+    lightAwareRemesh(chunks, lightTouched, info);
     // sapling lifecycle
     if (info) {
       if (info.placed === SAPLING) registerSapling(info.x, info.y, info.z);
@@ -694,7 +711,7 @@ const interaction = new Interaction(world, player, scene, hud, {
     if (!kegs.canPrime()) return; // sixteen already hissing — the keg declines
     const affected = world.setBlock(x, y, z, AIR);
     if (affected.length === 0) return;
-    lightAwareRemesh(affected, false);
+    lightAwareRemesh(affected, false, { x, y, z });
     kegs.prime(x, y, z);
     sfx.kegTick();
   },
@@ -1315,11 +1332,16 @@ function tick(now) {
   // after the camera has settled for this frame (bob, third-person boom)
   fishing.updateLine(camera);
   // underwater fog/tint follow the RENDERING viewpoint: the boomed camera in
-  // third person, the player's eye otherwise
-  const viewInWater = thirdPerson
+  // third person, the player's eye otherwise. The Emberwash gets the same
+  // treatment with an amber screen tint (no fog change — the pool is small
+  // and the burn timer is the real message).
+  const viewBlock = thirdPerson
     ? world.getBlock(Math.floor(camera.position.x), Math.floor(camera.position.y),
-        Math.floor(camera.position.z)) === WATER_ID
-    : player.eyeInWater;
+        Math.floor(camera.position.z))
+    : world.getBlock(Math.floor(player.pos.x), Math.floor(player.eyeY),
+        Math.floor(player.pos.z));
+  const viewInWater = viewBlock === WATER_ID;
+  const viewInLava = viewBlock === LAVA_ID;
   sky.update(frameDt, camera, viewInWater);
   // over the Rimelands the same shower falls as snow (the precip layer
   // switches sprite/speed/color)
@@ -1344,7 +1366,7 @@ function tick(now) {
   });
   setDayLight(materials, sky.lightLevel, sky.lightTint);
   setHeldSkinLight(sky.lightLevel, sky.lightTint);
-  hud.setUnderwater(viewInWater);
+  hud.setUnderwater(viewInWater, viewInLava);
 
   if (debugVisible) {
     const p = player.pos;

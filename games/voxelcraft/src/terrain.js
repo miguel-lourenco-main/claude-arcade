@@ -6,7 +6,7 @@
 import {
   GRASS, DIRT, STONE, SAND, GRAVEL, LOG, LEAVES, LEAVES_COLD, WATER, BEDROCK,
   SNOWY_GRASS, TALLGRASS, POPPY, DANDELION, CACTUS, SANDSTONE, COAL_ORE,
-  IRON_ORE, BERRY_BUSH, SNOW_LAYER, ICE, AIR,
+  IRON_ORE, BERRY_BUSH, SNOW_LAYER, ICE, AIR, LAVA,
 } from "./blocks.js";
 import { CHUNK, HEIGHT, SEA_LEVEL } from "./world.js";
 import { Perlin, hash2 } from "./noise.js";
@@ -14,6 +14,10 @@ import { ruinForChunk, stampRuin, seedRuinState } from "./ruins.js";
 
 const TREE_CELL = 5;   // one tree candidate per 5x5-column cell (grid jitter)
 const TREE_MARGIN = 3; // canopy radius 2 + 1 safety
+// the Emberwash line: cave cells carved at or below this height flood with
+// molten rock instead of air — a flat "sea level" for the deep, safely above
+// the bedrock band (y <= 2) and well under the cavern belt (y < 26)
+const LAVA_LEVEL = 11;
 
 function smoothstep(a, b, t) {
   t = Math.min(1, Math.max(0, (t - a) / (b - a)));
@@ -141,7 +145,9 @@ export function makeGenerator(seed) {
           if (y === 0 || (y <= 2 && hash2(x * 3 + y, z * 3, seed ^ 0xbed) < 0.6)) {
             id = BEDROCK;
           } else if (y > 3 && y < h - 2 && (y > SEA_LEVEL || minNbH >= y) && t.isCave(x, y, z)) {
-            id = AIR;
+            // the deepest carvings hold the Emberwash — pools with a flat,
+            // chunk-coherent surface (pure function of y, like the carve)
+            id = y <= LAVA_LEVEL ? LAVA : AIR;
           } else if (biome === "desert") {
             if (y > h - 4) id = SAND;
             else if (y > h - 9) id = SANDSTONE;

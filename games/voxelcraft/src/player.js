@@ -2,7 +2,8 @@
 // sprinting / sneaking / jumping / swimming / creative flight.
 
 import {
-  BLOCKS, isSolid, WATER, CACTUS, LADDER, ICE, SNOW_LAYER, armorProtection,
+  BLOCKS, isSolid, WATER, LAVA, isFluid, CACTUS, LADDER, ICE, SNOW_LAYER,
+  armorProtection,
 } from "./blocks.js";
 
 const HALF_W = 0.3;
@@ -65,8 +66,10 @@ export class Player {
     this.flying = false;
     this.sprinting = false;   // the double-tap latch (hold keys bypass it)
     this.isEating = null;     // () => bool hook — main.js wires interact.eating
-    this.inWater = false;
-    this.eyeInWater = false;
+    this.inWater = false;     // any FLUID at feet/torso (water or Emberwash)
+    this.inLava = false;      // specifically the Emberwash — it burns
+    this.eyeInWater = false;  // water only: drowning + underwater fog
+    this.eyeInLava = false;   // molten over the eyes — burns like contact
     this.onLadder = false;
     // riding a Reed Skiff: the boat entity that owns this player's physics
     // (boats.js seats, drives, and dismounts; update() suspends everything)
@@ -103,6 +106,7 @@ export class Player {
     this._peakY = 0;            // highest point of the current fall
     this._sinceDamage = 999;
     this._drownTimer = 0;
+    this._lavaTimer = 0;
     this._cactusTimer = 0;
     this._voidTimer = 0;
     this._starveTimer = 0;
@@ -296,7 +300,10 @@ export class Player {
       !sneaking && !(this.isEating && this.isEating());
     let speed;
     if (this.flying) speed = wantSprint ? FLY_SPRINT_SPEED : FLY_SPEED;
-    else if (this.inWater) speed = wantSprint && sprintInput ? SWIM_SPRINT_SPEED : SWIM_SPEED;
+    else if (this.inWater) {
+      speed = wantSprint && sprintInput ? SWIM_SPRINT_SPEED : SWIM_SPEED;
+      if (this.inLava) speed *= 0.55; // the melt is thicker than any river
+    }
     else if (sneaking) speed = SNEAK_SPEED;
     else if (wantSprint && sprintInput) speed = SPRINT_SPEED;
     else speed = WALK_SPEED;
@@ -482,6 +489,14 @@ export class Player {
       this._drownTimer = 0;
     }
 
+    // the Emberwash: fast ticking burns while any of the body is in the melt
+    // (armor absorbs its share — heat is physical enough for plate to matter)
+    this._lavaTimer -= dt;
+    if (this._lavaTimer <= 0 && (this.inLava || this.eyeInLava)) {
+      this._lavaTimer = 0.4;
+      this.damage(3, "the Emberwash");
+    }
+
     // cactus contact
     this._cactusTimer -= dt;
     if (this._cactusTimer <= 0 && this._touchesCactus()) {
@@ -549,8 +564,13 @@ export class Player {
     const { x, y, z } = this.pos;
     const feet = w.getBlock(Math.floor(x), Math.floor(y + 0.2), Math.floor(z));
     const torso = w.getBlock(Math.floor(x), Math.floor(y + 0.9), Math.floor(z));
-    this.inWater = feet === WATER || torso === WATER;
-    this.eyeInWater = w.getBlock(Math.floor(x), Math.floor(this.eyeY), Math.floor(z)) === WATER;
+    const eye = w.getBlock(Math.floor(x), Math.floor(this.eyeY), Math.floor(z));
+    // inWater is really "in a fluid": the Emberwash carries the swimmer the
+    // same way water does (or you'd fall through it like air) — it just burns
+    this.inWater = isFluid(feet) || isFluid(torso);
+    this.inLava = feet === LAVA || torso === LAVA;
+    this.eyeInWater = eye === WATER;
+    this.eyeInLava = eye === LAVA;
     // ladder grip is sampled exactly like water: feet or torso in a rung cell
     this.onLadder = feet === LADDER || torso === LADDER;
   }

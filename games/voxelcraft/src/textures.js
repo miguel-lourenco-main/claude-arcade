@@ -103,6 +103,8 @@ export const TILE = {
   BLADE_STAR: 87,
   // River Glass: the Rimelands' frozen lid over water (ICE block)
   ICE: 88,
+  // the Emberwash: molten pools of the deep (LAVA block)
+  LAVA: 89,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -1436,6 +1438,29 @@ painters[TILE.ICE] = (p) => {
   }
   // a frosted glint near one corner
   p.px(3, 3, 240, 248, 254); p.px(4, 3, 240, 248, 254); p.px(3, 4, 226, 238, 248);
+};
+
+painters[TILE.LAVA] = (p) => {
+  // the Emberwash: a dark crust webbed with molten seams. The shader lights
+  // it by its own emitter, so the brights here read as glow without any
+  // animation — deep chars for the crust, saturated oranges for the melt.
+  p.noiseFill([96, 34, 12], 14);
+  // molten seams: bright meanders that fork across the crust
+  for (let v = 0; v < 5; v++) {
+    let x = (p.rand() * TILE_PX) | 0, y = (p.rand() * TILE_PX) | 0;
+    const len = 5 + ((p.rand() * 6) | 0);
+    for (let i = 0; i < len; i++) {
+      const d = (p.rand() * 2 - 1) * 20;
+      p.px(x, y, 244 + d * 0.2, 140 + d, 30 + d * 0.4);
+      if (p.rand() < 0.4) p.px(x + 1, y, 210, 96, 20);
+      x = Math.max(0, Math.min(TILE_PX - 1, x + ((p.rand() * 3) | 0) - 1));
+      y = Math.max(0, Math.min(TILE_PX - 1, y + ((p.rand() * 3) | 0) - 1));
+    }
+  }
+  // white-hot pinpricks where the crust has just given way
+  p.speckle(6, [252, 208, 96], 20);
+  // cooled slag flecks
+  p.speckle(10, [58, 22, 10], 8);
 };
 
 export function buildAtlas(seed = 1337) {

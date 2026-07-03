@@ -105,6 +105,12 @@ specific item vocabulary.
   which is technically true.
 - **Star-Edge** — a starstone edge honed onto a sky-iron shiv; the keenest
   blade a Wanderling can carry, and it hums very faintly on clear nights.
+- **The Emberwash** — what the flip couldn't cool. In the deepest carvings,
+  below even the old-sky caves, the ground still remembers being on fire
+  about the whole arrangement: molten pools with a dark crust and bright
+  seams, glowing like a grudge. It doesn't chase anyone — the Upturn is
+  polite even about lava — but it doesn't move aside either. Wanderlings
+  who want what lies near it bring good treads and better judgment.
 - **The Steads-Before** — the pre-Upturn homesteads: raised when the world
   faced the other way, and carried along when it turned. They came through
   the flip the way crockery comes through a move — mostly. What's left

@@ -53,9 +53,16 @@ export class Chunk {
     if (y < 0 || y >= HEIGHT) return AIR;
     return this.data[blockIndex(lx, y, lz)];
   }
+  // the one owner of the emitter registry: every write — generation
+  // (terrain/ruins), player edits (World.setBlock), and the overlay
+  // re-application in ensureChunk — keeps it current through here
   set(lx, y, lz, id) {
     if (y < 0 || y >= HEIGHT) return;
-    this.data[blockIndex(lx, y, lz)] = id;
+    const idx = blockIndex(lx, y, lz);
+    const prev = this.data[idx];
+    if (BLOCKS[prev].lightEmit > 0) this.emitters.delete(idx);
+    if (BLOCKS[id].lightEmit > 0) this.emitters.set(idx, BLOCKS[id].lightEmit);
+    this.data[idx] = id;
   }
 }
 
@@ -203,12 +210,7 @@ export class World {
     if (!chunk || !chunk.generated) return [];
     const lx = x - (cx << 4), lz = z - (cz << 4);
     const idx = blockIndex(lx, y, lz);
-    const prev = chunk.data[idx];
-    chunk.set(lx, y, lz, id);
-
-    // keep the chunk's light-emitter registry current
-    if (BLOCKS[prev].lightEmit > 0) chunk.emitters.delete(idx);
-    if (BLOCKS[id].lightEmit > 0) chunk.emitters.set(idx, BLOCKS[id].lightEmit);
+    chunk.set(lx, y, lz, id); // Chunk.set keeps the emitter registry current
 
     const key = chunkKey(cx, cz);
     let overlay = this.edits.get(key);
@@ -250,14 +252,20 @@ export class World {
       chunk = new Chunk(cx, cz);
       this.chunks.set(key, chunk);
     }
-    this.generator(this, chunk);
-    // apply persisted player edits on top of the generated terrain
+    // clear BEFORE generating: the generator registers its own emitters
+    // through Chunk.set (Emberwash pools, glow flora) — clearing after it
+    // would render every generated light dark
     chunk.emitters.clear();
-    const overlay = this.edits.get(key);
-    if (overlay) {
-      for (const [idx, id] of overlay) {
-        chunk.data[idx] = id;
+    this.generator(this, chunk);
+    // apply persisted player edits on top of the generated terrain: an edit
+    // may add an emitter OR pave over a generated one, so set-or-delete
+    const overlayEdits = this.edits.get(key);
+    if (overlayEdits) {
+      for (const [idx, id] of overlayEdits) {
+        const prev = chunk.data[idx];
+        if (BLOCKS[prev].lightEmit > 0) chunk.emitters.delete(idx);
         if (BLOCKS[id].lightEmit > 0) chunk.emitters.set(idx, BLOCKS[id].lightEmit);
+        chunk.data[idx] = id;
       }
     }
     chunk.generated = true;

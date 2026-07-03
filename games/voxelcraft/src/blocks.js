@@ -159,6 +159,12 @@ export const STAR_BLADE = 100;
 // was hiding.
 export const SNOW_LAYER = 101;
 export const ICE = 102;
+// the Emberwash: what the flip couldn't cool. Molten pools in the deepest
+// caverns — a static fluid like water (sink, paddle, place into), but it
+// glows (emitter 13), it burns (player.js ticks contact damage), and no
+// tool ever collects it. Terrain floods deep cave cells with it; creative
+// can paint more.
+export const LAVA = 103;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -870,6 +876,24 @@ BLOCKS[ICE] = def("River Glass", {
   toolKind: "pick",
   sound: "glass",
 });
+
+// the Emberwash: opaque-bucket render (its own crust texture, no water swell)
+// but non-opaque mesh rules like River Glass — internal lava-lava faces cull,
+// and the BFS block light escapes the pool instead of dying at its skin
+BLOCKS[LAVA] = def("Emberwash", {
+  tiles: cube(TILE.LAVA),
+  hardness: Infinity,
+  drops: null,
+  solid: false,
+  opaque: false,
+  cullSame: true,
+  lightEmit: 13,
+  sound: "stone",
+});
+
+// a fluid cell: the player swims in it, and building into it is allowed
+// (placement replaces the fluid the way it replaces water)
+export function isFluid(id) { return id === WATER || id === LAVA; }
 
 // total damage-reduction fraction of a wear-slot array (entries are stacks or
 // null), capped at 0.60. Falls are a special case: armor helps a fall at only

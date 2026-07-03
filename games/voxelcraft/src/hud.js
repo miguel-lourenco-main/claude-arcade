@@ -887,7 +887,11 @@ export class Hud {
   }
   hidePause() { this.paused = false; this.overlayEl.classList.add("hidden"); }
 
-  setUnderwater(on) { this.waterTintEl.classList.toggle("hidden", !on); }
+  // the submerged screen tint: cool blue under water, amber in the Emberwash
+  setUnderwater(water, lava = false) {
+    this.waterTintEl.classList.toggle("hidden", !water && !lava);
+    this.waterTintEl.classList.toggle("lava", lava);
+  }
 
   updateDebug(lines, visible) {
     this.debugEl.classList.toggle("hidden", !visible);

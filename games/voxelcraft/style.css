@@ -301,6 +301,7 @@ body {
   position: absolute; inset: 0;
   background: rgba(24, 70, 145, 0.28);
 }
+#water-tint.lava { background: rgba(214, 78, 8, 0.42); }
 
 /* ---- overlays ---- */
 

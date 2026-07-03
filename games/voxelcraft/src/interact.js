@@ -6,8 +6,8 @@ import {
   AIR, BEDROCK, CHEST, WORKBENCH, KILN, BED, LADDER, DOOR, DOOR_TOP, BLAST_KEG,
   GATE, GATE_OPEN, ROOT_SEED, CROP_SPROUT, DIRT, GRASS, SLING_STONE, BOAT, WATER,
   FISHING_POLE, SNOW_LAYER,
-  BLOCKS, isSolid, isPlant, isDoor, isDoorLower, isGate, isSign, DOOR_TOGGLE,
-  dropFor, yawToFacing,
+  BLOCKS, isSolid, isPlant, isFluid, isDoor, isDoorLower, isGate, isSign,
+  DOOR_TOGGLE, dropFor, yawToFacing,
 } from "./blocks.js";
 import { HEIGHT } from "./world.js";
 import { EYE_HEIGHT, MAX_HUNGER } from "./player.js";
@@ -34,7 +34,9 @@ export function raycast(world, origin, dir, maxDist = REACH_CREATIVE) {
 
   while (t <= maxDist) {
     const id = world.getBlock(x, y, z);
-    if (id !== AIR && BLOCKS[id].bucket !== "water") {
+    // fluids are untargetable: the ray swims through water AND the Emberwash
+    // (you cap a pool by placing against its floor or banks, like water)
+    if (id !== AIR && !isFluid(id)) {
       return { x, y, z, id, normal, dist: t };
     }
     if (tMaxX < tMaxY && tMaxX < tMaxZ) {
@@ -664,9 +666,9 @@ export class Interaction {
     if (!isPlant(t.id) && t.id !== SNOW_LAYER) {
       px += t.normal[0]; py += t.normal[1]; pz += t.normal[2];
     }
-    // a cell is buildable if it's air, a plant, a Snowdrift, or water
+    // a cell is buildable if it's air, a plant, a Snowdrift, or a fluid
     const canReplace = (bid) => bid === AIR || isPlant(bid) || bid === SNOW_LAYER ||
-      BLOCKS[bid].bucket === "water";
+      isFluid(bid);
     const existing = this.world.getBlock(px, py, pz);
     if (!canReplace(existing)) return;
 
@@ -740,7 +742,7 @@ export class Interaction {
   _placeDoor(px, py, pz, existing) {
     if (py < 1 || py + 1 >= HEIGHT) return;
     const canReplace = (bid) => bid === AIR || isPlant(bid) || bid === SNOW_LAYER ||
-      BLOCKS[bid].bucket === "water";
+      isFluid(bid);
     const upperEx = this.world.getBlock(px, py + 1, pz);
     if (!canReplace(upperEx)) return;
     if (!isSolid(this.world.getBlock(px, py - 1, pz))) return; // solid floor

@@ -371,13 +371,18 @@ export class Mobs {
 
   // --- spawn director ---------------------------------------------------------
 
+  // proper lights suppress hostile spawns: torches (14), starstone (13),
+  // the Emberwash (13), starglass (11). The threshold keeps DIM growth —
+  // scattered cave flora like Wispcaps (8) — from sterilizing the deep:
+  // a mushroom is not a campfire.
   _nearTorch(world, x, y, z) {
     const cx = Math.floor(x) >> 4, cz = Math.floor(z) >> 4;
     const r2 = TORCH_SAFE_DIST * TORCH_SAFE_DIST;
     for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
       const c = world.getChunk(cx + dx, cz + dz);
       if (!c || c.emitters.size === 0) continue;
-      for (const [idx] of c.emitters) {
+      for (const [idx, level] of c.emitters) {
+        if (level < 11) continue;
         const lx = idx % 16, lz = ((idx / 16) | 0) % 16, ly = (idx / 256) | 0;
         const ex = c.cx * 16 + lx, ez = c.cz * 16 + lz;
         const d2 = (ex - x) ** 2 + (ly - y) ** 2 + (ez - z) ** 2;
