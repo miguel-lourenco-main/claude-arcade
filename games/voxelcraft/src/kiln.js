@@ -11,6 +11,7 @@ import {
   SAND, GLASS, COBBLE, STONE, IRON_ORE, IRON_INGOT, SNUFFET_LOIN, ROAST_LOIN,
   MEAL_ROOT, BAKED_ROOT, SILVERFIN, SEARED_SILVERFIN, COAL_ORE, LOG, PLANKS,
   STARSTONE, STARGLASS, GLOAM_ORE, GLOAM_INGOT,
+  POPPY, DANDELION, EMBER_BROTH, SUNWISP_BROTH, KELP_GLAND, KELPSALVE,
 } from "./blocks.js";
 import { MAX_STACK } from "./inventory.js";
 
@@ -30,6 +31,11 @@ export const SMELTS = {
   // a landed pearl of the old sky runs molten into a pane that keeps the
   // glow (see the Pearlfall in meteors.js)
   [STARSTONE]: STARGLASS,
+  // the Whims' broths: meadow flowers and a Mirewalker's gland, simmered
+  // down into their effects (player.js EFFECTS)
+  [POPPY]: EMBER_BROTH,
+  [DANDELION]: SUNWISP_BROTH,
+  [KELP_GLAND]: KELPSALVE,
 };
 
 // seconds of heat per unit of fuel

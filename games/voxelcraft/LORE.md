@@ -132,6 +132,15 @@ specific item vocabulary.
   the Notice Post still says, take what the chest offers, and leave the
   walls to their sulk. It's agreed this is a fair split.
 
+- **The Whims** — the Upturn's moods, worn briefly. A broth or a bad bite
+  can leave one on you for a minute: **Fleetfoot** (the Sunwisp lightness
+  takes to your feet), **Emberglow** (a warm ember heals you and asks
+  nothing of the satchel), **Mire-rot** (the Mirewalker's gift — a gnaw
+  that armor can't argue with, though it politely stops at half a heart),
+  and **Kelpguard** (kelp-salve that shaves every hurt and washes the rot
+  right out). The broths simmer in any kiln: an Emberbell for the glow, a
+  Sunwisp for the feet, and a Mirewalker's own **Kelp Gland** for the
+  salve — the disease carries its cure, which the bog considers fair.
 - **Gleam** — the light that clings to work. When the stars drowned, their
   light didn't all go out; some of it soaked into the ground and the
   beasts and the making of things, and it sheds as tiny motes when work

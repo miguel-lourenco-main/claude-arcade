@@ -169,6 +169,22 @@ const BOWL_COLORS = { X: "#c56a2b", m: "#d9a441" };
 const SHIELD_ROWS = [".XXXXX.", "XXXoXXX", "XXooXXX", ".XXXXX.", "..XXX..", "...X..."];
 const SHIELD_COLORS = { X: "#c4ccda", o: "#d6b04a" };
 
+// the Whims' badges: little 7x6 marks in each whim's own register
+const EFFECT_ROWS = {
+  fleetfoot: [".....X.", "..XXX..", ".XXX.X.", "XXXXX..", "..X....", ".X....."], // a stride
+  emberglow: ["...X...", "..XXX..", ".XoXX..", ".XXoX..", "..XXX..", "...X..."], // an ember
+  mirerot:   ["X..X..X", ".XoXoX.", "..XXX..", ".XoXX..", "X..X..X", "..X...X"], // the rot
+  kelpguard: [".XXXXX.", "XoXXXoX", "XXXXXXX", ".XXXXX.", "..XXX..", "...X..."], // a kelp ward
+  dimmed:    [".XXXXX.", "XX...XX", "X..o..X", "XX...XX", ".XXXXX.", "..XXX.."], // a leaned dark
+};
+const EFFECT_COLORS = {
+  fleetfoot: { X: "#e8d874", o: "#fff8c8" },
+  emberglow: { X: "#e07838", o: "#ffd890" },
+  mirerot:   { X: "#7c9a4e", o: "#c8e090" },
+  kelpguard: { X: "#5aa87c", o: "#c0ecd4" },
+  dimmed:    { X: "#6a6a88", o: "#c8c8e0" },
+};
+
 const ICONS = {
   heartFull: pixelIcon(HEART_ROWS, (ch) => (ch === "X" ? "#d4342a" : null)),
   heartHalf: pixelIcon(HEART_ROWS, (ch, x) => (ch === "X" ? (x <= 3 ? "#d4342a" : "#3a3a44") : null)),
@@ -182,6 +198,10 @@ const ICONS = {
   shieldFull: pixelIcon(SHIELD_ROWS, (ch) => SHIELD_COLORS[ch] || null),
   shieldEmpty: pixelIcon(SHIELD_ROWS, (ch) => (SHIELD_COLORS[ch] ? "#3a3a44" : null)),
 };
+const EFFECT_ICONS = {};
+for (const [id, rows] of Object.entries(EFFECT_ROWS)) {
+  EFFECT_ICONS[id] = pixelIcon(rows, (ch) => EFFECT_COLORS[id][ch] || null);
+}
 
 export class Hud {
   constructor(atlasCanvas, opts) {
@@ -344,6 +364,7 @@ export class Hud {
     this.gleamEl = document.getElementById("gleam");
     this.gleamFillEl = document.getElementById("gleam-fill");
     this.gleamJarsEl = document.getElementById("gleam-jars");
+    this.effectsEl = document.getElementById("effects");
     const hearts = document.getElementById("hearts");
     const bubbles = document.getElementById("bubbles");
     const hunger = document.getElementById("hunger");
@@ -385,6 +406,32 @@ export class Hud {
       this.shieldEls[i].style.backgroundImage =
         `url(${i < pips ? ICONS.shieldFull : ICONS.shieldEmpty})`;
     }
+  }
+
+  // the Whims row (top-right): one badge + countdown per active effect.
+  // list is [[id, secondsLeft], ...]; identity-keyed rebuild, cheap since
+  // there are at most five whims in the world.
+  setEffects(list) {
+    const key = list.map(([id, t]) => `${id}:${Math.ceil(t)}`).join(",");
+    if (key === this._lastEffects) return;
+    this._lastEffects = key;
+    const row = this.effectsEl;
+    row.innerHTML = "";
+    for (const [id, t] of list) {
+      if (!EFFECT_ICONS[id]) continue;
+      const badge = document.createElement("div");
+      badge.className = "effect-badge";
+      const icon = document.createElement("div");
+      icon.className = "effect-icon";
+      icon.style.backgroundImage = `url(${EFFECT_ICONS[id]})`;
+      const time = document.createElement("div");
+      time.className = "effect-time";
+      time.textContent = String(Math.ceil(t));
+      badge.appendChild(icon);
+      badge.appendChild(time);
+      row.appendChild(badge);
+    }
+    row.classList.toggle("hidden", list.length === 0);
   }
 
   // the Gleam meter: a slim jar-fill bar over the status rows + jar count

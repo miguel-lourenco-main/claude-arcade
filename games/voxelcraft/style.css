@@ -73,6 +73,28 @@ body {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
 }
 
+/* ---- the Whims: effect badges, top-right ---- */
+
+#effects {
+  position: absolute; top: 12px; right: 12px;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
+}
+.effect-badge {
+  display: flex; align-items: center; gap: 5px;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 3px 6px; border-radius: 4px;
+}
+.effect-icon {
+  width: 21px; height: 18px;
+  background-size: contain; background-repeat: no-repeat;
+  image-rendering: pixelated;
+}
+.effect-time {
+  min-width: 20px; text-align: right;
+  font: bold 11px monospace; color: #e8e8e0;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+
 /* ---- survival status (hearts + air) ---- */
 
 #status {

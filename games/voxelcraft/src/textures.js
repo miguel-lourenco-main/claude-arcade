@@ -135,6 +135,11 @@ export const TILE = {
   BOGBEAN_RIPE: 111,
   BOGBEAN: 112,
   POTTAGE: 113,
+  // the Whims' broths: two bottles, the gland, the salve pot
+  EMBER_BROTH: 114,
+  SUNWISP_BROTH: 115,
+  KELP_GLAND: 116,
+  KELPSALVE: 117,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -1290,6 +1295,62 @@ painters[TILE.POTTAGE] = (p) => {
   // steam: two shy curls
   p.px(6, 7, 226, 228, 232, 150); p.px(7, 6, 226, 228, 232, 120);
   p.px(10, 7, 226, 228, 232, 150); p.px(9, 5, 226, 228, 232, 110);
+};
+
+// a stoppered field bottle: shared silhouette, per-broth liquid color
+const brothPainter = (liquid, glint) => (p) => {
+  p.clear();
+  // cork + neck
+  p.px(7, 3, 150, 118, 74); p.px(8, 3, 150, 118, 74);
+  p.px(7, 4, 122, 94, 58); p.px(8, 4, 122, 94, 58);
+  for (let y = 5; y <= 6; y++) { p.px(7, y, 210, 222, 228, 200); p.px(8, y, 210, 222, 228, 200); }
+  // body: glass walls holding the simmer
+  for (let y = 7; y <= 12; y++) {
+    const half = y === 7 || y === 12 ? 2 : 3;
+    for (let x = 8 - half; x <= 7 + half; x++) {
+      const edge = x === 8 - half || x === 7 + half || y === 12;
+      if (edge) p.px(x, y, 208, 220, 226, 210);
+      else {
+        const d = (p.rand() * 2 - 1) * 12;
+        p.px(x, y, liquid[0] + d, liquid[1] + d, liquid[2] + d);
+      }
+    }
+  }
+  p.px(6, 8, glint[0], glint[1], glint[2]); // the warm spark in the broth
+};
+painters[TILE.EMBER_BROTH] = brothPainter([196, 88, 44], [255, 190, 90]);
+painters[TILE.SUNWISP_BROTH] = brothPainter([214, 178, 62], [255, 244, 160]);
+
+painters[TILE.KELP_GLAND] = (p) => {
+  // the Mirewalker's kelp gland: a slick dark-green sac with a pale vein
+  p.clear();
+  for (let y = 5; y <= 12; y++) {
+    const half = y <= 6 ? 1 : y <= 10 ? 3 : 2;
+    for (let x = 8 - half; x <= 7 + half; x++) {
+      const d = (p.rand() * 2 - 1) * 10;
+      const edge = x === 8 - half || x === 7 + half || y === 5 || y === 12;
+      p.px(x, y, (edge ? 30 : 52) + d, (edge ? 62 : 96) + d, (edge ? 48 : 70) + d);
+    }
+  }
+  for (let y = 6; y <= 11; y++) p.px(7, y, 122, 168, 132); // the vein
+  p.px(6, 7, 150, 196, 158); // the slick shine
+};
+painters[TILE.KELPSALVE] = (p) => {
+  // Kelpsalve: a squat clay pot of cool green salve, wiped at the rim
+  p.clear();
+  for (let y = 7; y <= 13; y++) {
+    const half = y === 7 || y === 13 ? 3 : 4;
+    for (let x = 8 - half; x <= 7 + half; x++) {
+      const d = (p.rand() * 2 - 1) * 8;
+      const edge = x === 8 - half || x === 7 + half || y === 13;
+      p.px(x, y, (edge ? 118 : 152) + d, (edge ? 84 : 108) + d, (edge ? 58 : 74) + d);
+    }
+  }
+  for (let x = 5; x <= 10; x++) {
+    const d = (p.rand() * 2 - 1) * 10;
+    p.px(x, 7, 108 + d, 176 + d, 132 + d); // the salve surface
+  }
+  p.px(6, 7, 168, 220, 184); // the finger-wipe shine
 };
 
 painters[TILE.FARMLAND_TOP] = (p) => {

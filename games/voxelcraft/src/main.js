@@ -185,6 +185,19 @@ const drops = new ItemDrops(scene, materials);
 // (eventually) at the Loomstone. Additive save field; death keeps it.
 const gleam = new Gleam();
 if (save && save.gleam) gleam.load(save.gleam);
+
+// the Whims in progress (additive field): validated per entry — the ids
+// must be known and the clocks sane. onEffectStart isn't wired yet, so a
+// loaded whim resumes quietly (no re-announce), which reads right.
+if (save && Array.isArray(save.effects) && player.mode === "survival") {
+  for (const e of save.effects) {
+    if (!Array.isArray(e)) continue;
+    const [id, t] = e;
+    if (typeof id === "string" && Number.isFinite(t) && t > 0) {
+      player.addEffect(id, Math.min(600, t));
+    }
+  }
+}
 function awardGleam(n) {
   if (player.mode !== "survival" || n <= 0) return;
   gleam.add(n);
@@ -549,6 +562,7 @@ const hud = new Hud(atlas.canvas, {
   onToggleMode: () => {
     hud.closeAllWindows(); // defensively spill/close before switching rules
     player.mode = player.mode === "survival" ? "creative" : "survival";
+    player.clearEffects(); // the Whims are survival's; a mode switch shrugs them off
     if (player.mode === "survival") {
       player.flying = false;
       player.resetFall(); // creative altitude must not become a survival fall
@@ -612,6 +626,19 @@ function spillStack(stack) {
 }
 
 player.onDamage = () => { hud.flashDamage(); sfx.hurt(); };
+// a whim newly taking hold gets a one-line field note
+const EFFECT_NOTES = {
+  fleetfoot: "The Sunwisp lightness takes to your feet.",
+  emberglow: "A warm ember settles behind your ribs.",
+  mirerot: "The mire-rot takes hold.",
+  kelpguard: "Cool kelp-salve steadies your skin.",
+  dimmed: "The dark leans on you.",
+};
+player.onEffectStart = (id) => {
+  if (EFFECT_NOTES[id]) hud.announce(EFFECT_NOTES[id], 2600);
+};
+// the Whims are survival's — a mode switch shrugs them off
+// (wired into onToggleMode below via hud opts)
 player.onDeath = (cause) => {
   hud.showDeath(cause);
   if (document.pointerLockElement) document.exitPointerLock();
@@ -912,6 +939,8 @@ const stopAutosave = startAutosave(() => writeSave(world, player, sky, hud, inve
   music: [music.enabled ? 1 : 0, Math.round(music.volume * 100) / 100],
   // additive: Gleam [jars, progress] — absent in older saves (a fresh jar)
   gleam: gleam.serialize(),
+  // additive: the Whims in progress [[id, secondsLeft], ...]
+  effects: [...player.effects].map(([id, t]) => [id, Math.round(t * 10) / 10]),
 }));
 
 // --- held item (first-person hand) — its own scene + depth-cleared pass ------
@@ -1328,6 +1357,9 @@ function tick(now) {
     hud.setHunger(player.hunger);
     hud.setAir(player.air, player.maxAir, player.eyeInWater);
     hud.setGleam(gleam.level, gleam.frac());
+    hud.setEffects([...player.effects]);
+  } else {
+    hud.setEffects([]);
   }
 
   // void safety net (creative only — in survival the void deals damage and

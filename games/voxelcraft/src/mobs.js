@@ -6,7 +6,7 @@
 import * as THREE from "three";
 import {
   BLOCKS, GRASS, SAND, MUD, WATER, LAVA, isFluid, COAL_ORE, TORCH,
-  SNUFFET_LOIN, MOSS_CLUMP, AIR, isSolid,
+  SNUFFET_LOIN, MOSS_CLUMP, KELP_GLAND, AIR, isSolid,
 } from "./blocks.js";
 import { mulberry32 } from "./noise.js";
 
@@ -45,8 +45,9 @@ export const SPECIES = {
   mirewalker: {
     name: "Mirewalker", hp: 20, speed: 1.0, behavior: "hostile", habitat: "shore",
     cap: 1, halfW: 0.35, height: 1.9, damage: 5, aggro: 10, attackRange: 1.7,
-    knockResist: 0.85, drops: [[COAL_ORE, 3], [TORCH, 4]], rareChance: 0.15,
-    sound: "bellow", gleam: 8,
+    knockResist: 0.85, drops: [[COAL_ORE, 3], [TORCH, 4], [KELP_GLAND, 1]],
+    rareChance: 0.15, sound: "bellow", gleam: 8,
+    inflicts: ["mirerot", 8], // its hit leaves the rot; its gland is the cure
   },
   // the Peddler: a wandering trader Wanderling, hunched under an enormous
   // patchwork backpack. Day-only (gone by dusk, the way the Murkling is gone
@@ -532,6 +533,8 @@ export class Mobs {
             this._lineOfSight(world, m, player)) {
           m.attackCd = 1;
           player.damage(spec.damage, `a ${spec.name}`);
+          // some hits leave a whim behind (the Mirewalker's rot)
+          if (spec.inflicts) player.addEffect(spec.inflicts[0], spec.inflicts[1]);
           const kx = player.pos.x - m.x, kz = player.pos.z - m.z;
           const kl = Math.max(0.2, Math.hypot(kx, kz));
           player.vel.x += (kx / kl) * 5;

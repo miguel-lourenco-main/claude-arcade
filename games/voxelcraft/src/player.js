@@ -28,6 +28,21 @@ const LADDER_SIDE_SPEED = 2.0;    // damped horizontal shuffle while gripping
 const MAX_STEP_DISP = 0.4;        // max movement per collision substep (anti-tunneling)
 const STEP_DISTANCE = 2.2;        // blocks walked between footstep sounds
 
+// the Whims: timed statuses worn briefly (see LORE.md). The table is the
+// whole framework — a whim is an id, a display name, and at most a speed
+// multiplier; the timed behaviors (Emberglow's regen, Mire-rot's gnaw,
+// Kelpguard's damage shave) live in _updateSurvival/damage below.
+export const EFFECTS = {
+  fleetfoot: { name: "Fleetfoot", speed: 1.3 },   // Sunwisp Broth
+  emberglow: { name: "Emberglow" },               // Emberbell Broth: quiet regen
+  mirerot: { name: "Mire-rot" },                  // the Mirewalker's gift
+  kelpguard: { name: "Kelpguard" },               // Kelpsalve: damage shave + cure
+  dimmed: { name: "Dimmed", speed: 0.6 },         // the dark leaning on you
+};
+const EMBERGLOW_INTERVAL = 2.5;  // seconds per healed heart-half
+const MIREROT_INTERVAL = 2;      // seconds per gnawed heart-half
+const KELPGUARD_SHAVE = 0.8;     // incoming damage multiplier
+
 // survival ("normal") limitations
 export const MAX_HEALTH = 20;     // 10 hearts
 export const MAX_HUNGER = 20;     // 10 bowls
@@ -103,6 +118,12 @@ export class Player {
     this.wear = null;
     this.onArmorBreak = null;   // (blockId) => a worn piece shattered
     this.onArmorWear = null;    // () => dur ticked down on the worn set
+    // the Whims: effect id -> seconds left. Survival-only (mode switches
+    // and respawns clear it); persisted as an additive save field.
+    this.effects = new Map();
+    this.onEffectStart = null;  // (id) => a whim newly took hold (HUD note)
+    this._glowTimer = 0;
+    this._rotTimer = 0;
     this._peakY = 0;            // highest point of the current fall
     this._sinceDamage = 999;
     this._drownTimer = 0;
@@ -114,8 +135,38 @@ export class Player {
 
   get maxAir() { return AIR_SECONDS; }
 
+  // a whim takes hold: refreshed to the longer of current/new, never stacked.
+  // Kelpguard is also the cure — applying it washes the Mire-rot out.
+  addEffect(id, seconds) {
+    if (!EFFECTS[id] || this.mode !== "survival" || this.dead) return;
+    const fresh = !this.effects.has(id);
+    this.effects.set(id, Math.max(this.effects.get(id) || 0, seconds));
+    if (id === "kelpguard") this.effects.delete("mirerot");
+    if (fresh && this.onEffectStart) this.onEffectStart(id);
+  }
+
+  hasEffect(id) { return this.effects.has(id); }
+
+  // the combined speed multiplier of every active whim (1 = unaffected)
+  effectSpeedMul() {
+    let mul = 1;
+    for (const id of this.effects.keys()) {
+      const s = EFFECTS[id].speed;
+      if (s) mul *= s;
+    }
+    return mul;
+  }
+
+  clearEffects() {
+    this.effects.clear();
+    this._glowTimer = 0;
+    this._rotTimer = 0;
+  }
+
   damage(amount, cause) {
     if (this.mode !== "survival" || this.dead || amount <= 0) return;
+    // Kelpguard: the salve shaves every hurt before the plate weighs in
+    if (this.effects.has("kelpguard")) amount *= KELPGUARD_SHAVE;
     amount = this._absorb(amount, cause);
     this.health = Math.max(0, this.health - amount);
     this._sinceDamage = 0;
@@ -138,7 +189,8 @@ export class Player {
   _absorb(amount, cause) {
     const wear = this.wear;
     if (!wear) return amount;
-    if (cause === "drowning" || cause === "starvation" || cause === "the void") {
+    if (cause === "drowning" || cause === "starvation" || cause === "the void" ||
+        cause === "the mire-rot") { // sickness ignores the plate
       return amount;
     }
     const red = armorProtection(wear, cause === "fall");
@@ -161,6 +213,7 @@ export class Player {
 
   respawn(spawnPoint) {
     this.riding = null; // death unseats — the skiff stays where it was
+    this.clearEffects(); // the grave keeps the whims
     Object.assign(this.pos, spawnPoint);
     this.vel.x = this.vel.y = this.vel.z = 0;
     this.health = MAX_HEALTH;
@@ -309,6 +362,11 @@ export class Player {
     else speed = WALK_SPEED;
     this.sprintActive = speed === SPRINT_SPEED || speed === SWIM_SPRINT_SPEED ||
       (this.flying && wantSprint);
+    // the Whims' pace: Fleetfoot quickens, Dimmed drags — applied after the
+    // sprint check reads the base speed, and never to hunger drain rates
+    if (this.mode === "survival" && this.effects.size > 0) {
+      speed *= this.effectSpeedMul();
+    }
 
     // linear acceleration toward the wanted velocity, applied as a VECTOR
     // approach (not per-axis): a rotating camera swings the target around
@@ -462,6 +520,31 @@ export class Player {
   // survival-only hazards: fall damage, drowning, cactus, void, slow regen
   _updateSurvival(dt, wasAirborne) {
     this._sinceDamage += dt;
+
+    // the Whims run their clocks down (and off)
+    if (this.effects.size > 0) {
+      for (const [id, left] of this.effects) {
+        if (left - dt <= 0) this.effects.delete(id);
+        else this.effects.set(id, left - dt);
+      }
+      // Emberglow: a warm ember heals steadily and asks NOTHING of the
+      // satchel (that's the point of a broth over a meal)
+      if (this.effects.has("emberglow")) {
+        this._glowTimer += dt;
+        if (this._glowTimer >= EMBERGLOW_INTERVAL) {
+          this._glowTimer -= EMBERGLOW_INTERVAL;
+          this.health = Math.min(MAX_HEALTH, this.health + 1);
+        }
+      } else this._glowTimer = 0;
+      // Mire-rot: gnaws like starvation — down to (never past) half a heart
+      if (this.effects.has("mirerot")) {
+        this._rotTimer += dt;
+        if (this._rotTimer >= MIREROT_INTERVAL) {
+          this._rotTimer -= MIREROT_INTERVAL;
+          if (this.health > 1) this.damage(Math.min(1, this.health - 1), "the mire-rot");
+        }
+      } else this._rotTimer = 0;
+    }
 
     // fall damage: MC rule, damage = blocks fallen minus 3 (a gripped ladder
     // is as safe as water — no fall accumulates through it)

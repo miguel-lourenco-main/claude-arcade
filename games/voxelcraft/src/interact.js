@@ -244,9 +244,11 @@ export class Interaction {
   _updateEating(dt) {
     const id = this.hotbar.selectedId();
     const def = BLOCKS[id];
-    // right-click on a chest/workbench/kiln/cot still routes, food in hand or not
+    // right-click on a chest/workbench/kiln/cot still routes, food in hand
+    // or not. An effect-bearing broth drinks at a FULL satchel too — the
+    // whim is the meal, the token restore just rides along.
     const wants = this.buttons.has(2) && def && def.food && !this._interactiveTarget() &&
-      this.player.hunger < MAX_HUNGER - 1e-9;
+      (this.player.hunger < MAX_HUNGER - 1e-9 || !!def.food.effect);
     if (!wants) {
       this.eating = false;
       this._eatProgress = 0;
@@ -267,8 +269,19 @@ export class Interaction {
     if (this._eatProgress >= EAT_SECONDS) {
       this._eatProgress = 0;
       // consume LAST: a failed take (stale slot) must not feed the player
-      if (this.canConsume(id) && this.player.eat(def.food.restore)) {
-        if (this.onEat) this.onEat("swallow");
+      if (this.canConsume(id)) {
+        const ate = this.player.eat(def.food.restore);
+        if (def.food.effect) {
+          this.player.addEffect(def.food.effect[0], def.food.effect[1]);
+        }
+        // a broth counts as swallowed even at a full satchel (eat() said no
+        // to the restore, but the whim took) — plain food at full is a bug
+        // the wants-gate already prevents
+        if (ate || def.food.effect) {
+          if (this.onEat) this.onEat("swallow");
+        } else {
+          this.eating = false;
+        }
       } else {
         this.eating = false;
       }

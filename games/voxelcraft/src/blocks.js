@@ -208,6 +208,13 @@ export const BOGBEAN_HALF = 124;
 export const BOGBEAN_RIPE = 125;
 export const BOGBEAN = 126;
 export const POTTAGE = 127;
+// the Whims' broths (see LORE.md): kiln-simmered consumables that apply a
+// timed effect (def.food.effect = [id, seconds] — player.js EFFECTS). The
+// Kelp Gland is the Mirewalker's drop, the Kelpsalve its own cure.
+export const EMBER_BROTH = 128;
+export const SUNWISP_BROTH = 129;
+export const KELP_GLAND = 130;
+export const KELPSALVE = 131;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -750,6 +757,30 @@ BLOCKS[POTTAGE] = def("Wanderer's Pottage", cropCross({
   tiles: cube(TILE.POTTAGE),
   placeable: false,
   food: { restore: 10 },
+}));
+
+// --- the Whims' broths ---------------------------------------------------------
+// Effect-bearing consumables: restore is a token 1 (the effect is the meal),
+// and interact.js lets them drink at a full satchel for exactly that reason.
+BLOCKS[EMBER_BROTH] = def("Emberbell Broth", cropCross({
+  tiles: cube(TILE.EMBER_BROTH),
+  placeable: false,
+  food: { restore: 1, effect: ["emberglow", 20] },
+}));
+BLOCKS[SUNWISP_BROTH] = def("Sunwisp Broth", cropCross({
+  tiles: cube(TILE.SUNWISP_BROTH),
+  placeable: false,
+  food: { restore: 1, effect: ["fleetfoot", 45] },
+}));
+// the gland itself is no meal — it's what the kiln renders into the salve
+BLOCKS[KELP_GLAND] = def("Kelp Gland", cropCross({
+  tiles: cube(TILE.KELP_GLAND),
+  placeable: false,
+}));
+BLOCKS[KELPSALVE] = def("Kelpsalve", cropCross({
+  tiles: cube(TILE.KELPSALVE),
+  placeable: false,
+  food: { restore: 1, effect: ["kelpguard", 30] },
 }));
 
 export const CROP_STAGES = [CROP_SPROUT, CROP_HALF, CROP_RIPE];
