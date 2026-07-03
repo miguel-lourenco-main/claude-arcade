@@ -132,6 +132,13 @@ specific item vocabulary.
   the Notice Post still says, take what the chest offers, and leave the
   walls to their sulk. It's agreed this is a fair split.
 
+- **The Tuftling** — a small tufty burrower of the meadows, mostly tail
+  and opinion, and mad for Silverfin. Offer it one and it might decide
+  you are its person (it keeps the fish either way; it is not a
+  complicated animal). A decided Tuftling follows at heel, waits where
+  it's told, turns up at your side no matter how far you wander, and
+  flings itself — chirping — at whatever you last raised a hand to.
+  It is the only creature of the Upturn that stays.
 - **The Snufflet** — a snuffet pup: a loaf in training. Feed two grown
   snuffets a pouch of Root Pips each (they snuffle seeds out of the tall
   grass anyway — offering some by hand is just good manners) and they'll

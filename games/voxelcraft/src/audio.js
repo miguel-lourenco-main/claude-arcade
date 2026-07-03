@@ -78,6 +78,23 @@ export class Sfx {
         this._noiseBurst(950, 0.03, 0.1);
         setTimeout(() => this._noiseBurst(1150, 0.03, 0.1), 90);
         break;
+      case "chirp": { // Tuftling: a bright two-note trill
+        if (!this._ensure()) break;
+        const ctx = this.ctx, now = ctx.currentTime;
+        for (const [t0, f] of [[0, 1480], [0.09, 1720]]) {
+          const osc = ctx.createOscillator();
+          const g = ctx.createGain();
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(f, now + t0);
+          osc.frequency.exponentialRampToValueAtTime(f * 1.15, now + t0 + 0.06);
+          g.gain.setValueAtTime(0.05, now + t0);
+          g.gain.exponentialRampToValueAtTime(0.001, now + t0 + 0.08);
+          osc.connect(g).connect(ctx.destination);
+          osc.start(now + t0);
+          osc.stop(now + t0 + 0.1);
+        }
+        break;
+      }
       case "rustle": // Prickleback: dry spines
         this._noiseBurst(750, 0.14, 0.07);
         break;

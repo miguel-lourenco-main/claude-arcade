@@ -236,6 +236,8 @@ const boats = new Boats(scene, {
 if (save && save.chests) world.loadChests(save.chests);
 if (save && save.kilns) world.loadKilns(save.kilns); // additive v2 field
 if (save && Array.isArray(save.boats)) boats.load(save.boats); // additive v2 field
+// additive field: tamed Tuftlings — the only creatures that persist
+if (save && Array.isArray(save.pets)) mobs.loadPets(save.pets);
 if (save && save.signs) world.loadSigns(save.signs); // additive v2 field
 // additive v2 field: ruin chunks whose loot was already dealt — must load
 // before any chunk generates, or a looted stead would re-seed its chest
@@ -1009,6 +1011,8 @@ const stopAutosave = startAutosave(() => writeSave(world, player, sky, hud, inve
   gleam: gleam.serialize(),
   // additive: the Whims in progress [[id, secondsLeft], ...]
   effects: [...player.effects].map(([id, t]) => [id, Math.round(t * 10) / 10]),
+  // additive: tamed Tuftlings [[x, y, z, hp, stay], ...]
+  pets: mobs.serializePets(),
 }));
 
 // --- held item (first-person hand) — its own scene + depth-cleared pass ------

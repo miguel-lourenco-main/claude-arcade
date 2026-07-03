@@ -6,6 +6,7 @@ import {
   AIR, BEDROCK, CHEST, WORKBENCH, KILN, BED, LADDER, DOOR, DOOR_TOP, BLAST_KEG,
   GATE, GATE_OPEN, SEED_TO_SPROUT, DIRT, GRASS, MUD, FARMLAND, LOOMSTONE,
   SLING_STONE, BOAT, WATER, FISHING_POLE, SNOW_LAYER, QUILL, ROOT_SEED,
+  SILVERFIN,
   BLOCKS, isSolid, isPlant, isFluid, isDoor, isDoorLower, isGate, isSign,
   DOOR_TOGGLE, dropFor, yawToFacing,
 } from "./blocks.js";
@@ -702,6 +703,32 @@ export class Interaction {
           if (this.onEat) this.onEat("chew");
         }
         return;
+      }
+      // the Tuftling: a Silverfin might buy its loyalty (1 in 3 — it keeps
+      // the fish either way); an empty hand toggles a tamed one between
+      // heel and stay
+      if (m && m.species === "tuftling") {
+        const held = this.hotbar.selectedId();
+        if (!m.tamed && held === SILVERFIN) {
+          if (this.canConsume(SILVERFIN)) {
+            const r = this.mobs.tame(m);
+            if (this.onHint) {
+              this.onHint(r === "tamed"
+                ? "The Tuftling decides you are its person."
+                : "The Tuftling takes the fish and remains unconvinced.", 2600);
+            }
+          }
+          return;
+        }
+        if (m.tamed && held === AIR) {
+          const mode = this.mobs.togglePet(m);
+          if (this.onHint) {
+            this.onHint(mode === "stay"
+              ? "The Tuftling settles in to wait."
+              : "The Tuftling falls in behind you.", 2200);
+          }
+          return;
+        }
       }
     }
     // a sling stone throws instead of placing — unless an interactive block

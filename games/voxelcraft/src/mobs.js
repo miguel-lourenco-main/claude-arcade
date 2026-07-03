@@ -49,6 +49,15 @@ export const SPECIES = {
     rareChance: 0.15, sound: "bellow", gleam: 8,
     inflicts: ["mirerot", 8], // its hit leaves the rot; its gland is the cure
   },
+  // the Tuftling: a small tufty burrower of the meadows, mad for Silverfin.
+  // Offer it one and it MIGHT decide you are its person (mobs.tame) — a
+  // tamed one follows, teleports after you across any distance, and harries
+  // whatever you strike. Passive, rare, and the only creature that stays.
+  tuftling: {
+    name: "Tuftling", hp: 8, speed: 3.4, behavior: "passive", habitat: "meadow",
+    cap: 1, halfW: 0.28, height: 0.5, damage: 3, attackRange: 1.2,
+    rareChance: 0.25, sound: "chirp", gleam: 2, drops: null,
+  },
   // the Peddler: a wandering trader Wanderling, hunched under an enormous
   // patchwork backpack. Day-only (gone by dusk, the way the Murkling is gone
   // by dawn), rare, passive — and it keeps a 60-second grudge if kicked
@@ -87,6 +96,7 @@ export class Mobs {
   constructor(scene) {
     this.scene = scene;
     this.mobs = [];
+    this._petTarget = null; // the mob a tamed Tuftling is harrying
     this._spawnTimer = 0;
     this.onMobHurt = null;
     this.onDrop = null;      // (x, y, z, id, n)
@@ -165,6 +175,15 @@ export class Mobs {
     const peStick = this._mat(paint(0xf65, [148, 126, 90], 10));
     // the dangling trinkets: little bright oddments on strings
     const peTrinket = this._mat(paint(0xf66, [200, 168, 84], 20));
+    // Tuftling: warm sand-rust coat, cream belly, and the famous tail tuft
+    const tuBody = this._mat(paint(0xa71, [188, 138, 86], 10));
+    const tuFace = this._mat(paint(0xa72, [188, 138, 86], 10, (ctx) => {
+      ctx.fillStyle = "#26221c";
+      ctx.fillRect(4, 6, 3, 3); ctx.fillRect(9, 6, 3, 3); // big dark eyes
+      ctx.fillStyle = "#141210";
+      ctx.fillRect(7, 10, 2, 1); // the nose
+    }));
+    const tuTuft = this._mat(paint(0xa73, [232, 214, 178], 12));
 
     return {
       snuffet: () => {
@@ -193,6 +212,36 @@ export class Mobs {
           ear.position.set(side * 0.26, 0.52, 0.5);
           ear.rotation.z = side * 0.35;
           g.add(ear);
+        }
+        return { group: g, legs };
+      },
+      tuftling: () => {
+        const g = new THREE.Group();
+        const body = box(0.44, 0.3, 0.5, tuBody);
+        body.position.y = 0.22;
+        g.add(body);
+        const headMats = [tuBody, tuBody, tuBody, tuBody, tuFace, tuBody];
+        const head = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.28, 0.24), headMats);
+        head.position.set(0, 0.34, 0.32);
+        g.add(head);
+        for (const side of [-1, 1]) {
+          const ear = box(0.06, 0.16, 0.06, tuBody);
+          ear.position.set(side * 0.1, 0.52, 0.3);
+          g.add(ear);
+        }
+        // the tuft: an oversized plume curling up over the back
+        const tuft1 = box(0.14, 0.16, 0.22, tuTuft);
+        tuft1.position.set(0, 0.34, -0.32);
+        tuft1.rotation.x = 0.5;
+        g.add(tuft1);
+        const tuft2 = box(0.18, 0.2, 0.16, tuTuft);
+        tuft2.position.set(0, 0.5, -0.42);
+        g.add(tuft2);
+        const legs = [];
+        for (const [lx, lz] of [[-0.14, 0.16], [0.14, 0.16], [-0.14, -0.16], [0.14, -0.16]]) {
+          const leg = box(0.1, 0.14, 0.1, tuBody);
+          leg.position.set(lx, 0.07, lz);
+          g.add(leg); legs.push(leg);
         }
         return { group: g, legs };
       },
@@ -347,6 +396,27 @@ export class Mobs {
     return true;
   }
 
+  // offering a Tuftling a Silverfin: one-in-three it decides you are its
+  // person. Returns "tamed" | "shy" | null (not tameable).
+  tame(m) {
+    if (m.species !== "tuftling" || m.tamed) return null;
+    if (Math.random() < 1 / 3) {
+      m.tamed = true;
+      m.mode = "follow";
+      if (this.onSound) this.onSound(m.spec.sound);
+      return "tamed";
+    }
+    if (this.onSound) this.onSound(m.spec.sound);
+    return "shy";
+  }
+
+  // follow <-> stay, toggled by an empty-hand right-click
+  togglePet(m) {
+    m.mode = m.mode === "stay" ? "follow" : "stay";
+    if (this.onSound) this.onSound(m.spec.sound);
+    return m.mode;
+  }
+
   // the nearest OTHER in-love adult snuffet within courting range
   _nearestLove(m) {
     let best = null, bestD = 8;
@@ -359,8 +429,8 @@ export class Mobs {
   }
 
   count(speciesKey) {
-    let n = 0;
-    for (const m of this.mobs) if (m.species === speciesKey) n++;
+    let n = 0; // tamed creatures don't count against the wild cap
+    for (const m of this.mobs) if (m.species === speciesKey && !m.tamed) n++;
     return n;
   }
 
@@ -394,9 +464,32 @@ export class Mobs {
       baby: false,
       growT: 0,          // seconds until a pup is grown
       sizeMul: 1,        // presentation + collision scale (pups 0.45)
+      tamed: false,      // a tamed Tuftling stays, follows, and fights
+      mode: "follow",    // tamed: "follow" | "stay"
     };
     this.mobs.push(mob);
     return mob;
+  }
+
+  // tamed companions persist (the ONLY mobs that do): [[x,y,z,hp,stay]...]
+  serializePets() {
+    const r = (v) => Math.round(v * 10) / 10;
+    return this.mobs.filter((m) => m.tamed)
+      .map((m) => [r(m.x), r(m.y), r(m.z), m.hp, m.mode === "stay" ? 1 : 0]);
+  }
+
+  loadPets(arr) {
+    if (!Array.isArray(arr)) return;
+    for (const e of arr) {
+      if (!Array.isArray(e) || e.length < 4) continue;
+      const [x, y, z, hp, stay] = e;
+      if (![x, y, z].every(Number.isFinite) || !Number.isFinite(hp)) continue;
+      const m = this.spawnAt(x, y, z, "tuftling");
+      if (!m) continue;
+      m.tamed = true;
+      m.hp = Math.max(1, Math.min(m.spec.hp, hp));
+      m.mode = stay ? "stay" : "follow";
+    }
   }
 
   // --- spawn director ---------------------------------------------------------
@@ -450,7 +543,8 @@ export class Mobs {
 
     if (!night && topId === GRASS) {
       candidates.push("snuffet");
-      candidates.push("peddler"); // rare: rareChance thins this out below
+      candidates.push("peddler");  // rare: rareChance thins this out below
+      candidates.push("tuftling"); // rare too, and only one wild at a time
     }
     if (night && isSolid(topId)) candidates.push("murkling");
     if (biome === "desert" && topId === SAND) candidates.push("prickleback");
@@ -510,7 +604,7 @@ export class Mobs {
       // NOT wake up because someone walked overhead
       const dist3 = Math.hypot(m.x - player.pos.x, m.y - player.pos.y, m.z - player.pos.z);
 
-      if (distToPlayer > DESPAWN_DIST) { this._remove(i); continue; }
+      if (distToPlayer > DESPAWN_DIST && !m.tamed) { this._remove(i); continue; }
       // death pays out BEFORE the dawn cleanup — a kill landed on the
       // dawn-crossing frame still drops its loot
       if (m.hp <= 0) {
@@ -555,7 +649,9 @@ export class Mobs {
       }
 
       let targetSpeed = 0;
-      if (chasing) {
+      if (m.tamed) {
+        targetSpeed = this._petBehavior(m, player);
+      } else if (chasing) {
         m.yaw = Math.atan2(player.pos.x - m.x, player.pos.z - m.z);
         targetSpeed = spec.speed;
         // melee — only with clear line of sight (no biting through walls)
@@ -689,6 +785,43 @@ export class Mobs {
     }
   }
 
+  // a tamed Tuftling's turn: harry the player's marked target if one is
+  // close and alive, else keep to heel (or stay put). Beyond 24 blocks it
+  // simply pops to the player's side — hand-feet don't pathfind.
+  _petBehavior(m, player) {
+    const t = this._petTarget;
+    if (t && t.hp > 0 && this.mobs.includes(t)) {
+      const d = Math.hypot(t.x - m.x, t.z - m.z);
+      if (d > 24) {
+        this._petTarget = null;
+      } else {
+        m.yaw = Math.atan2(t.x - m.x, t.z - m.z);
+        if (d < m.spec.attackRange && m.attackCd <= 0 && Math.abs(t.y - m.y) < 2) {
+          m.attackCd = 0.9;
+          this.strike(t, m.spec.damage, { x: m.x, z: m.z }, { byPet: true });
+          if (this.onMobHurt) this.onMobHurt(false);
+        }
+        return m.spec.speed;
+      }
+    } else if (t) {
+      this._petTarget = null;
+    }
+    if (m.mode === "stay") return 0;
+    const d = Math.hypot(player.pos.x - m.x, player.pos.z - m.z);
+    if (d > 24) {
+      m.x = player.pos.x + (Math.random() - 0.5) * 1.6;
+      m.z = player.pos.z + (Math.random() - 0.5) * 1.6;
+      m.y = player.pos.y + 0.5;
+      m.vx = m.vy = m.vz = 0;
+      return 0;
+    }
+    if (d > 3) {
+      m.yaw = Math.atan2(player.pos.x - m.x, player.pos.z - m.z);
+      return d > 8 ? m.spec.speed : m.spec.speed * 0.7;
+    }
+    return 0;
+  }
+
   // sampled visibility check between the mob's chest and the player's torso
   _lineOfSight(world, m, player) {
     const x0 = m.x, y0 = m.y + m.spec.height * 0.6, z0 = m.z;
@@ -789,6 +922,9 @@ export class Mobs {
   // land a hit on a mob: damage, knockback away from fromPos, and the full
   // reaction suite. Shared by punches and thrown sling-stones.
   strike(m, dmg, fromPos, opts = {}) {
+    // any hit the PLAYER lands marks the target for a following Tuftling
+    // (the pet's own strikes pass byPet so it never re-marks or un-marks)
+    if (!opts.byPet && !m.tamed && !m.spec.trades) this._petTarget = m;
     m.hp -= dmg;
     m.hurtT = 0.3;
     if (opts.crit) m.critT = 0.22; // the burst cue: a quick scale-pop
