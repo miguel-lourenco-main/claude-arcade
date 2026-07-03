@@ -392,10 +392,13 @@ export class Player {
       // alike — the slide), a Snowdrift drags the stride to 0.9x
       let traction = 1, stride = 1;
       if (this.onGround) {
-        const below = this.world.getBlock(
-          Math.floor(this.pos.x), Math.floor(this.pos.y - 0.05), Math.floor(this.pos.z));
+        const fx = Math.floor(this.pos.x), fz = Math.floor(this.pos.z);
+        const below = this.world.getBlock(fx, Math.floor(this.pos.y - 0.05), fz);
+        // the feet cell too: standing ON a drift puts the feet INSIDE its
+        // cell (y = cell + 0.12), so the below-probe alone can miss it
+        const feet = this.world.getBlock(fx, Math.floor(this.pos.y + 0.05), fz);
         if (below === ICE) traction = 0.5;
-        else if (below === SNOW_LAYER) stride = 0.9;
+        else if (below === SNOW_LAYER || feet === SNOW_LAYER) stride = 0.9;
       }
       const accel = (this.onGround ? (hasInput ? ACCEL_GROUND : FRICTION_GROUND) * traction
         : ACCEL_AIR) * dt;
@@ -609,6 +612,12 @@ export class Player {
     const y0 = Math.floor(minY) - 1, y1 = Math.floor(maxY - eps);
     const z0 = Math.floor(minZ), z1 = Math.floor(maxZ - eps);
 
+    // Downward Y sweeps clamp to the HIGHEST overlapped block top, not the
+    // first cell found (the scan runs bottom-up): a fast fall can cross a
+    // Snowdrift's 0.12 shell AND its support block in one substep, and
+    // clamping to the support would leave the feet embedded in the drift.
+    let landTop = -Infinity;
+
     for (let by = y0; by <= y1; by++) {
       for (let bz = z0; bz <= z1; bz++) {
         for (let bx = x0; bx <= x1; bx++) {
@@ -640,15 +649,22 @@ export class Player {
           } else {
             if (disp > 0) {
               p.y = by - PLAYER_HEIGHT - eps;
+              this.vel.y = 0;
             } else {
-              p.y = top + eps; // stand ON the block's real top (slab: +0.5)
-              this.onGround = true;
+              // don't resolve yet — a taller partial block (a drift's shell
+              // above its support) may still be found later in the scan
+              landTop = Math.max(landTop, top);
+              continue;
             }
-            this.vel.y = 0;
           }
           return;
         }
       }
+    }
+    if (landTop > -Infinity) {
+      p.y = landTop + eps; // stand ON the block's real top (slab: +0.5, drift: +0.12)
+      this.onGround = true;
+      this.vel.y = 0;
     }
   }
 

@@ -90,7 +90,19 @@ export class ItemDrops {
         const yDef = BLOCKS[world.getBlock(Math.floor(d.x), yCell, Math.floor(d.z))];
         // partial-height blocks (slabs) only catch below their actual top
         if (yDef.solid && sampleY < yCell + yDef.colHeight) {
-          if (d.vy < 0) { d.y = yCell + yDef.colHeight + 0.12; grounded = true; }
+          if (d.vy < 0) {
+            let top = yCell + yDef.colHeight;
+            // a fast substep can cross a low shell (Snowdrift 0.12, slab 0.5)
+            // AND its support in one go — landing on the support would embed
+            // the drop in the shell above, so rest on the shell's top instead
+            const aDef = BLOCKS[world.getBlock(Math.floor(d.x), yCell + 1, Math.floor(d.z))];
+            if (aDef.solid && aDef.colHeight <= 0.5 && top > yCell + 1 - 0.001 &&
+                top < yCell + 1 + aDef.colHeight) {
+              top = yCell + 1 + aDef.colHeight;
+            }
+            d.y = top + 0.12;
+            grounded = true;
+          }
           d.vy = 0;
         } else {
           d.y = ny;

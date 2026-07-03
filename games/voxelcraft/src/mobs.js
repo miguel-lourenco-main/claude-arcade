@@ -632,6 +632,10 @@ export class Mobs {
     // reach into the cell above, so a hopping mob at +1.3 still hits them
     const y0 = Math.floor(m.y) - 1, y1 = Math.floor(m.y + hh - eps);
     const z0 = Math.floor(m.z - hw), z1 = Math.floor(m.z + hw - eps);
+    // downward Y sweeps clamp to the HIGHEST overlapped block top (a fast
+    // fall can cross a Snowdrift's 0.12 shell and its support in one substep;
+    // the bottom-up scan would otherwise embed the mob in the drift)
+    let landTop = -Infinity;
     for (let by = y0; by <= y1; by++) for (let bz = z0; bz <= z1; bz++) for (let bx = x0; bx <= x1; bx++) {
       const bDef = BLOCKS[world.getBlock(bx, by, bz)];
       if (!bDef.solid) continue;
@@ -645,11 +649,15 @@ export class Mobs {
         m.z = disp > 0 ? bz - hw - eps : bz + 1 + hw + eps;
         m.vz = 0; m.hitWall = true;
       } else {
-        if (disp > 0) m.y = by - hh - eps;
-        else { m.y = top + eps; m.onGround = true; }
-        m.vy = 0;
+        if (disp > 0) { m.y = by - hh - eps; m.vy = 0; }
+        else { landTop = Math.max(landTop, top); continue; }
       }
       return;
+    }
+    if (landTop > -Infinity) {
+      m.y = landTop + eps;
+      m.onGround = true;
+      m.vy = 0;
     }
   }
 
