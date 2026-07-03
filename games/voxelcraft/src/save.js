@@ -1,6 +1,8 @@
 // World persistence: seed, player state, time of day, and the block-edit
 // overlay, saved to localStorage.
 
+import { stackToSave } from "./inventory.js";
+
 const KEY = "voxelcraft.save.v1";
 
 export function loadSave() {
@@ -75,10 +77,9 @@ export function writeSave(world, player, sky, hud, inventory, extra = {}) {
       wear: extra.wear || undefined,
       // additive: the stack held on the drag cursor mid-window — it lives in
       // no slot, so without this field a save written mid-drag deletes it
+      // ([id, count, dur?, mod?] like every other stack entry)
       cursor: hud.slotUI && hud.slotUI.cursor
-        ? (hud.slotUI.cursor.dur !== undefined
-          ? [hud.slotUI.cursor.id, hud.slotUI.cursor.count, hud.slotUI.cursor.dur]
-          : [hud.slotUI.cursor.id, hud.slotUI.cursor.count])
+        ? stackToSave(hud.slotUI.cursor)
         : undefined,
       // additive: stacks awaiting satchel room (v1 migration overflow) —
       // persisted until drained so a reload can never destroy them

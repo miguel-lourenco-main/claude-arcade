@@ -140,6 +140,9 @@ export const TILE = {
   SUNWISP_BROTH: 115,
   KELP_GLAND: 116,
   KELPSALVE: 117,
+  // the Loomstone: the basin top and the pearl-seamed sides
+  LOOMSTONE_TOP: 118,
+  LOOMSTONE_SIDE: 119,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -1351,6 +1354,41 @@ painters[TILE.KELPSALVE] = (p) => {
     p.px(x, 7, 108 + d, 176 + d, 132 + d); // the salve surface
   }
   p.px(6, 7, 168, 220, 184); // the finger-wipe shine
+};
+
+painters[TILE.LOOMSTONE_TOP] = (p) => {
+  // the basin: worked stone rim around a pooled-light hollow, with four
+  // thread-guide notches — where the gleam gets woven through
+  p.noiseFill([124, 126, 134], 8);
+  for (let y = 3; y <= 12; y++) {
+    for (let x = 3; x <= 12; x++) {
+      const rim = x === 3 || x === 12 || y === 3 || y === 12;
+      const d = (p.rand() * 2 - 1) * 10;
+      if (rim) p.px(x, y, 96 + d, 98 + d, 110 + d);
+      else {
+        // the pooled gleam: pale nacre-green, brighter at the center
+        const cd = Math.abs(x - 7.5) + Math.abs(y - 7.5);
+        const b = 46 - cd * 6;
+        p.px(x, y, 176 + b + d, 214 + b + d, 168 + b + d);
+      }
+    }
+  }
+  // thread-guide notches at the cardinal rim points
+  p.px(7, 2, 210, 200, 232); p.px(8, 2, 210, 200, 232);
+  p.px(7, 13, 210, 200, 232); p.px(8, 13, 210, 200, 232);
+  p.px(2, 7, 210, 200, 232); p.px(2, 8, 210, 200, 232);
+  p.px(13, 7, 210, 200, 232); p.px(13, 8, 210, 200, 232);
+};
+painters[TILE.LOOMSTONE_SIDE] = (p) => {
+  // worked stone with a pearl seam glowing through the mortar line
+  p.noiseFill([116, 118, 128], 9);
+  for (let x = 0; x < TILE_PX; x++) {
+    const d = (p.rand() * 2 - 1) * 12;
+    p.px(x, 5, 196 + d, 192 + d, 226 + d); // the nacre seam
+    if (p.rand() < 0.4) p.px(x, 6, 156, 154, 186);
+  }
+  p.speckle(8, [88, 90, 102], 8);
+  p.px(4, 5, 240, 238, 255); p.px(11, 5, 240, 238, 255); // seam glints
 };
 
 painters[TILE.FARMLAND_TOP] = (p) => {

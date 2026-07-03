@@ -29,13 +29,36 @@ export function validDur(id, dur) {
   return Math.min(dur, maxDur);
 }
 
+// the validated thread (loom.js `mod`) for a stack of this id: a short
+// string on a tool or an armor piece, else undefined. Whether the string
+// names a real thread is the loom's business — an unknown mod is inert,
+// never destructive.
+export function validMod(id, mod) {
+  const b = BLOCKS[id];
+  if (!b || (!b.tool && !b.armor)) return undefined;
+  if (typeof mod !== "string" || mod.length === 0 || mod.length > 16) return undefined;
+  return mod;
+}
+
 // canonical stack copy: clamps count to the per-id ceiling and carries a
-// validated dur along — every slot write funnels through this
-export function makeStack(id, count, dur) {
+// validated dur + thread along — every slot write funnels through this
+export function makeStack(id, count, dur, mod) {
   const s = { id, count: Math.min(maxStackFor(id), count) };
   const d = validDur(id, dur);
   if (d !== undefined) s.dur = d;
+  const m = validMod(id, mod);
+  if (m !== undefined) s.mod = m;
   return s;
+}
+
+// save entry for a stack: [id, count], +dur as the 3rd element, +mod as the
+// 4th (dur pads to 0 when absent so the mod keeps its seat). Shared by the
+// inventory, the wear column, chests/kilns (world.js), and the drag cursor.
+export function stackToSave(s) {
+  if (!s) return 0;
+  if (s.mod !== undefined) return [s.id, s.count, s.dur ?? 0, s.mod];
+  if (s.dur !== undefined) return [s.id, s.count, s.dur];
+  return [s.id, s.count];
 }
 
 function validStack(s) {
@@ -51,14 +74,15 @@ export class Inventory {
   get(i) { return this.slots[i] || null; }
 
   set(i, stack) {
-    this.slots[i] = validStack(stack) ? makeStack(stack.id, stack.count, stack.dur) : null;
+    this.slots[i] = validStack(stack)
+      ? makeStack(stack.id, stack.count, stack.dur, stack.mod) : null;
   }
 
   // Add n of id: merge into existing stacks first, then fill empty slots
   // (hotbar first, then main). Returns the count that did NOT fit.
-  // `dur` rides along for tools (a picked-up tool keeps its wear); tools
-  // never merge — their per-id ceiling of 1 leaves no room.
-  add(id, n, dur) {
+  // `dur`/`mod` ride along for tools (a picked-up tool keeps its wear and
+  // its thread); tools never merge — their per-id ceiling of 1 leaves no room.
+  add(id, n, dur, mod) {
     if (!BLOCKS[id] || id === AIR || n <= 0) return 0;
     const max = maxStackFor(id);
     let left = n;
@@ -73,7 +97,7 @@ export class Inventory {
     for (let i = 0; i < INV_SIZE && left > 0; i++) {
       if (!this.slots[i]) {
         const take = Math.min(max, left);
-        this.slots[i] = makeStack(id, take, dur);
+        this.slots[i] = makeStack(id, take, dur, mod);
         left -= take;
       }
     }
@@ -123,9 +147,9 @@ export class Inventory {
   }
 
   serialize() {
-    // additive v2 shape: tools with wear save a third element [id, count, dur]
-    return this.slots.map((s) =>
-      (s ? (s.dur !== undefined ? [s.id, s.count, s.dur] : [s.id, s.count]) : 0));
+    // additive shape: +dur as the 3rd element, +thread (mod) as the 4th —
+    // older loaders simply ignore the extras
+    return this.slots.map(stackToSave);
   }
 
   load(arr) {
@@ -135,7 +159,7 @@ export class Inventory {
       const e = arr[i];
       if (!Array.isArray(e)) continue;
       const stack = { id: e[0], count: e[1] };
-      if (validStack(stack)) this.slots[i] = makeStack(e[0], e[1], e[2]);
+      if (validStack(stack)) this.slots[i] = makeStack(e[0], e[1], e[2], e[3]);
     }
   }
 

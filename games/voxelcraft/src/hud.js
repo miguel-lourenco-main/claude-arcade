@@ -10,6 +10,7 @@ import { ATLAS_TILES, TILE_PX } from "./textures.js";
 import { RECIPES, BASIC_RECIPES, canCraft } from "./craft.js";
 import { canAfford } from "./trade.js";
 import { SMELTS, FUEL_SECONDS, SMELT_SECONDS } from "./kiln.js";
+import { threadName } from "./loom.js";
 import { SlotUI, invRegion, arrayRegion, paletteRegion, slotRegion } from "./slotui.js";
 
 const ICON = 40;
@@ -231,6 +232,8 @@ export class Hud {
     this.tradeOpen = false;
     this._tradeOffers = null; // the day's offers while the window is open
     this._onTrade = null;     // (offer) => bool: executed?
+    this.loomOpen = false;
+    this._loom = null;        // main.js's loom adapter while the window is open
     this.paused = true; // the boot overlay is showing
     this.gameMode = "creative";
     this._lastHealth = -1;
@@ -561,7 +564,11 @@ export class Hud {
     this.selected = ((i % 9) + 9) % 9;
     this.refreshHotbarRow();
     const s = this.inventory.get(this.selected);
-    this._announce(s ? BLOCKS[s.id].name : "Bare foot");
+    // a threaded tool announces its thread with its name
+    this._announce(s
+      ? BLOCKS[s.id].name + (threadName(s) ? ` — ${threadName(s)}` : "")
+      : "Bare foot");
+    if (this.loomOpen) this._renderLoomList(); // the basin follows the belt
   }
 
   scroll(delta) { this.select(this.selected + (delta > 0 ? 1 : -1)); }
@@ -879,6 +886,66 @@ export class Hud {
     }
   }
 
+  // the Loomstone window (trade-window idiom): rows are the threads that
+  // could sit in the SELECTED hotbar stack. `loom` is built by main.js:
+  // { describeTarget(), rows(), weave(key) } — rows() re-derives state so
+  // selection changes and successful weaves just re-render.
+  openLoom(loom) {
+    this.loomOpen = true;
+    this._loom = loom;
+    const { hotbar, main } = this._invRegions();
+    this.slotUI.open([
+      { region: main, gridEl: document.getElementById("loom-main-grid") },
+      { region: hotbar, gridEl: document.getElementById("loom-hotbar-grid") },
+    ], { main: [hotbar], hotbar: [main] });
+    this._renderLoomList();
+    document.getElementById("loom-ui").classList.remove("hidden");
+    document.exitPointerLock();
+  }
+
+  closeLoom() {
+    if (!this.loomOpen) return;
+    this.loomOpen = false;
+    this._loom = null;
+    this.slotUI.close();
+    document.getElementById("loom-ui").classList.add("hidden");
+  }
+
+  _renderLoomList() {
+    if (!this._loom) return;
+    document.getElementById("loom-target").textContent = this._loom.describeTarget();
+    const list = document.getElementById("loom-list");
+    list.innerHTML = "";
+    const rows = this._loom.rows();
+    if (rows.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "hint";
+      empty.textContent = "The basin waits. Select a tool or a worn piece on your belt.";
+      list.appendChild(empty);
+      return;
+    }
+    for (const r of rows) {
+      const row = document.createElement("div");
+      row.className = "craft-row" + (r.ok ? "" : " uncraftable");
+      const label = document.createElement("span");
+      label.innerHTML = `<b>${r.name}</b><small>${r.blurb} — ` +
+        `<span class="thread-cost">${r.cost}</span>` +
+        `${r.ok ? "" : ` (${r.why})`}</small>`;
+      row.appendChild(label);
+      if (r.ok) {
+        row.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          if (this._loom && this._loom.weave(r.key)) {
+            this._renderLoomList();
+            this.slotUI.renderAll();
+            this.refreshHotbarRow();
+          }
+        });
+      }
+      list.appendChild(row);
+    }
+  }
+
   // kiln window: input over fuel, smelt-progress arrow, take-only output,
   // plus the usual satchel + belt. `kiln` is the live per-block state object
   // (world.kilns entry) — the tick in main.js mutates it while we're open.
@@ -933,7 +1000,7 @@ export class Hud {
 
   anyWindowOpen() {
     return this.pickerOpen || this.chestOpen || this.benchOpen ||
-      this.kilnOpen || this.signOpen || this.tradeOpen;
+      this.kilnOpen || this.signOpen || this.tradeOpen || this.loomOpen;
   }
 
   closeAllWindows() {
@@ -942,6 +1009,7 @@ export class Hud {
     this.closeBench();
     this.closeKiln();
     this.closeTrade();
+    this.closeLoom();
     this.closeSign(); // commits — a defensive close never eats the writing
   }
 

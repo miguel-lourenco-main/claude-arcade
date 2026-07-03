@@ -1,19 +1,22 @@
 // Chunked voxel world: storage, block get/set, edit overlay for persistence.
 
 import { AIR, BLOCKS } from "./blocks.js";
-import { validDur } from "./inventory.js";
+import { validDur, validMod, stackToSave } from "./inventory.js";
 
-// container slot -> save entry: tools with wear keep a third element
-// [id, count, dur] (additive — older loaders ignore it)
-const saveSlot = (s) => (s ? (s.dur !== undefined ? [s.id, s.count, s.dur] : [s.id, s.count]) : 0);
-// save entry -> container slot, validating the optional dur
+// container slot -> save entry: tools keep wear as a third element and a
+// woven thread as a fourth [id, count, dur, mod] (additive — older loaders
+// ignore the extras)
+const saveSlot = stackToSave;
+// save entry -> container slot, validating the optional dur + thread
 function loadSlot(e) {
   if (!Array.isArray(e)) return null;
-  const [id, n, dur] = e;
+  const [id, n, dur, mod] = e;
   if (!Number.isInteger(id) || !BLOCKS[id] || !Number.isInteger(n) || n <= 0) return null;
   const slot = { id, count: Math.min(64, n) };
   const d = validDur(id, dur);
   if (d !== undefined) slot.dur = d;
+  const m = validMod(id, mod);
+  if (m !== undefined) slot.mod = m;
   return slot;
 }
 

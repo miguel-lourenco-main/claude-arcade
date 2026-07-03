@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { buildAtlas, buildWaterTexture, buildCrackTextures } from "./textures.js";
 import { BLOCKS, AIR, WEAR_KINDS, armorProtection } from "./blocks.js";
 import { World, CHUNK, HEIGHT } from "./world.js";
-import { Inventory, makeStack } from "./inventory.js";
+import { Inventory, makeStack, stackToSave } from "./inventory.js";
 import { ItemDrops } from "./entities.js";
 import { PrimedKegs } from "./explosives.js";
 import { SlingStones } from "./projectiles.js";
@@ -18,6 +18,7 @@ import { craft } from "./craft.js";
 import { dailyOffers, executeTrade } from "./trade.js";
 import { makeKiln, tickKilns } from "./kiln.js";
 import { Gleam } from "./gleam.js";
+import { THREADS, threadsFor, weaveBlocker, weave, threadName } from "./loom.js";
 import {
   PlayerModel, buildHeldFoot, buildHeldTool, buildHeldCompass, buildHeldClock,
   setHeldSkinLight,
@@ -140,17 +141,21 @@ if (save) {
     // additive field: pending overflow stacks from an earlier session
     if (Array.isArray(save.overflowStacks)) {
       for (const e of save.overflowStacks) {
-        // e[2]: additive tool wear (validated on the way into a slot)
-        if (validSaveStack(e)) pendingOverflow.push({ id: e[0], count: e[1], dur: e[2] });
+        // e[2]/e[3]: additive tool wear + thread (validated entering a slot)
+        if (validSaveStack(e)) {
+          pendingOverflow.push({ id: e[0], count: e[1], dur: e[2], mod: e[3] });
+        }
       }
     }
     // additive field: the stack that was held on the drag cursor when the
     // save was written — return it to the satchel, or queue it if full
     if (validSaveStack(save.cursor)) {
       const count = Math.min(64, save.cursor[1]);
-      const left = inventory.add(save.cursor[0], count, save.cursor[2]);
+      const left = inventory.add(save.cursor[0], count, save.cursor[2], save.cursor[3]);
       if (left > 0) {
-        pendingOverflow.push({ id: save.cursor[0], count: left, dur: save.cursor[2] });
+        pendingOverflow.push({
+          id: save.cursor[0], count: left, dur: save.cursor[2], mod: save.cursor[3],
+        });
       }
     }
   } else {
@@ -173,7 +178,7 @@ if (save && Array.isArray(save.wear)) {
     if (!validSaveStack(e)) continue;
     const a = BLOCKS[e[0]].armor;
     if (!a || a.kind !== WEAR_KINDS[i]) continue; // only the matching kind
-    wearSlots[i] = makeStack(e[0], 1, e[2]);
+    wearSlots[i] = makeStack(e[0], 1, e[2], e[3]);
   }
 }
 player.wear = wearSlots;
@@ -210,7 +215,7 @@ function drainOverflow() {
   if (pendingOverflow.length === 0) return;
   let changed = false;
   pendingOverflow = pendingOverflow.filter((stack) => {
-    const left = inventory.add(stack.id, stack.count, stack.dur);
+    const left = inventory.add(stack.id, stack.count, stack.dur, stack.mod);
     if (left !== stack.count) changed = true;
     stack.count = left;
     return left > 0;
@@ -597,7 +602,10 @@ const hud = new Hud(atlas.canvas, {
     }
   },
   onSpillCursor: (stack) => spillStack(stack),
-  onSlotsChanged: () => { sfx.click(); drainOverflow(); refreshArmor(); },
+  onSlotsChanged: () => {
+    sfx.click(); drainOverflow(); refreshArmor();
+    if (hud.loomOpen) hud._renderLoomList();
+  },
   inventory,
   wearSlots,
   playerViewer: new PlayerViewer(document.getElementById("player-view"), 1337),
@@ -622,7 +630,8 @@ function spillStack(stack) {
   drops.spawn(
     player.pos.x + dir.x * 0.6, player.eyeY - 0.2, player.pos.z + dir.z * 0.6,
     stack.id, stack.count,
-    { vel: { x: dir.x * 4, y: 2, z: dir.z * 4 }, pickupDelay: 1.2, dur: stack.dur });
+    { vel: { x: dir.x * 4, y: 2, z: dir.z * 4 }, pickupDelay: 1.2,
+      dur: stack.dur, mod: stack.mod });
 }
 
 player.onDamage = () => { hud.flashDamage(); sfx.hurt(); };
@@ -747,6 +756,8 @@ const interaction = new Interaction(world, player, scene, hud, {
     const s = inventory.get(hud.selected);
     const def = s && BLOCKS[s.id];
     if (!def || !def.tool) return;
+    // an Oak Thread woven through the haft: wear lands half as often
+    if (s.mod === "oak" && Math.random() < 0.5) return;
     const left = (Number.isInteger(s.dur) ? s.dur : def.tool.maxDur) - 1;
     if (left <= 0) {
       inventory.set(hud.selected, null);
@@ -805,12 +816,42 @@ const interaction = new Interaction(world, player, scene, hud, {
     if (!kiln) { kiln = makeKiln(); world.kilns.set(key, kiln); }
     hud.openKiln(kiln);
   },
+  // right-click a Loomstone: the weaving window. The target is always the
+  // SELECTED hotbar stack — the basin follows the belt.
+  onOpenLoom: () => {
+    hud.openLoom({
+      describeTarget: () => {
+        const s = inventory.get(hud.selected);
+        if (!s) return "Nothing selected";
+        const t = threadName(s);
+        return `${BLOCKS[s.id].name}${t ? ` — ${t}` : ""}  ·  ${gleam.level} jar${gleam.level === 1 ? "" : "s"} of gleam`;
+      },
+      rows: () => {
+        const s = inventory.get(hud.selected);
+        if (!s || !BLOCKS[s.id] || (!BLOCKS[s.id].tool && !BLOCKS[s.id].armor)) return [];
+        return threadsFor(BLOCKS[s.id]).map((key) => {
+          const t = THREADS[key];
+          const why = weaveBlocker(key, s, gleam, inventory);
+          const cost = [`${t.levels} jars`,
+            ...t.mats.map(([id, n]) => `${n}× ${BLOCKS[id].name}`)].join(" + ");
+          return { key, name: t.name, blurb: t.blurb, cost, ok: why === "", why };
+        });
+      },
+      weave: (key) => {
+        const s = inventory.get(hud.selected);
+        if (!s || !weave(key, s, gleam, inventory)) return false;
+        sfx.craft();
+        hud.announce(`The ${THREADS[key].name} takes.`, 2600);
+        return true;
+      },
+    });
+  },
   onKilnBreak: (x, y, z) => {
     const key = `${x},${y},${z}`;
     const kiln = world.kilns.get(key);
     if (kiln) {
       for (const s of kiln.slots) {
-        if (s) drops.spawn(x + 0.5, y + 0.6, z + 0.5, s.id, s.count, { dur: s.dur });
+        if (s) drops.spawn(x + 0.5, y + 0.6, z + 0.5, s.id, s.count, { dur: s.dur, mod: s.mod });
       }
       world.kilns.delete(key);
     }
@@ -821,7 +862,7 @@ const interaction = new Interaction(world, player, scene, hud, {
     const store = world.chests.get(key);
     if (store) {
       for (const s of store) {
-        if (s) drops.spawn(x + 0.5, y + 0.6, z + 0.5, s.id, s.count, { dur: s.dur });
+        if (s) drops.spawn(x + 0.5, y + 0.6, z + 0.5, s.id, s.count, { dur: s.dur, mod: s.mod });
       }
       world.chests.delete(key);
     }
@@ -923,11 +964,9 @@ const stopAutosave = startAutosave(() => writeSave(world, player, sky, hud, inve
     const stage = stages ? Math.max(0, stages.indexOf(id)) : 0;
     return [x, y, z, stage, Math.max(1, due - growthSeconds)];
   }),
-  overflowStacks: pendingOverflow.map((s) =>
-    (s.dur !== undefined ? [s.id, s.count, s.dur] : [s.id, s.count])),
-  // additive: the 4 wear slots incl. dur ([id, count, dur?] or 0 each)
-  wear: wearSlots.map((s) =>
-    (s ? (s.dur !== undefined ? [s.id, s.count, s.dur] : [s.id, s.count]) : 0)),
+  overflowStacks: pendingOverflow.map(stackToSave),
+  // additive: the 4 wear slots incl. dur + thread ([id, count, dur?, mod?] or 0)
+  wear: wearSlots.map(stackToSave),
   boats: boats.serialize(), // additive: deployed skiffs [[x,y,z,yaw]...]
   weather: [
     sky.weatherPhase,
@@ -1204,8 +1243,9 @@ document.addEventListener("keydown", (e) => {
   if (e.code === "KeyQ" && inputActive() && !hud.anyWindowOpen()) {
     const s = inventory.get(hud.selected);
     const dur = s ? s.dur : undefined;
+    const mod = s ? s.mod : undefined;
     if (s && inventory.takeFromSlot(hud.selected, 1)) {
-      spillStack({ id: s.id, count: 1, dur });
+      spillStack({ id: s.id, count: 1, dur, mod });
       hud.refreshHotbarRow();
     }
     return;
@@ -1304,8 +1344,8 @@ function tick(now) {
       player.update(FIXED_DT);
       accumulator -= FIXED_DT;
     }
-    drops.update(frameDt, world, player, (id, qty, dur) => {
-      const leftover = inventory.add(id, qty, dur);
+    drops.update(frameDt, world, player, (id, qty, dur, mod) => {
+      const leftover = inventory.add(id, qty, dur, mod);
       const accepted = qty - leftover;
       if (accepted > 0) {
         sfx.pickup();

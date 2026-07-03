@@ -199,6 +199,8 @@ export class Player {
       const s = wear[i];
       const a = s && BLOCKS[s.id] ? BLOCKS[s.id].armor : null;
       if (!a) continue;
+      // an Oak Thread woven through the piece: wear lands half as often
+      if (s.mod === "oak" && Math.random() < 0.5) continue;
       const left = (Number.isInteger(s.dur) ? s.dur : a.maxDur) - 1;
       if (left <= 0) {
         wear[i] = null;

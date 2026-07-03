@@ -4,7 +4,7 @@
 import * as THREE from "three";
 import {
   AIR, BEDROCK, CHEST, WORKBENCH, KILN, BED, LADDER, DOOR, DOOR_TOP, BLAST_KEG,
-  GATE, GATE_OPEN, SEED_TO_SPROUT, DIRT, GRASS, MUD, FARMLAND,
+  GATE, GATE_OPEN, SEED_TO_SPROUT, DIRT, GRASS, MUD, FARMLAND, LOOMSTONE,
   SLING_STONE, BOAT, WATER, FISHING_POLE, SNOW_LAYER,
   BLOCKS, isSolid, isPlant, isFluid, isDoor, isDoorLower, isGate, isSign,
   DOOR_TOGGLE, dropFor, yawToFacing,
@@ -94,6 +94,7 @@ export class Interaction {
     this.onOpenChest = opts.onOpenChest;   // (x, y, z) => open chest UI (survival)
     this.onOpenBench = opts.onOpenBench;   // () => open workbench UI (survival)
     this.onOpenKiln = opts.onOpenKiln;     // (x, y, z) => open kiln UI (survival)
+    this.onOpenLoom = opts.onOpenLoom;     // () => open Loomstone UI (survival)
     this.onSleep = opts.onSleep;           // (x, y, z) => Moss Cot rest (survival)
     this.onOpenSign = opts.onOpenSign;     // (x, y, z) => Notice Post write window
     this.onPrimeKeg = opts.onPrimeKeg;     // (x, y, z) => light a Blast Keg
@@ -235,7 +236,8 @@ export class Interaction {
     const t = this.target;
     return !!t &&
       (t.id === CHEST || t.id === WORKBENCH || t.id === KILN || t.id === BED ||
-       t.id === BLAST_KEG || isDoor(t.id) || isGate(t.id) || isSign(t.id)) &&
+       t.id === LOOMSTONE || t.id === BLAST_KEG ||
+       isDoor(t.id) || isGate(t.id) || isSign(t.id)) &&
       !this.player._sneaking;
   }
 
@@ -319,9 +321,15 @@ export class Interaction {
     const hardness = BLOCKS[t.id].hardness;
     // the right tool for the block multiplies dig speed by its tier rate
     // (plank 2x, stone 4x, iron 6x); wrong or no tool digs at the bare-hand
-    // rate — hardness itself is unchanged, so pre-tool progression holds
+    // rate — hardness itself is unchanged, so pre-tool progression holds.
+    // A Flint Thread quickens a MATCHED tool by half again.
     const tool = this._heldTool();
-    const rate = tool && tool.kind === BLOCKS[t.id].toolKind ? tool.speed : 1;
+    let rate = 1;
+    if (tool && tool.kind === BLOCKS[t.id].toolKind) {
+      rate = tool.speed;
+      const s = this.hotbar.selectedStack ? this.hotbar.selectedStack() : null;
+      if (s && s.mod === "flint") rate *= 1.5;
+    }
     this._mineProgress += dt * rate;
 
     this._hitSoundTimer -= dt;
@@ -404,8 +412,13 @@ export class Interaction {
       const lim = block ? block.dist : reach;
       // a shiv in hand raises the kick from 1 to its tier's damage; other
       // tools swing like a bare foot. Any landed tool hit costs 1 use.
+      // A Keen Thread woven through the blade adds its bite on top.
       const tool = this._heldTool();
       let dmg = tool && tool.kind === "blade" ? tool.damage : 1;
+      if (tool && tool.kind === "blade") {
+        const s = this.hotbar.selectedStack ? this.hotbar.selectedStack() : null;
+        if (s && s.mod === "keen") dmg += 2;
+      }
       // falling crit: airborne AND dropping — a hit that carries the whole
       // Wanderling behind it lands half again as hard (fists and blades
       // alike; ladders, water, and wings don't count as falling)
@@ -666,6 +679,10 @@ export class Interaction {
     }
     if (t.id === KILN && this.player.mode === "survival" && !this.player._sneaking && this.onOpenKiln) {
       this.onOpenKiln(t.x, t.y, t.z);
+      return;
+    }
+    if (t.id === LOOMSTONE && this.player.mode === "survival" && !this.player._sneaking && this.onOpenLoom) {
+      this.onOpenLoom();
       return;
     }
     if (t.id === BED && this.player.mode === "survival" && !this.player._sneaking && this.onSleep) {

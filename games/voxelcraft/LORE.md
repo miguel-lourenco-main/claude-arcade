@@ -132,6 +132,14 @@ specific item vocabulary.
   the Notice Post still says, take what the chest offers, and leave the
   walls to their sulk. It's agreed this is a fair split.
 
+- **The Loomstone & the Threads** — a landed starstone hollowed like a
+  basin and bedded in worked stone. Gleam pools in the hollow, and a
+  steady pair of hand-feet can weave it THROUGH a tool or a worn piece
+  as a Thread: the **Keen Thread** (a blade that bites two deeper), the
+  **Flint Thread** (a digger half again as eager), the **Oak Thread**
+  (wear that lands half as often), the **Ward Thread** (a worn piece
+  that argues a little harder). One thread per item, and it never comes
+  out — weaving is a promise, not a coat of paint.
 - **The Whims** — the Upturn's moods, worn briefly. A broth or a bad bite
   can leave one on you for a minute: **Fleetfoot** (the Sunwisp lightness
   takes to your feet), **Emberglow** (a warm ember heals you and asks

@@ -16,7 +16,7 @@ import {
   STARSTONE, STAR_BLADE,
   GLOAM_INGOT, GLOAM_BLOCK, GLOAM_PICK, GLOAM_AXE, GLOAM_SHOVEL, GLOAM_BLADE,
   GLOAM_CROWN, GLOAM_JERKIN, GLOAM_LEGGINGS, GLOAM_TREADS,
-  PLANK_HOE, STONE_HOE, IRON_HOE, MEAL_ROOT, BOGBEAN, POTTAGE,
+  PLANK_HOE, STONE_HOE, IRON_HOE, MEAL_ROOT, BOGBEAN, POTTAGE, LOOMSTONE,
 } from "./blocks.js";
 
 // in: [[blockId, count], ...]  out: [blockId, count]  note: extra recipe copy
@@ -78,6 +78,8 @@ export const RECIPES = [
   // the Star-Edge Shiv: a landed pearl of the old sky (the Pearlfall
   // delivers them — see meteors.js), honed onto a finished sky-iron blade
   { in: [[STARSTONE, 1], [IRON_BLADE, 1]], out: [STAR_BLADE, 1], note: "a pearl's edge on a sky-iron spine" },
+  // the Loomstone: a pearl bedded in stone; the light pools (see loom.js)
+  { in: [[STARSTONE, 1], [STONE, 6]], out: [LOOMSTONE, 1], note: "a pearl bedded in stone; the light pools" },
   // gloamgold tools: the deep metal, hafted on knotwood like all the rest
   { in: [[GLOAM_INGOT, 3], [PLANKS, 2]], out: [GLOAM_PICK, 1], note: "the planks are the haft" },
   { in: [[GLOAM_INGOT, 3], [PLANKS, 2]], out: [GLOAM_AXE, 1], note: "the planks are the haft" },

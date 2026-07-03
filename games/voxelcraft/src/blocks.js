@@ -215,6 +215,9 @@ export const EMBER_BROTH = 128;
 export const SUNWISP_BROTH = 129;
 export const KELP_GLAND = 130;
 export const KELPSALVE = 131;
+// the Loomstone: a starstone basin that weaves gleam into gear as Threads
+// (loom.js). Right-click a placed one with a tool/armor piece selected.
+export const LOOMSTONE = 132;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -783,6 +786,14 @@ BLOCKS[KELPSALVE] = def("Kelpsalve", cropCross({
   food: { restore: 1, effect: ["kelpguard", 30] },
 }));
 
+// the Loomstone: a pearl bedded in stone; the light pools in the basin.
+// Glows a little (a hollowed starstone would), pick-work to move.
+BLOCKS[LOOMSTONE] = def("Loomstone", { hardness: 3.0,
+  tiles: { top: TILE.LOOMSTONE_TOP, side: TILE.LOOMSTONE_SIDE, bottom: TILE.STONE },
+  toolKind: "pick", needsPick: 2,
+  lightEmit: 8,
+});
+
 export const CROP_STAGES = [CROP_SPROUT, CROP_HALF, CROP_RIPE];
 export const BOGBEAN_STAGES = [BOGBEAN_SPROUT, BOGBEAN_HALF, BOGBEAN_RIPE];
 // the stage ladder a growing block belongs to, or null. New crops add their
@@ -1121,12 +1132,17 @@ BLOCKS[GLOAM_BLOCK] = def("Gloamgold Block", { hardness: 3.4,
 // only 25% of its value — EXCEPT the treads, which count in full (it's the
 // hand-feet that take the landing). Full sky-iron: 0.60 vs hits, 0.24 vs
 // falls; full gloamgold: 0.70 vs hits, 0.28 vs falls; full bark: 0.25 / 0.10.
+// a Ward Thread's flat bonus per warded piece (loom.js) — hits only; the
+// fall formula already discounts plate and a thread is thinner than plate
+export const WARD_BONUS = 0.04;
+
 export function armorProtection(slots, fall = false) {
   let total = 0;
   for (const s of slots || []) {
     const a = s && BLOCKS[s.id] ? BLOCKS[s.id].armor : null;
     if (!a) continue;
     total += fall ? a.prot * (a.kind === "treads" ? 1 : 0.25) : a.prot;
+    if (!fall && s.mod === "ward") total += WARD_BONUS;
   }
   return Math.min(ARMOR_CAP, total);
 }
