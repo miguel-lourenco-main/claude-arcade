@@ -105,6 +105,7 @@ export class Interaction {
     this.canThrowStone = opts.canThrow;    // () => bool (projectile cap)
     this.mobs = opts.mobs;           // Mobs instance (punching)
     this.onTradeMob = opts.onTradeMob; // (mob) => open the Peddler's trade window
+    this.onMobCompanion = opts.onMobCompanion; // (mob) => bool: fed/sat a Snuffet
     this.boats = opts.boats;         // Boats instance (board/deploy/kick)
     this.carts = opts.carts;         // Carts instance (board/deploy/kick)
     this.fishing = opts.fishing;     // Fishing instance (cast/reel)
@@ -624,16 +625,22 @@ export class Interaction {
       const cart = this.carts.rayHit(eye, dir, this._entityClamp(eye, dir));
       if (cart) { this.onBoardCart(cart); return; }
     }
-    // right-click the Peddler to trade — the mob ray runs before any block
-    // routing, exactly like boarding a skiff (sneak to override). Survival
-    // only: the trade window is a satchel window, and creative wants for
-    // nothing anyway.
-    if (this.mobs && this.onTradeMob && this.player.mode === "survival" &&
-        !this.player._sneaking) {
+    // right-click a mob — one shared entity ray before any block routing,
+    // exactly like boarding a skiff (sneak to override). The Peddler trades
+    // (survival only: the trade window is a satchel window, and creative
+    // wants for nothing anyway); a Snuffet takes berries (the bonding path)
+    // or, bonded, toggles sit/stand — main.js owns that routing.
+    if (this.mobs && !this.player._sneaking) {
       const eye = { x: this.player.pos.x, y: this.player.eyeY, z: this.player.pos.z };
       const dir = this.player.lookDir();
       const m = this.mobs.rayHit(eye, dir, this._entityClamp(eye, dir));
-      if (m && m.spec.trades) { this.onTradeMob(m); return; }
+      if (m) {
+        if (m.spec.trades && this.onTradeMob && this.player.mode === "survival") {
+          this.onTradeMob(m);
+          return;
+        }
+        if (this.onMobCompanion && this.onMobCompanion(m)) return;
+      }
     }
     // a sling stone throws instead of placing — unless an interactive block
     // is targeted (sneak-throw at a chest works, like sneak-place does)

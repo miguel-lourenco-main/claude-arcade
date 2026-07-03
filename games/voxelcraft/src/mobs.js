@@ -15,6 +15,16 @@ const HOP_SPEED = 9.2;      // clears a 1-block step at any framerate
 const MAX_STEP = 0.4;
 const TORCH_SAFE_DIST = 12; // hostiles won't spawn near torchlight
 
+// the bondling (a berry-bonded Snuffet — see LORE.md): companion tuning
+const BOND_CAP = 3;         // a Wanderling keeps at most three
+const BOND_MAX_HP = 8;      // the bond toughens the little grazer
+const FOLLOW_MAX = 10;      // outside this it trots back toward its person
+const TELEPORT_DIST = 24;   // beyond this it folds space to their side
+const STRAND_SECONDS = 5;   // stuck-while-following this long also teleports
+const FOLLOW_SPEED = 4.6;   // a shade over the player's walk — it keeps up
+const GUARD_SPEED = 5.2;    // the charge
+const FEUD_RANGE = 24;      // mob-vs-mob grudges lapse beyond this
+
 // behavior: passive (flees when hurt) | hostile (chases in aggro range)
 //           ambush (motionless until close, then hostile) | neutral
 //           (retaliates when punched; contactDamage hurts on touch)
@@ -87,6 +97,10 @@ export class Mobs {
     this.onMobHurt = null;
     this.onDrop = null;      // (x, y, z, id, n)
     this.onSound = null;     // (soundKind)
+    this.onBondlingDeath = null; // (mob) => the mourning chime + text
+    // the per-feed bond roll (1-in-3, MC-style repeat feeding). A mutable
+    // property so the test handle can pin it to 1 (or 0) deterministically.
+    this.bondChance = 1 / 3;
 
     this._materials = [];    // every mob material, for the day/night tint
     this._builders = this._makeBuilders();
@@ -334,9 +348,17 @@ export class Mobs {
     }
   }
 
+  // wild-population count for the spawn director: bondlings are kept, not
+  // spawned, so they never crowd the meadow's wild cap
   count(speciesKey) {
     let n = 0;
-    for (const m of this.mobs) if (m.species === speciesKey) n++;
+    for (const m of this.mobs) if (m.species === speciesKey && !m.bonded) n++;
+    return n;
+  }
+
+  bondedCount() {
+    let n = 0;
+    for (const m of this.mobs) if (m.bonded) n++;
     return n;
   }
 
@@ -364,9 +386,144 @@ export class Mobs {
       callT: 4 + Math.random() * 10,
       onGround: false,
       hitWall: false,
+      // the bondling state (snuffets only, but harmless defaults for all)
+      bonded: false,
+      sitting: false,
+      scarfSeed: 0,
+      guardTarget: null,   // bondling: the mob it's charging
+      targetMob: null,     // hostile/neutral: the bondling that hit it
+      strandT: 0,          // seconds stuck while trying to follow
     };
     this.mobs.push(mob);
     return mob;
+  }
+
+  // --- the bondling: a berry-bonded companion (see LORE.md) --------------------
+
+  // one berry down the trunk. Returns { bonded, healed } so the caller can
+  // cue the moment (the heart-puff always shows; the bond gets its own line).
+  feed(m) {
+    let bonded = false, healed = false;
+    if (m.bonded) {
+      if (m.hp < BOND_MAX_HP) {
+        m.hp = Math.min(BOND_MAX_HP, m.hp + 2);
+        healed = true;
+      }
+    } else if (this.bondedCount() < BOND_CAP && Math.random() < this.bondChance) {
+      this.bond(m);
+      bonded = true;
+    }
+    return { bonded, healed };
+  }
+
+  // make it official: the scarf goes on, the frame toughens, and the meadow's
+  // despawn rules stop applying. scarfSeed is passed on load so a reloaded
+  // bondling keeps its exact colors.
+  bond(m, scarfSeed = (Math.random() * 0xffffffff) >>> 0) {
+    if (m.bonded) return;
+    m.bonded = true;
+    m.sitting = false;
+    m.scarfSeed = scarfSeed;
+    m.hp = BOND_MAX_HP;
+    m.scarfMesh = this._buildScarf(scarfSeed);
+    m.group.add(m.scarfMesh);
+  }
+
+  toggleSit(m) {
+    m.sitting = !m.sitting;
+    if (m.sitting) { m.guardTarget = null; m.strandT = 0; }
+    return m.sitting;
+  }
+
+  // the little original neck-scarf: a band knotted where the round body meets
+  // the head, dyed in old-tunic cloth picked by the owner seed
+  _buildScarf(seed) {
+    const rand = mulberry32(seed);
+    const cloth = [
+      [188, 92, 48], [214, 176, 74], [74, 122, 128],
+      [106, 80, 128], [93, 122, 60], [172, 70, 82],
+    ];
+    const base = cloth[(rand() * cloth.length) | 0];
+    let trim = cloth[(rand() * cloth.length) | 0];
+    if (trim === base) trim = cloth[(cloth.indexOf(base) + 1) % cloth.length];
+    const mat = this._mat(paint((seed >>> 8) || 1, base, 10, (ctx) => {
+      ctx.fillStyle = `rgb(${trim[0]},${trim[1]},${trim[2]})`;
+      for (let y = 2; y < 16; y += 5) ctx.fillRect(0, y, 16, 2); // the stripes
+    }));
+    const g = new THREE.Group();
+    const box = (w, h, d) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    const band = box(0.5, 0.14, 0.4);
+    band.position.set(0, 0.52, 0.45);
+    g.add(band);
+    const knot = box(0.14, 0.14, 0.12);
+    knot.position.set(0.2, 0.44, 0.55);
+    g.add(knot);
+    const tail = box(0.12, 0.26, 0.05);
+    tail.position.set(0.2, 0.28, 0.58);
+    tail.rotation.x = 0.25;
+    g.add(tail);
+    return g;
+  }
+
+  // any player-landed hit sends the unseated bondlings after the victim; any
+  // bondling-landed hit (opts.attacker) makes the victim feud back. Neither
+  // ever points at the Peddler or at another bondling.
+  _setGuard(target) {
+    if (!target || target.spec.trades || target.bonded) return;
+    for (const b of this.mobs) {
+      if (!b.bonded || b.sitting || b === target) continue;
+      if (Math.hypot(b.x - target.x, b.z - target.z) > FEUD_RANGE) continue;
+      b.guardTarget = target;
+    }
+  }
+
+  // fold space back to the player's side: the first clear 2-cell column with
+  // solid footing near them (scanned top-down, so it lands ON things, not in)
+  _teleportToPlayer(world, m, player) {
+    for (const [dx, dz] of [[1.6, 0], [-1.6, 0], [0, 1.6], [0, -1.6],
+                            [1.6, 1.6], [-1.6, -1.6], [1.6, -1.6], [-1.6, 1.6]]) {
+      const tx = player.pos.x + dx, tz = player.pos.z + dz;
+      const bx = Math.floor(tx), bz = Math.floor(tz);
+      if (!world.isGenerated(bx >> 4, bz >> 4)) continue;
+      const py = Math.floor(player.pos.y);
+      for (let by = Math.min(93, py + 2); by >= Math.max(1, py - 3); by--) {
+        if (world.getBlock(bx, by, bz) !== AIR ||
+            world.getBlock(bx, by + 1, bz) !== AIR ||
+            !isSolid(world.getBlock(bx, by - 1, bz))) continue;
+        m.x = tx; m.y = by + 0.01; m.z = tz;
+        m.vx = m.vy = m.vz = 0;
+        m.strandT = 0;
+        m.group.position.set(m.x, m.y, m.z);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // persistence: the bonded companions ride the save as an additive field
+  // (species, pos, hp, sitting, scarf seed) — everything else regrows wild
+  serializeBondlings() {
+    const out = [];
+    const r = (v) => Math.round(v * 10) / 10;
+    for (const m of this.mobs) {
+      if (!m.bonded) continue;
+      out.push([m.species, r(m.x), r(m.y), r(m.z), m.hp, m.sitting ? 1 : 0, m.scarfSeed]);
+    }
+    return out;
+  }
+
+  loadBondlings(entries) {
+    for (const e of entries) {
+      if (this.bondedCount() >= BOND_CAP) break;
+      if (!Array.isArray(e) || e.length < 7) continue;
+      const [sp, x, y, z, hp, sit, seed] = e;
+      if (!SPECIES[sp] || ![x, y, z].every(Number.isFinite)) continue;
+      const m = this.spawnAt(x, y, z, sp);
+      if (!m) continue;
+      this.bond(m, Number.isInteger(seed) && seed >= 0 ? seed : 1);
+      m.hp = Number.isFinite(hp) ? Math.max(1, Math.min(BOND_MAX_HP, hp)) : BOND_MAX_HP;
+      m.sitting = sit === 1 || sit === true;
+    }
   }
 
   // --- spawn director ---------------------------------------------------------
@@ -503,10 +660,17 @@ export class Mobs {
       // NOT wake up because someone walked overhead
       const dist3 = Math.hypot(m.x - player.pos.x, m.y - player.pos.y, m.z - player.pos.z);
 
-      if (distToPlayer > DESPAWN_DIST) { this._remove(i); continue; }
+      // a bondling never despawns — distance is handled by the teleport below
+      if (distToPlayer > DESPAWN_DIST && !m.bonded) { this._remove(i); continue; }
       // death pays out BEFORE the dawn cleanup — a kill landed on the
       // dawn-crossing frame still drops its loot
       if (m.hp <= 0) {
+        // a fallen bondling drops nothing; it gets the mourning chime instead
+        if (m.bonded) {
+          this.onBondlingDeath?.(m);
+          this._remove(i);
+          continue;
+        }
         if (spec.drops && this.onDrop) {
           for (const [id, n] of spec.drops) this.onDrop(m.x, m.y + 0.4, m.z, id, n);
         }
@@ -521,6 +685,12 @@ export class Mobs {
         this._remove(i); continue;
       }
       if (night && spec.habitat === "day") { this._remove(i); continue; }
+      // a far-flung bondling folds space back to its person's side — checked
+      // BEFORE the generated-chunk gate, since it's the mob's own chunk that
+      // may be unloaded while the player's is fine
+      if (m.bonded && !m.sitting && dist3 > TELEPORT_DIST) {
+        this._teleportToPlayer(world, m, player);
+      }
       if (!world.isGenerated(Math.floor(m.x) >> 4, Math.floor(m.z) >> 4)) continue;
       m.hurtT = Math.max(0, m.hurtT - dt);
       m.critT = Math.max(0, m.critT - dt);
@@ -530,6 +700,20 @@ export class Mobs {
       m.grudgeT = Math.max(0, m.grudgeT - dt);
 
       // --- behavior selection ---
+      // the mob-vs-mob feud: a hostile hit by a bondling turns on it for as
+      // long as the anger holds (and the feud stays in range)
+      let tgtMob = null;
+      if (m.targetMob) {
+        const t = m.targetMob;
+        const alive = t.hp > 0 && this.mobs.includes(t);
+        if (!alive || m.angryT <= 0 ||
+            Math.hypot(t.x - m.x, t.z - m.z) > FEUD_RANGE) {
+          m.targetMob = null;
+        } else {
+          tgtMob = t;
+        }
+      }
+
       const aggro = spec.aggro || 0;
       let chasing = false;
       if (canFight) {
@@ -538,23 +722,36 @@ export class Mobs {
         if (spec.behavior === "ambush") {
           if (m.state === "wait" && dist3 < aggro) m.state = "hunt";
           if (m.state === "hunt") {
-            chasing = dist3 < aggro * 3;
+            chasing = dist3 < aggro * 3 || !!tgtMob;
             if (!chasing) m.state = "wait";
           }
         }
         if (spec.behavior === "neutral" && m.angryT > 0) chasing = true;
       }
+      if (tgtMob) chasing = true; // the feud stands even at the player's back
 
       let targetSpeed = 0;
       if (chasing) {
-        m.yaw = Math.atan2(player.pos.x - m.x, player.pos.z - m.z);
+        // the feud target outranks the player while it holds
+        const fx = tgtMob ? tgtMob.x : player.pos.x;
+        const fy = tgtMob ? tgtMob.y : player.pos.y;
+        const fz = tgtMob ? tgtMob.z : player.pos.z;
+        m.yaw = Math.atan2(fx - m.x, fz - m.z);
         targetSpeed = spec.speed;
-        // melee — only with clear line of sight (no biting through walls)
-        if (distToPlayer < spec.attackRange && m.attackCd <= 0 &&
+        if (tgtMob) {
+          // mob-vs-mob melee: no line-of-sight ritual, just reach + cooldown
+          if (Math.hypot(fx - m.x, fz - m.z) < spec.attackRange + tgtMob.spec.halfW &&
+              Math.abs(fy - m.y) < 2 && m.attackCd <= 0) {
+            m.attackCd = 1;
+            this.strike(tgtMob, spec.damage || 1, { x: m.x, z: m.z }, { attacker: m });
+          }
+        } else if (distToPlayer < spec.attackRange && m.attackCd <= 0 &&
             Math.abs(player.pos.y - m.y) < 2 &&
             this._lineOfSight(world, m, player)) {
+          // melee — only with clear line of sight (no biting through walls)
           m.attackCd = 1;
           player.damage(spec.damage, `a ${spec.name}`);
+          this._setGuard(m); // the bondlings take exception
           const kx = player.pos.x - m.x, kz = player.pos.z - m.z;
           const kl = Math.max(0.2, Math.hypot(kx, kz));
           player.vel.x += (kx / kl) * 5;
@@ -582,6 +779,41 @@ export class Mobs {
         if (m.state === "walk") targetSpeed = spec.speed * 0.7;
       }
 
+      // --- the bondling companion states: SIT / GUARD / FOLLOW ---
+      // Overrides whatever the ambient idle/walk picked above. Inside the
+      // 3-10 follow band the ambient wander stands — that's the living feel.
+      if (m.bonded) {
+        if (m.sitting) {
+          targetSpeed = 0; // planted, until told otherwise
+        } else {
+          // GUARD: validate, then charge — headbutts land on the 1s attackCd
+          if (m.guardTarget && (m.guardTarget.hp <= 0 ||
+              !this.mobs.includes(m.guardTarget) ||
+              Math.hypot(m.guardTarget.x - m.x, m.guardTarget.z - m.z) > FEUD_RANGE)) {
+            m.guardTarget = null;
+          }
+          if (m.guardTarget) {
+            const g = m.guardTarget;
+            m.yaw = Math.atan2(g.x - m.x, g.z - m.z);
+            targetSpeed = GUARD_SPEED;
+            if (Math.hypot(g.x - m.x, g.z - m.z) < 1.1 + g.spec.halfW &&
+                Math.abs(g.y - m.y) < 2 && m.attackCd <= 0) {
+              m.attackCd = 1;
+              this.strike(g, 1, { x: m.x, z: m.z }, { attacker: m });
+            }
+          } else if (distToPlayer > FOLLOW_MAX) {
+            // FOLLOW: trot back into the 3-10 band; a bondling stuck against
+            // something for 5s gives up on pathing and folds space instead
+            m.yaw = Math.atan2(player.pos.x - m.x, player.pos.z - m.z);
+            targetSpeed = FOLLOW_SPEED;
+            m.strandT = Math.hypot(m.vx, m.vz) > 0.6 ? 0 : m.strandT + dt;
+            if (m.strandT >= STRAND_SECONDS) this._teleportToPlayer(world, m, player);
+          } else {
+            m.strandT = 0;
+          }
+        }
+      }
+
       // neutral contact damage (leaning on a Prickleback is a mistake)
       if (canFight && spec.contactDamage && m.contactCd <= 0) {
         const pad = 0.15;
@@ -590,6 +822,7 @@ export class Mobs {
             player.pos.y < m.y + spec.height && player.pos.y + 1.8 > m.y) {
           m.contactCd = 0.6;
           player.damage(spec.contactDamage, `a ${spec.name}'s spines`);
+          this._setGuard(m); // spines count as damaging the player too
         }
       }
 
@@ -619,11 +852,13 @@ export class Mobs {
 
       // --- presentation ---
       m.walkPhase += Math.hypot(m.vx, m.vz) * dt * 5;
-      const swing = Math.sin(m.walkPhase) * 0.65;
+      // a sitting bondling plants down: legs folded forward, belly lowered
+      const sit = m.bonded && m.sitting;
+      const swing = sit ? 0 : Math.sin(m.walkPhase) * 0.65;
       for (let li = 0; li < m.legs.length; li++) {
-        m.legs[li].rotation.x = (li % 2 === 0 ? swing : -swing);
+        m.legs[li].rotation.x = sit ? 1.35 : (li % 2 === 0 ? swing : -swing);
       }
-      m.group.position.set(m.x, m.y, m.z);
+      m.group.position.set(m.x, m.y - (sit ? 0.12 : 0), m.z);
       m.group.rotation.y = m.yaw;
       // hurt flinch is a subtle swell; a falling crit lands with a real pop
       // that collapses over ~0.2s
@@ -750,12 +985,25 @@ export class Mobs {
     m.vz += (dz / len) * knock * resist;
     m.vy = 5 * resist;
     // reactions: passives flee, neutrals get angry, ambushers wake up,
-    // hostiles hold a grudge (a stone from beyond aggro range still counts)
-    if (m.spec.behavior === "passive") { m.state = "flee"; m.stateT = 3.5; m.yaw = Math.atan2(m.x - fromPos.x, m.z - fromPos.z); }
+    // hostiles hold a grudge (a stone from beyond aggro range still counts).
+    // A bondling doesn't flee — it takes the hit and (unseated) hits back.
+    if (m.spec.behavior === "passive" && !m.bonded) { m.state = "flee"; m.stateT = 3.5; m.yaw = Math.atan2(m.x - fromPos.x, m.z - fromPos.z); }
     // the Peddler adds insult to the injury ledger: no trade for a while
     if (m.spec.grudge) m.grudgeT = m.spec.grudge;
     if (m.spec.behavior === "neutral" || m.spec.behavior === "hostile") m.angryT = 8;
     if (m.spec.behavior === "ambush") m.state = "hunt";
+    if (opts.attacker) {
+      // hit by a bondling: the victim switches its aggro onto it
+      if (m.spec.behavior !== "passive") m.targetMob = opts.attacker;
+      // a hit bondling answers whoever landed it (never sitting, never a
+      // fellow bondling, never the Peddler)
+      if (m.bonded && !m.sitting && !opts.attacker.bonded && !opts.attacker.spec.trades) {
+        m.guardTarget = opts.attacker;
+      }
+    } else if (!m.bonded && !m.spec.trades) {
+      // a player-landed hit (punch or sling stone): the bondlings pile in
+      this._setGuard(m);
+    }
     this.onMobHurt?.(!!opts.crit);
   }
 

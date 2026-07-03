@@ -88,7 +88,19 @@ export class Sfx {
         this._bellTone(1320, 0.5, 0.05);
         setTimeout(() => this._bellTone(1188, 0.4, 0.035), 210);
         break;
+      case "chirp": // a fed Snuffet: a quick happy two-note trill
+        this._bellTone(1568, 0.12, 0.06);
+        setTimeout(() => this._bellTone(1976, 0.16, 0.05), 90);
+        break;
     }
+  }
+
+  // a bondling gone: three soft bell tones, each a step lower — the quiet
+  // kind of goodbye the Upturn prefers
+  mourn() {
+    this._bellTone(659, 0.9, 0.05);
+    setTimeout(() => this._bellTone(523, 0.9, 0.045), 280);
+    setTimeout(() => this._bellTone(392, 1.3, 0.04), 620);
   }
 
   // a small struck bell: a sine with a faint detuned partial, long decay

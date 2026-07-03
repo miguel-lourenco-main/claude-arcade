@@ -121,6 +121,12 @@ specific item vocabulary.
   the waybars. It goes where the way goes and nowhere else, gathers speed
   down a rise the way gossip gathers detail, and off the end of the line it
   simply rolls to a sulky stop. Named for the sound; kept for the joy.
+- **Bondling** — a snuffet that has taken a Wanderling's bog berries enough
+  times to decide the arrangement is permanent. It wears a knotted
+  neck-scarf in its person's colors, keeps to within ten easy paces, plants
+  down when asked, and headbutts — with surprising conviction — anything
+  that lays a hand on its Wanderling. Keeping more than three is considered
+  showing off.
 - **The Steads-Before** — the pre-Upturn homesteads: raised when the world
   faced the other way, and carried along when it turned. They came through
   the flip the way crockery comes through a move — mostly. What's left

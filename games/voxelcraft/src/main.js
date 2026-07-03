@@ -28,7 +28,7 @@ import { PlayerViewer } from "./player-viewer.js";
 import {
   SAPLING, LOG, LEAVES, LEAVES_COLD, BED, WATER as WATER_ID, dropFor,
   CROP_SPROUT, CROP_RIPE, CROP_STAGES, isCrop, SLING_STONE, BOAT, FISHING_POLE,
-  isSign, COMPASS, CLOCK, SNOW_LAYER, CART,
+  isSign, COMPASS, CLOCK, SNOW_LAYER, CART, BERRIES,
 } from "./blocks.js";
 import { makeGenerator, findSpawn, findBiomeLocation } from "./terrain.js";
 import { findNearestRuin, ruinForChunk } from "./ruins.js";
@@ -212,6 +212,9 @@ if (save && save.chests) world.loadChests(save.chests);
 if (save && save.kilns) world.loadKilns(save.kilns); // additive v2 field
 if (save && Array.isArray(save.boats)) boats.load(save.boats); // additive v2 field
 if (save && Array.isArray(save.carts)) carts.load(save.carts); // additive v2 field
+// additive v2 field: the bonded companions (bondlings) — species, pos, hp,
+// sitting, scarf seed. Older saves simply have no scarves tied anywhere.
+if (save && Array.isArray(save.bondlings)) mobs.loadBondlings(save.bondlings);
 if (save && save.signs) world.loadSigns(save.signs); // additive v2 field
 // additive v2 field: ruin chunks whose loot was already dealt — must load
 // before any chunk generates, or a looted stead would re-seed its chest
@@ -763,6 +766,39 @@ const interaction = new Interaction(world, player, scene, hud, {
       return true;
     });
   },
+  // right-click a Snuffet: berries feed it — one consumed, a heart-puff and a
+  // happy chirp, and (until the cap) the seeded chance the bond takes. A hurt
+  // bondling heals 2 instead. Anything-but-berries on a bondling toggles
+  // sit/stand. Returns false untouched so block routing can continue.
+  onMobCompanion: (m) => {
+    if (m.species !== "snuffet") return false;
+    if (hud.selectedId() === BERRIES) {
+      // consume-first is safe here: a feed never refuses (worst case it's a
+      // full-health bondling enjoying a free berry)
+      if (player.mode === "survival") {
+        const s = inventory.get(hud.selected);
+        if (!s || s.id !== BERRIES || !inventory.takeFromSlot(hud.selected, 1)) return false;
+        hud.refreshHotbarRow();
+      }
+      const res = mobs.feed(m);
+      sfx.creature("chirp");
+      // the heart-puff: a soft rosy burst over the snout
+      interaction.particles.burst(
+        m.x - 0.5, m.y + m.spec.height * 0.55 - 0.3, m.z - 0.5, [0.95, 0.5, 0.62], 12);
+      if (res.bonded) {
+        hud.announce("The Snuffet ties on your colors. A bondling, then.", 3200);
+      } else if (res.healed) {
+        hud.announce("Your bondling munches, mending.", 1800);
+      }
+      return true;
+    }
+    if (m.bonded) {
+      const sitting = mobs.toggleSit(m);
+      hud.announce(sitting ? "Your bondling plants down to wait." : "Your bondling falls in behind you.", 1800);
+      return true;
+    }
+    return false;
+  },
   // seat the Wanderling: player physics suspends itself while riding (see
   // player.update) and boats.update carries the seat from here on
   onBoardBoat: (b) => {
@@ -842,6 +878,11 @@ mobs.onMobHurt = (crit) => (crit ? sfx.critHit() : sfx.mobHurt());
 player.isEating = () => interaction.eating;
 mobs.onSound = (kind) => sfx.creature(kind);
 mobs.onDrop = (x, y, z, id, n) => drops.spawn(x, y, z, id, n);
+// a fallen bondling: no drops — a soft mourning chime and a quiet line
+mobs.onBondlingDeath = () => {
+  sfx.mourn();
+  hud.announce("The scarf lies still. Your bondling is gone.", 3600);
+};
 
 const stopAutosave = startAutosave(() => writeSave(world, player, sky, hud, inventory, {
   saplings: [...saplings].map(([key, due]) => {
@@ -860,6 +901,8 @@ const stopAutosave = startAutosave(() => writeSave(world, player, sky, hud, inve
     (s ? (s.dur !== undefined ? [s.id, s.count, s.dur] : [s.id, s.count]) : 0)),
   boats: boats.serialize(), // additive: deployed skiffs [[x,y,z,yaw]...]
   carts: carts.serialize(), // additive: deployed trundles [[x,y,z,yaw]...]
+  // additive: the bondlings [[species,x,y,z,hp,sitting,scarfSeed]...]
+  bondlings: mobs.serializeBondlings(),
   weather: [
     sky.weatherPhase,
     Math.round(sky.weatherTimer * 10) / 10,
