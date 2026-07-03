@@ -263,7 +263,12 @@ function growTree(x, y, z) {
     }
     for (const c of world.setBlock(x, y + dy, z, LOG)) affected.add(c);
   }
-  lightAwareRemesh([...affected], lightTouched, { x, y, z });
+  // no anchor: the edit spans the whole canopy (trunk 4-6 + crown), so a
+  // single base cell under-measures emitter distance — a torch lit from a
+  // ledge near the NEW leaves but 17+ blocks from the trunk base would skip
+  // the wide remesh and strand stale light in the neighbor chunk. Trees
+  // grow rarely; take the conservative wide check.
+  lightAwareRemesh([...affected], lightTouched);
 }
 
 // does any emitter in the 3x3 ring around this chunk sit within block-light
@@ -278,9 +283,14 @@ function emitterNearEdit(cx, cz, at) {
     if (!c || c.emitters.size === 0) continue;
     if (!at) return true;
     for (const [idx] of c.emitters) {
-      const lx = idx % 16, lz = ((idx / 16) | 0) % 16, ly = (idx / 256) | 0;
+      // y first: a surface edit high above the Emberwash rejects every pool
+      // cell on one compare instead of full 3D distance math
+      const ly = (idx / 256) | 0;
+      const dy2 = (ly - at.y) * (ly - at.y);
+      if (dy2 >= LIGHT_REACH2) continue;
+      const lx = idx % 16, lz = ((idx / 16) | 0) % 16;
       const ex = c.cx * 16 + lx, ez = c.cz * 16 + lz;
-      const d2 = (ex - at.x) ** 2 + (ly - at.y) ** 2 + (ez - at.z) ** 2;
+      const d2 = (ex - at.x) ** 2 + dy2 + (ez - at.z) ** 2;
       if (d2 < LIGHT_REACH2) return true;
     }
   }
@@ -337,6 +347,8 @@ if (save && Array.isArray(save.saplings)) {
 // root just stands there, patiently, until harvested.
 
 const crops = new Map(); // "x,y,z" -> growthSeconds when the next stage lands
+// the sprout ids, precomputed: onEdit asks on every block edit
+const SPROUT_IDS = new Set(Object.values(SEED_TO_SPROUT));
 
 function registerCrop(x, y, z, delay = 45 + Math.random() * 30) {
   crops.set(`${x},${y},${z}`, growthSeconds + delay);
@@ -494,15 +506,17 @@ function resolveRespawn() {
 }
 
 // respawn/void landings must respect player edits: if the spawn column was
-// built over (or dug out), climb to the first clear spot above it
+// built over (or dug out), climb to the first clear spot above it — and
+// "clear" excludes the Emberwash: nobody lands IN the melt
 function adjustToClearGround(pos) {
   const bx = Math.floor(pos.x), bz = Math.floor(pos.z);
   if (!world.isGenerated(bx >> 4, bz >> 4)) return;
+  const blocked = (y) => {
+    const id = world.getBlock(bx, y, bz);
+    return BLOCKS[id].solid || id === LAVA_ID;
+  };
   let y = Math.max(1, Math.floor(pos.y));
-  while (y < HEIGHT - 2 &&
-    (BLOCKS[world.getBlock(bx, y, bz)].solid || BLOCKS[world.getBlock(bx, y + 1, bz)].solid)) {
-    y++;
-  }
+  while (y < HEIGHT - 2 && (blocked(y) || blocked(y + 1))) y++;
   pos.y = Math.max(pos.y, y + 0.05);
 }
 
@@ -644,9 +658,7 @@ const interaction = new Interaction(world, player, scene, hud, {
       if (info.popped === SAPLING) saplings.delete(`${info.x},${info.y + 1},${info.z}`);
       // crop lifecycle: planting a seed writes its sprout; breaking or
       // popping (soil dug out underneath) any growing stage cancels its timer
-      if (Object.values(SEED_TO_SPROUT).includes(info.placed)) {
-        registerCrop(info.x, info.y, info.z);
-      }
+      if (SPROUT_IDS.has(info.placed)) registerCrop(info.x, info.y, info.z);
       if (isCrop(info.broken)) crops.delete(`${info.x},${info.y},${info.z}`);
       if (isCrop(info.popped)) crops.delete(`${info.x},${info.y + 1},${info.z}`);
       // breaking a Notice Post takes its writing with it (the board mesh
@@ -662,6 +674,7 @@ const interaction = new Interaction(world, player, scene, hud, {
     }
   },
   onSound: (kind, id) => sfx.block(kind, id),
+  onHint: (text) => hud.announce(text, 2600),
   onEat: (kind) => sfx.eat(kind),
   onDoor: (opened) => sfx.door(opened),
   onPick: (id) => hud.pickBlock(id),
@@ -1113,6 +1126,7 @@ document.addEventListener("mouseup", (e) => interaction.onMouseUp(e.button));
 document.addEventListener("contextmenu", (e) => e.preventDefault());
 
 let debugVisible = false;
+let bootLavaChecked = false; // the one-time load-into-lava rescue (tick loop)
 
 document.addEventListener("keydown", (e) => {
   if (e.repeat) return;
@@ -1212,6 +1226,20 @@ function tick(now) {
   // own chunk AND its neighbors (collision near a border reads into them)
   const pcx = Math.floor(player.pos.x / CHUNK), pcz = Math.floor(player.pos.z / CHUNK);
   const playerChunkReady = world.isGenerated(pcx, pcz) && neighborsGenerated(pcx, pcz);
+
+  // one-time boot safety: a pre-Emberwash save's deep caves regenerate
+  // flooded, so a player who saved standing in one would load INTO the melt
+  // and start burning before they can orient. Climb them to clear ground.
+  if (playerChunkReady && !bootLavaChecked) {
+    bootLavaChecked = true;
+    const bx = Math.floor(player.pos.x), bz = Math.floor(player.pos.z);
+    const feet = world.getBlock(bx, Math.floor(player.pos.y + 0.2), bz);
+    const head = world.getBlock(bx, Math.floor(player.eyeY), bz);
+    if (feet === LAVA_ID || head === LAVA_ID) {
+      adjustToClearGround(player.pos);
+      player.resetFall();
+    }
+  }
 
   if (playerChunkReady && inputActive()) {
     accumulator = Math.min(accumulator + frameDt, 0.25);
@@ -1356,13 +1384,14 @@ function tick(now) {
   // third person, the player's eye otherwise. The Emberwash gets the same
   // treatment with an amber screen tint (no fog change — the pool is small
   // and the burn timer is the real message).
-  const viewBlock = thirdPerson
+  // first person reuses the player's own eye sample (one sampling rule,
+  // owned by player.js — the tint can never disagree with the burn/drown)
+  const camBlock = thirdPerson
     ? world.getBlock(Math.floor(camera.position.x), Math.floor(camera.position.y),
         Math.floor(camera.position.z))
-    : world.getBlock(Math.floor(player.pos.x), Math.floor(player.eyeY),
-        Math.floor(player.pos.z));
-  const viewInWater = viewBlock === WATER_ID;
-  const viewInLava = viewBlock === LAVA_ID;
+    : AIR;
+  const viewInWater = thirdPerson ? camBlock === WATER_ID : player.eyeInWater;
+  const viewInLava = thirdPerson ? camBlock === LAVA_ID : player.eyeInLava;
   sky.update(frameDt, camera, viewInWater);
   // over the Rimelands the same shower falls as snow (the precip layer
   // switches sprite/speed/color)

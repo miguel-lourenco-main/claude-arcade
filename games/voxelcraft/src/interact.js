@@ -86,6 +86,7 @@ export class Interaction {
     this.hotbar = hotbar; // {selectedId()}
     this.onEdit = opts.onEdit;       // (affectedChunks, {ids}) => remesh now
     this.onSound = opts.onSound;     // (kind, blockId) => audio
+    this.onHint = opts.onHint;       // (text) => a gentle HUD nudge
     this.onPick = opts.onPick;       // (blockId) => set hotbar slot
     this.onSwing = opts.onSwing;     // () => held-item swing animation
     this.canConsume = opts.canConsume; // (id) => bool, takes from inventory (survival)
@@ -699,9 +700,16 @@ export class Interaction {
           !isSolid(this.world.getBlock(px, py, pz - 1))) return;
     } else if (SEED_TO_SPROUT[id] !== undefined) {
       // seed items (root pips, bogbean pods) want TURNED EARTH — the
-      // Furrower made farming a craft
+      // Furrower made farming a craft. Pre-Furrower farms planted straight
+      // into dirt, so a failed plant on plain soil gets a nudge instead of
+      // a silent nothing (the old click used to work).
       const below = this.world.getBlock(px, py - 1, pz);
-      if (below !== FARMLAND) return;
+      if (below !== FARMLAND) {
+        if ((below === DIRT || below === GRASS || below === MUD) && this.onHint) {
+          this.onHint("The seeds want Turned Earth — a Furrower turns the soil.");
+        }
+        return;
+      }
     } else if (def.shape === "sign") {
       // a Notice Post stands on solid ground only — nobody trusts a notice
       // nailed to thin air

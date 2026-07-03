@@ -326,6 +326,7 @@ const HELD_TIER_HEAD = {
   1: [186, 152, 96],  // plank
   2: [138, 140, 148], // stone
   3: [200, 208, 222], // sky-iron
+  4: [198, 156, 82],  // gloamgold (dusk-gold, matching the armor overlay)
 };
 
 // --- wayfinding instruments -------------------------------------------------
@@ -427,6 +428,15 @@ export function buildHeldTool(kind, tier, seed = 0x5eed) {
     const lip = box(0.1, 0.08, 0.05, headMat);
     lip.position.set(0, 0.55, 0.04);
     g.add(lip);
+  } else if (kind === "hoe") {
+    // the Furrower: a swan-neck folding forward off the tip, ending in a
+    // short down-turned tine — the row-asker, not a weapon
+    const neck = box(0.06, 0.06, 0.2, headMat);
+    neck.position.set(0, 0.38, 0.1);
+    g.add(neck);
+    const tine = box(0.055, 0.18, 0.055, headMat);
+    tine.position.set(0, 0.29, 0.19);
+    g.add(tine);
   } else {
     // the Shiv: cross-guard over the grip, then a long tapering sliver
     const guard = box(0.2, 0.045, 0.1, haftMat);

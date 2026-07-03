@@ -5,8 +5,8 @@
 
 import * as THREE from "three";
 import {
-  BLOCKS, GRASS, SAND, MUD, WATER, COAL_ORE, TORCH, SNUFFET_LOIN, MOSS_CLUMP,
-  AIR, isSolid,
+  BLOCKS, GRASS, SAND, MUD, WATER, LAVA, isFluid, COAL_ORE, TORCH,
+  SNUFFET_LOIN, MOSS_CLUMP, AIR, isSolid,
 } from "./blocks.js";
 import { mulberry32 } from "./noise.js";
 
@@ -386,9 +386,14 @@ export class Mobs {
       if (!c || c.emitters.size === 0) continue;
       for (const [idx, level] of c.emitters) {
         if (level < 11) continue;
-        const lx = idx % 16, lz = ((idx / 16) | 0) % 16, ly = (idx / 256) | 0;
+        // y first: one compare rejects a surface spawn 30 blocks above the
+        // Emberwash without paying the full distance math per pool cell
+        const ly = (idx / 256) | 0;
+        const dy2 = (ly - y) * (ly - y);
+        if (dy2 >= r2) continue;
+        const lx = idx % 16, lz = ((idx / 16) | 0) % 16;
         const ex = c.cx * 16 + lx, ez = c.cz * 16 + lz;
-        const d2 = (ex - x) ** 2 + (ly - y) ** 2 + (ez - z) ** 2;
+        const d2 = (ex - x) ** 2 + dy2 + (ez - z) ** 2;
         if (d2 < r2) return true;
       }
     }
@@ -570,9 +575,22 @@ export class Mobs {
       m.vx += (tx - m.vx) * Math.min(1, 10 * dt);
       m.vz += (tz - m.vz) * Math.min(1, 10 * dt);
 
-      const inWater = world.getBlock(Math.floor(m.x), Math.floor(m.y + 0.3), Math.floor(m.z)) === WATER;
+      // creatures get the same fluid contract as the player: buoyancy in
+      // any fluid, and the Emberwash BURNS — kiting a hostile into a pool
+      // is supposed to work
+      const cellId = world.getBlock(Math.floor(m.x), Math.floor(m.y + 0.3), Math.floor(m.z));
+      const inWater = isFluid(cellId);
       if (inWater) m.vy = Math.min(2.5, m.vy + 10 * dt);
       else m.vy = Math.max(-30, m.vy - GRAVITY * dt);
+      if (cellId === LAVA) {
+        m.lavaCd = (m.lavaCd || 0) - dt;
+        if (m.lavaCd <= 0) {
+          m.lavaCd = 0.5;
+          m.hp -= 3; // the top-of-loop death check pays out drops next frame
+          m.hurtT = 0.25;
+          if (distToPlayer < 24 && this.onMobHurt) this.onMobHurt(false);
+        }
+      }
 
       this._move(world, m, dt);
 

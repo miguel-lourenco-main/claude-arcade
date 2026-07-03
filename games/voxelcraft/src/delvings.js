@@ -14,9 +14,9 @@
 import { hash2, mulberry32 } from "./noise.js";
 import { CHUNK, HEIGHT, SEA_LEVEL, clampSignText } from "./world.js";
 import {
-  AIR, DIRT, COBBLE, PLANKS, LOG, CHEST, LADDER, PLANK_SLAB, SIGN_S, BLOCKS,
-  TORCH, COAL_ORE, SLING_STONE, IRON_INGOT, IRON_PICK, GLOAM_INGOT, GLOAM_ORE,
-  WISPCAP, STARSTONE,
+  AIR, DIRT, STONE, COBBLE, PLANKS, LOG, CHEST, LADDER, PLANK_SLAB, SIGN_S,
+  BLOCKS, TORCH, COAL_ORE, SLING_STONE, IRON_INGOT, IRON_PICK, GLOAM_INGOT,
+  GLOAM_ORE, WISPCAP, STARSTONE,
 } from "./blocks.js";
 
 const DELVE_RATE = 1 / 45; // chunks that hide a delving (before terrain vetoes)
@@ -52,11 +52,15 @@ export function delveForChunk(terrain, cx, cz) {
   delve.chest = alongX
     ? { x: x + 3, y: roomY, z }
     : { x, y: roomY, z: z + 3 };
-  // some mouths still carry the crew's notice, planted by the head-frame
+  // some crews left their notice at the gallery's NEAR end — inside the
+  // stamped geometry, so the board always stands on floored ground (a
+  // surface post on sloped terrain would sometimes bury or orphan it)
   if (hash2(cx, cz, seed ^ 0xde15) < 0.5) {
     const text = DELVE_FRAGMENTS[
       Math.floor(hash2(cx, cz, seed ^ 0xde16) * DELVE_FRAGMENTS.length)];
-    delve.sign = { x: x + 1, y: h + 1, z: z + 1, text: clampSignText(text) };
+    delve.sign = alongX
+      ? { x: x - 3, y: roomY, z, text: clampSignText(text) }
+      : { x, y: roomY, z: z - 3, text: clampSignText(text) };
   }
   return delve;
 }
@@ -150,10 +154,14 @@ export function stampDelve(chunk, delve) {
       put(lx3, roomY + 2, lz3, PLANKS);
     }
   }
-  // what the crew was chasing: a few ore cells left in the gallery walls
+  // what the crew was chasing: a few ore cells left in the gallery walls —
+  // only where the wall is actually stone (a wall that opens into a carved
+  // cavern or the Emberwash keeps what it has: no floating ore, no dry
+  // blocks paving a pool)
   for (let a = -3; a <= 3; a++) {
     for (const b of [-2, 2]) {
       const [wx, wz] = cell(a, b);
+      if (get(wx, roomY, wz) !== STONE) continue;
       const r = decay(wx, roomY, wz, 0xd04);
       if (r < 0.1) put(wx, roomY, wz, COAL_ORE);
       else if (r < 0.16 && roomY <= 12) put(wx, roomY, wz, GLOAM_ORE);
@@ -191,10 +199,15 @@ export function stampDelve(chunk, delve) {
     }
   }
 
-  // the store chest at the far end, on its own guaranteed floor
+  // the store chest at the far end, on its own guaranteed floor — and the
+  // crew's notice at the near end, on the gallery's own floored ground.
+  // The sign stamps UNCONDITIONALLY: seedDelveState registered its text in
+  // world.signs, and a text entry without a board is deleted forever by
+  // SignBoards.sync on first sight.
   put(delve.chest.x, delve.chest.y - 1, delve.chest.z, COBBLE);
   put(delve.chest.x, delve.chest.y, delve.chest.z, CHEST);
-  if (delve.sign && BLOCKS[get(delve.sign.x, h, delve.sign.z)].solid) {
+  if (delve.sign) {
+    put(delve.sign.x, delve.sign.y - 1, delve.sign.z, COBBLE);
     put(delve.sign.x, delve.sign.y, delve.sign.z, SIGN_S);
   }
 }

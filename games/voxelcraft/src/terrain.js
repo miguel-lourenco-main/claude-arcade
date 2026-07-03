@@ -7,7 +7,7 @@ import {
   GRASS, DIRT, STONE, SAND, GRAVEL, LOG, LEAVES, LEAVES_COLD, WATER, BEDROCK,
   SNOWY_GRASS, TALLGRASS, POPPY, DANDELION, CACTUS, SANDSTONE, COAL_ORE,
   IRON_ORE, GLOAM_ORE, BERRY_BUSH, SNOW_LAYER, ICE, AIR, LAVA, WISPCAP,
-  MUD, REEDS, isSolid,
+  MUD, REEDS, isSolid, BLOCKS,
 } from "./blocks.js";
 import { CHUNK, HEIGHT, SEA_LEVEL } from "./world.js";
 import { Perlin, hash2 } from "./noise.js";
@@ -199,6 +199,23 @@ export function makeGenerator(seed) {
           if (biome === "snow") chunk.set(lx, SEA_LEVEL, lz, ICE);
         }
       }
+    }
+
+    // pass 1b: Emberwash emitter pruning. Chunk.set registered every lava
+    // cell as a level-13 emitter, but an interior pool cell (lava on every
+    // in-chunk exposure) adds a BFS seed without adding any visible light —
+    // its glow is carried by the exposed cells around it. Keep emitters only
+    // where the pool actually meets something light can travel through.
+    // Cells on the chunk border keep theirs (cross-chunk exposure unknown).
+    for (const [idx] of chunk.emitters) {
+      const lx = idx % CHUNK, lz = ((idx / CHUNK) | 0) % CHUNK, y = (idx / (CHUNK * CHUNK)) | 0;
+      if (chunk.get(lx, y, lz) !== LAVA) continue;
+      if (lx === 0 || lx === CHUNK - 1 || lz === 0 || lz === CHUNK - 1) continue;
+      const exposed = (id) => id !== LAVA && !BLOCKS[id].opaque;
+      if (exposed(chunk.get(lx, y + 1, lz)) ||
+          exposed(chunk.get(lx + 1, y, lz)) || exposed(chunk.get(lx - 1, y, lz)) ||
+          exposed(chunk.get(lx, y, lz + 1)) || exposed(chunk.get(lx, y, lz - 1))) continue;
+      chunk.emitters.delete(idx);
     }
 
     // pass 2a: trees from grid cells overlapping the chunk + canopy margin
