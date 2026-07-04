@@ -404,6 +404,52 @@ export class Sfx {
     setTimeout(() => this._noiseBurst(80, 0.7, 0.26), 130); // the rumble
   }
 
+  // a Festival Rocket leaving the hand: a short rising whistle over an airy
+  // hiss — the fuse-lit ascent
+  rocketLaunch() {
+    if (!this.enabled || !this._ensure()) return;
+    const ctx = this.ctx, now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(360, now);
+    osc.frequency.exponentialRampToValueAtTime(1240, now + 0.7); // the climb
+    g.gain.setValueAtTime(0.05, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.75);
+    osc.connect(g).connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.78);
+    this._noiseBurst(1800, 0.5, 0.04); // the airy hiss of the trail
+  }
+
+  // the burst: a soft boom followed by a scatter of tiny high pops — the
+  // crackle. The pops are staggered by a hair each so they read as a shower.
+  rocketBurst() {
+    this._noiseBurst(520, 0.14, 0.16); // the boom's crack
+    this._noiseBurst(90, 0.4, 0.3);    // the body
+    for (let i = 0; i < 7; i++) {
+      const t = 60 + i * 55 + Math.random() * 40;
+      setTimeout(() => this._noiseBurst(2600 + Math.random() * 900, 0.03, 0.06), t);
+    }
+  }
+
+  // a rocket spent mid-glide to thrust the Wanderwing: a punchy forward whoosh
+  rocketBoost() {
+    if (!this.enabled || !this._ensure()) return;
+    const ctx = this.ctx, now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(680, now);
+    osc.frequency.exponentialRampToValueAtTime(220, now + 0.22);
+    g.gain.setValueAtTime(0.1, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.26);
+    osc.connect(g).connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.28);
+    this._noiseBurst(1400, 0.18, 0.09); // the wing-snap of the thrust
+  }
+
   pickup() {
     if (!this.enabled || !this._ensure()) return;
     const ctx = this.ctx;

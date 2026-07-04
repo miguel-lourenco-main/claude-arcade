@@ -1435,6 +1435,25 @@ export class Mobs {
     this.onMobHurt?.(!!opts.crit);
   }
 
+  // a Festival Rocket's burst overhead: nearby PASSIVE mobs bolt for a moment,
+  // fleeing the noise (hostiles are unmoved — a bang doesn't scare the dark).
+  // Bonded/tamed companions keep their heads; nothing takes damage. Returns
+  // the count spooked (a test hook).
+  spook(x, y, z, radius = 8) {
+    const r2 = radius * radius;
+    let n = 0;
+    for (const m of this.mobs) {
+      if (m.spec.behavior !== "passive" || m.bonded || m.tamed || m.spec.trades) continue;
+      const dx = m.x - x, dy = m.y - y, dz = m.z - z;
+      if (dx * dx + dy * dy + dz * dz > r2) continue;
+      m.state = "flee";
+      m.stateT = 2.2;
+      m.yaw = Math.atan2(m.x - x, m.z - z); // face away from the bang
+      n++;
+    }
+    return n;
+  }
+
   _remove(i) {
     this.scene.remove(this.mobs[i].group);
     this.mobs.splice(i, 1);

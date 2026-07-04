@@ -8,7 +8,7 @@ import {
   BERRIES, IRON_ORE, COBBLE, TORCH, MEAL_ROOT, SLING_STONE, PLANKS, BOAT,
   COAL_ORE, GLASS, GRAVEL, MOSS_CLUMP, ROOT_SEED, SILVERFIN, ROAST_LOIN,
   STONE_PICK, COMPASS, BARK_JERKIN, IRON_TREADS, IRON_INGOT, STARSTONE, RAIL,
-  KELPSALVE, QUILL, PAIL,
+  KELPSALVE, QUILL, PAIL, ROCKET_SUN, ROCKET_EMBER, ROCKET_GLEAM,
 } from "./blocks.js";
 import { mulberry32 } from "./noise.js";
 
@@ -59,6 +59,20 @@ export const OFFERS = [
 
 export const OFFERS_PER_DAY = 3;
 
+// Fairday: every seventh day the Wanderlings send light back up to thank the
+// old sky for its pearls, and the Peddler turns up with an armful of Festival
+// Rockets. One rocket offer takes the top of the board on those days — a
+// festival price the flower-picker's recipe undercuts, but he saves the walk.
+export const FAIR_OFFERS = [
+  { give: [[BERRIES, 4]], get: [ROCKET_SUN, 6], fair: true },
+  { give: [[BERRIES, 4]], get: [ROCKET_EMBER, 6], fair: true },
+  { give: [[BERRIES, 4]], get: [ROCKET_GLEAM, 6], fair: true },
+];
+
+// is `day` a Fairday? Day 0 is a Wanderling's first waking — the festival
+// lands on days 7, 14, 21, ...
+export function isFairday(day) { return day > 0 && day % 7 === 0; }
+
 // the day's three offers, deterministic in (seed, day) — a seeded partial
 // Fisher-Yates over the table indices
 export function dailyOffers(seed, day) {
@@ -68,7 +82,13 @@ export function dailyOffers(seed, day) {
     const j = (rand() * (i + 1)) | 0;
     [idx[i], idx[j]] = [idx[j], idx[i]];
   }
-  return idx.slice(0, OFFERS_PER_DAY).map((i) => OFFERS[i]);
+  const picks = idx.slice(0, OFFERS_PER_DAY).map((i) => OFFERS[i]);
+  // Fairday: the day's rocket takes the top slot (which variant rotates with
+  // the same seeded stream, so the whole world sees the same festival board)
+  if (isFairday(day)) {
+    picks[0] = FAIR_OFFERS[(rand() * FAIR_OFFERS.length) | 0];
+  }
+  return picks;
 }
 
 export function canAfford(offer, inventory) {

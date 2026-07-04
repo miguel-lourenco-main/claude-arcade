@@ -9,6 +9,7 @@ import { Inventory, makeStack, stackToSave } from "./inventory.js";
 import { ItemDrops } from "./entities.js";
 import { PrimedKegs } from "./explosives.js";
 import { Projectiles } from "./projectiles.js";
+import { Fireworks } from "./fireworks.js";
 import { Mobs } from "./mobs.js";
 import { MeteorShowers } from "./meteors.js";
 import { Prowl } from "./prowl.js";
@@ -857,6 +858,18 @@ const interaction = new Interaction(world, player, scene, hud, {
       });
     sfx.twang(charge);
   },
+  // a Festival Rocket launches straight up from just over the Wanderling's
+  // head — a spark of fuse, then a burst of the agent's colour (`fireworks`
+  // is a later const, like `stones`; the callback only fires at runtime)
+  canLaunchRocket: () => fireworks.canLaunch(),
+  onLaunchRocket: (id) => {
+    const r = BLOCKS[id].rocket;
+    fireworks.launch(player.pos.x, player.eyeY + 0.4, player.pos.z, r.color, r.shape);
+    sfx.rocketLaunch();
+  },
+  // a rocket spent mid-glide thrust the Wanderwing (player.glideBoost did the
+  // physics + wing wear already); this is just the whoosh cue
+  onGlideBoost: () => sfx.rocketBoost(),
   // quills are consumed from ANYWHERE in the satchel (the stave holds the
   // selected slot), so the seed-slot canConsume doesn't fit here
   hasAmmo: (id) => inventory.count(id) > 0,
@@ -1128,6 +1141,15 @@ const stones = new Projectiles(scene, materials, {
     sfx.stoneCrack();
     interaction.particles.burst(x - 0.5, y - 0.5, z - 0.5,
       atlas.avgColor[BLOCKS[SLING_STONE].tiles.side] || [0.5, 0.5, 0.5], 6);
+  },
+});
+
+// Festival Rockets: the ascent + burst visuals. A burst booms and spooks the
+// nearby passive grazers (hostiles are unmoved); it never touches a block.
+const fireworks = new Fireworks(scene, {
+  onBurst: (x, y, z) => {
+    sfx.rocketBurst();
+    mobs.spook(x, y, z, 8);
   },
 });
 
@@ -1569,6 +1591,7 @@ function tick(now) {
     carts.update(frameDt, world, player);
     kegs.update(frameDt, world, player);
     stones.update(frameDt, world);
+    fireworks.update(frameDt, world);
     fishing.update(frameDt, world, player);
     meteors.update(frameDt, sky, camera);
     worldSeconds += frameDt;
@@ -1780,7 +1803,7 @@ requestAnimationFrame(tick);
 if (NO_LOCK) {
   window.voxelcraft = {
     player, world, hud, sky, terrain, interaction, mobs, drops, saplings, crops,
-    inventory, kegs, stones, boats, carts, fishing, signBoards, wayfinder, meteors,
+    inventory, kegs, stones, fireworks, boats, carts, fishing, signBoards, wayfinder, meteors,
     // the Prowl: prowl.active / prowl.nightPlan(n) / prowl.quietT etc., plus
     // the armer — forceProwl() marks the coming night regardless of the hash
     prowl,

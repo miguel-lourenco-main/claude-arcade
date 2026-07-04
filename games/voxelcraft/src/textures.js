@@ -172,6 +172,12 @@ export const TILE = {
   // the Wanderwing (see LORE.md): a folded patchwork wing-cape icon — leaf-
   // green membrane panels stitched over quill ribs, a mustard collar lashing.
   WANDERWING: 132,
+  // the Festival Rockets (see LORE.md): a thin paper tube capped with a
+  // pointed nose and trailing a fuse, its wound color-band tinted by the
+  // burst agent — gold Sunwisp, red Emberbell, nacre-green Gleam.
+  ROCKET_SUN: 133,
+  ROCKET_EMBER: 134,
+  ROCKET_GLEAM: 135,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -2122,6 +2128,42 @@ painters[TILE.WANDERWING] = (p) => {
   p.px(4, 6, RIB[0], RIB[1], RIB[2]); p.px(11, 8, RIB[0], RIB[1], RIB[2]);
   p.px(6, 10, RIB[0], RIB[1], RIB[2]);
 };
+
+// a Festival Rocket icon: an upright paper tube with a pointed nose-cone, a
+// wound color-band that tells the burst apart, and a little fuse curling off
+// the base. `band` is the agent's [r,g,b]; the tube/nose stay neutral paper.
+const rocketPainter = (band) => (p) => {
+  p.clear();
+  const PAPER = [206, 198, 180], PAPER_HI = [230, 224, 210], PAPER_LO = [150, 142, 126];
+  const NOSE = [176, 120, 96];
+  const dot = (x, y, c, j = 6) => {
+    if (x < 0 || y < 0 || x >= TILE_PX || y >= TILE_PX) return;
+    const d = (p.rand() * 2 - 1) * j;
+    p.px(x, y, c[0] + d, c[1] + d, c[2] + d);
+  };
+  // the body tube runs x 6..9, y 5..13; a highlight column on the left edge
+  for (let y = 5; y <= 13; y++) {
+    for (let x = 6; x <= 9; x++) {
+      const band0 = y >= 8 && y <= 10; // the wound color-band around the middle
+      const c = band0 ? band : (x === 6 ? PAPER_HI : x === 9 ? PAPER_LO : PAPER);
+      dot(x, y, c, band0 ? 10 : 6);
+    }
+  }
+  // the pointed nose-cone tapering to a tip at y 2
+  dot(7, 4, NOSE); dot(8, 4, NOSE);
+  dot(7, 3, NOSE); dot(8, 3, NOSE);
+  dot(7, 2, [210, 196, 150], 4); // a bright cap on the point
+  // a bright fleck of the burst color peeking from the nose (the charge)
+  p.px(8, 5, band[0], band[1], band[2]);
+  // the fuse curling off the base, and a glowing spark at its tip
+  dot(9, 14, [70, 60, 48], 3);
+  dot(10, 15, [70, 60, 48], 3);
+  p.px(11, 15, 255, 220, 150);
+  p.px(11, 14, 255, 244, 200);
+};
+painters[TILE.ROCKET_SUN] = rocketPainter([236, 190, 66]);
+painters[TILE.ROCKET_EMBER] = rocketPainter([214, 74, 56]);
+painters[TILE.ROCKET_GLEAM] = rocketPainter([120, 214, 174]);
 
 export function buildAtlas(seed = 1337) {
   const size = ATLAS_TILES * TILE_PX;

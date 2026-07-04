@@ -89,6 +89,8 @@ const GLIDE_TURN_EASE = 3.2;    // how hard the camera heading steers the track
 const GLIDE_SECONDS_PER_DUR = 2.5; // glide seconds spent per point of wing wear
 const GLIDE_SAFE_LAND = 12;     // impact speed below this lands clean
 const GLIDE_IMPACT_FACTOR = 0.5;// the wing absorbs most of a hard slam
+const GLIDE_BOOST = 8;          // a Festival Rocket's mid-glide thrust (bl/s)
+const GLIDE_BOOST_CAP = 16;     // the ceiling a boost can raise cruise to
 
 
 export class Player {
@@ -322,6 +324,28 @@ export class Player {
         this._wearWing();
       }
     }
+  }
+
+  // can a Festival Rocket boost the glide right now? (mid-glide, wing worn —
+  // interact.js checks this BEFORE consuming the rocket, so a boost that can't
+  // happen never eats one)
+  canGlideBoost() { return this.gliding && this._wingSlot() >= 0; }
+
+  // a rocket spent mid-glide: thrust along the look vector. The forward cruise
+  // jumps by the impulse (capped, so repeated rockets plateau rather than run
+  // away), the horizontal track snaps onto the look heading, and a nose-up aim
+  // trades the thrust into a climb — the long-distance flight loop. The wing
+  // pays one point of dur for the push.
+  glideBoost() {
+    if (!this.canGlideBoost()) return false;
+    const dir = this.lookDir();
+    this._glideSpeed = Math.min(GLIDE_BOOST_CAP, this._glideSpeed + GLIDE_BOOST);
+    const hlen = Math.hypot(dir.x, dir.z) || 1;
+    this.vel.x = (dir.x / hlen) * this._glideSpeed;
+    this.vel.z = (dir.z / hlen) * this._glideSpeed;
+    this.vel.y += dir.y * GLIDE_BOOST; // aim up to climb, down to dive
+    this._wearWing();                   // one point of the wing for the thrust
+    return true;
   }
 
   // spend one point of the worn wing's durability; at 0 it frays mid-air —

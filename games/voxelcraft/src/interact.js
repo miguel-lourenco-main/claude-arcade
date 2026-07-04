@@ -8,7 +8,7 @@ import {
   SLING_STONE, BOAT, WATER, LAVA, FISHING_POLE, SNOW_LAYER, QUILL, ROOT_SEED,
   SILVERFIN, MURK_LANTERN, GLEAM_MOSS, RAIL, CART,
   PAIL, WATER_PAIL, EMBER_PAIL, CINDERGLASS,
-  BLOCKS, isSolid, isPlant, isFluid, isDoor, isDoorLower, isGate, isSign, isRail,
+  BLOCKS, isSolid, isPlant, isFluid, isDoor, isDoorLower, isGate, isSign, isRail, isRocket,
   DOOR_TOGGLE, dropFor, yawToFacing,
 } from "./blocks.js";
 import { HEIGHT } from "./world.js";
@@ -20,6 +20,7 @@ const ACTION_REPEAT_MS = 240;
 const EAT_SECONDS = 1.2;      // hold right-click this long to finish a bite
 const CHEW_INTERVAL = 0.28;   // chewing sound cadence while eating
 const THROW_COOLDOWN_MS = 350; // between sling-stone throws
+const ROCKET_COOLDOWN_MS = 400; // between rocket launches/boosts (hold-repeat)
 
 // Amanatides & Woo voxel traversal. `skip(id)` marks extra block ids the ray
 // passes through — the entity-clamp rays skip rails, because a trundle LIVES
@@ -141,6 +142,9 @@ export class Interaction {
     this.onThrow = opts.onThrow;           // () => launch a sling stone
     this.canThrowStone = opts.canThrow;    // () => bool (projectile cap)
     this.onShoot = opts.onShoot;           // (charge 0..1) => loose a quill
+    this.onLaunchRocket = opts.onLaunchRocket; // (rocketId) => send one skyward
+    this.canLaunchRocket = opts.canLaunchRocket; // () => bool (launch cap)
+    this.onGlideBoost = opts.onGlideBoost; // () => a rocket-thrust cue (sfx)
     this.hasAmmo = opts.hasAmmo;           // (id) => any in the WHOLE satchel
     this.consumeAmmo = opts.consumeAmmo;   // (id) => take one from anywhere
     this.mobs = opts.mobs;           // Mobs instance (punching)
@@ -175,6 +179,7 @@ export class Interaction {
 
     // throwing state (right-click with a sling stone selected)
     this._nextThrow = 0;
+    this._nextRocket = 0;
     // drawing state (hold right-click with a Springstave selected): drawT
     // climbs to 1 over a second; onMouseUp looses. Exposed for the HUD's
     // crosshair pinch and the hand animation.
@@ -710,6 +715,32 @@ export class Interaction {
     if (this.onSwing) this.onSwing();
   }
 
+  // a Festival Rocket's right-click. Consume-last discipline throughout: the
+  // cooldown, the glide predicate, the launch cap, and the inventory take are
+  // all cleared BEFORE anything is spent, so a refused use never eats a rocket.
+  //   - mid-glide with a wing worn: the rocket thrusts the Wanderwing along the
+  //     look vector (player.glideBoost pays the wing a point of dur).
+  //   - otherwise: it launches straight up to burst.
+  _useRocket(id) {
+    const now = performance.now();
+    if (now < this._nextRocket) return;
+    // the glide-boost path — the long-distance flight loop
+    if (this.player.canGlideBoost && this.player.canGlideBoost()) {
+      if (this.player.mode === "survival" && !this.canConsume(id)) return;
+      this._nextRocket = now + ROCKET_COOLDOWN_MS;
+      this.player.glideBoost();
+      if (this.onGlideBoost) this.onGlideBoost();
+      return;
+    }
+    // the launch path
+    if (!this.onLaunchRocket) return;
+    if (this.canLaunchRocket && !this.canLaunchRocket()) return; // launch cap
+    if (this.player.mode === "survival" && !this.canConsume(id)) return;
+    this._nextRocket = now + ROCKET_COOLDOWN_MS;
+    this.onLaunchRocket(id);
+    if (this.onSwing) this.onSwing();
+  }
+
   // a Dib-Pole in hand owns right-click: no float out -> cast one; a float
   // out -> reel it in (which is the catch, if something is dibbing). Armed
   // once per physical press: the hold-repeat can't cast-and-instantly-reel,
@@ -952,6 +983,14 @@ export class Interaction {
     // override escape hatch as the stone and the skiff
     if (this.hotbar.selectedId() === FISHING_POLE && !this._interactiveTarget()) {
       this._fish();
+      return;
+    }
+    // a Festival Rocket in hand owns right-click: mid-glide it thrusts the
+    // Wanderwing, otherwise it launches skyward. Sneak to override (place-
+    // against escape hatch), like the stone and the skiff — though a rocket
+    // never places, so the sneak just eats the click harmlessly.
+    if (isRocket(this.hotbar.selectedId()) && !this._interactiveTarget()) {
+      this._useRocket(this.hotbar.selectedId());
       return;
     }
     // a Pail in hand owns right-click: an empty one scoops the fluid the

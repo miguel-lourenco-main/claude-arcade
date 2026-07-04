@@ -18,6 +18,7 @@ import {
   GLOAM_CROWN, GLOAM_JERKIN, GLOAM_LEGGINGS, GLOAM_TREADS,
   PLANK_HOE, STONE_HOE, IRON_HOE, MEAL_ROOT, BOGBEAN, POTTAGE, LOOMSTONE,
   QUILL, SPRINGSTAVE, STARGLASS, MURK_LANTERN, PAIL,
+  ROCKET_SUN, ROCKET_EMBER, ROCKET_GLEAM, POPPY, DANDELION, GLEAM_MOSS,
 } from "./blocks.js";
 
 // in: [[blockId, count], ...]  out: [blockId, count]  note: extra recipe copy
@@ -48,6 +49,12 @@ export const RECIPES = [
   // the Springstave: bent green, corded with moss-twine (workbench)
   { in: [[PLANKS, 3], [MOSS_CLUMP, 1]], out: [SPRINGSTAVE, 1], note: "bent green, corded with moss-twine" },
   { in: [[COAL_ORE, 4], [SAND, 5]], out: [BLAST_KEG, 1] },
+  // Festival Rockets: a fistful of coal wound with a color agent. The burst
+  // color follows the agent — a Sunwisp burns gold, an Emberbell red, a pinch
+  // of Gleam Moss the caves' nacre-green (workbench). Three per winding.
+  { in: [[COAL_ORE, 1], [DANDELION, 2]], out: [ROCKET_SUN, 3], note: "coal wound with sunwisp — a gold droop" },
+  { in: [[COAL_ORE, 1], [POPPY, 2]], out: [ROCKET_EMBER, 3], note: "coal wound with emberbell — a red bloom" },
+  { in: [[COAL_ORE, 1], [GLEAM_MOSS, 2]], out: [ROCKET_GLEAM, 3], note: "coal wound with gleam moss — a green ring" },
   // Wanderer's Pottage: the mire and the meadow, in one pot (workbench)
   { in: [[MEAL_ROOT, 1], [BOGBEAN, 2]], out: [POTTAGE, 1], note: "the mire and the meadow, in one pot" },
   { in: [[SAND, 4]], out: [SANDSTONE, 1] },

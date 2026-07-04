@@ -279,6 +279,15 @@ export const CINDERGLASS = 152;
 // fly — and gives NO plate; its durability is spent by GLIDE TIME, not by
 // hits. Held Space while falling deploys it; the wind does the rest.
 export const WANDERWING = 153;
+// Festival Rockets (see LORE.md): the packed spark a Wanderling looses on
+// Fairday to "give the old sky a pearl back". Each variant is a fistful of
+// coal wound with a color agent, and the BURST color follows the agent —
+// Sunwisp burns gold, Emberbell red, Gleam Moss a nacre-green. Carried items,
+// never world blocks, stack like ammunition. Right-click launches one straight
+// up to burst; right-click WHILE GLIDING spends one to thrust the Wanderwing.
+export const ROCKET_SUN = 154;   // Sunwisp Rocket — a gold willow droop
+export const ROCKET_EMBER = 155; // Emberbell Rocket — a red sphere puff
+export const ROCKET_GLEAM = 156; // Gleam Rocket — a nacre-green ring
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -1107,6 +1116,26 @@ BLOCKS[WANDERWING] = def("Wanderwing", {
   armor: { kind: "jerkin", tier: "wing", prot: 0, maxDur: 200, glide: true },
 });
 
+// the Festival Rockets: three carried, stacking, never-placed items. The
+// `rocket` field carries the burst spec fireworks.js reads — an RGB tint that
+// follows the color agent, and one of the three bloom shapes. Right-click
+// routing (interact.js) launches or glide-boosts; nothing about them is ever
+// a world block, so they save with the inventory like any other item.
+const rocket = (name, tile, color, shape) => def(name, {
+  tiles: cube(tile),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  hardness: 0.05,
+  placeable: false,
+  sound: "wood",
+  rocket: { color, shape },
+});
+BLOCKS[ROCKET_SUN] = rocket("Sunwisp Rocket", TILE.ROCKET_SUN, 0xffcf4a, "willow");
+BLOCKS[ROCKET_EMBER] = rocket("Emberbell Rocket", TILE.ROCKET_EMBER, 0xff5238, "sphere");
+BLOCKS[ROCKET_GLEAM] = rocket("Gleam Rocket", TILE.ROCKET_GLEAM, 0x84e8bc, "ring");
+
 // --- the Pearlfall's gifts ------------------------------------------------------
 // Starstone: a landed pearl of the old sky, dense and still glowing. It only
 // ever enters the world through a meteor landing (meteors.js writes it via
@@ -1376,6 +1405,12 @@ export function armorProtection(slots, fall = false) {
     if (!fall && s.mod === "ward") total += WARD_BONUS;
   }
   return Math.min(ARMOR_CAP, total);
+}
+
+// a Festival Rocket item (any variant): right-click launches or glide-boosts
+// instead of doing nothing (it can never be placed).
+export function isRocket(id) {
+  return BLOCKS[id] !== undefined && BLOCKS[id].rocket != null;
 }
 
 // a cross block that pops off / is replaced in place when built over (plants;
