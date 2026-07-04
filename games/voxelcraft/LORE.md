@@ -164,6 +164,22 @@ specific item vocabulary.
   the Notice Post still says, take what the chest offers, and leave the
   walls to their sulk. It's agreed this is a fair split.
 
+- **The Living Steads & the Steadfolk** — not every homestead folded down to
+  its footings in the turn. A rare few came through WHOLE and stayed lived-in:
+  two or three small cottages with the doors still on, a well the water still
+  answers, a fenced meal-root patch, and torches lit against the dark. The
+  folk who kept them are the **Steadfolk** — Wanderlings who stopped
+  wandering. They potter the courtyard by day, each near their own door; head
+  indoors at dusk to sit by the hearth; and keep to their patch of the Upturn
+  (a Steadfolk never strays far from its well). Each works one trade — the
+  **grower** minds the crops and brambles, the **wright** the timber and
+  sky-iron, the **keeper** the hearth and the pot — and will barter three
+  goods a day from it, rotating with the calendar like the Peddler's board. Do
+  a Steadfolk two good turns in a day and it warms to you: the third barter
+  comes cheaper, until dawn deals a cold board again. They are passive to a
+  fault — kick one and it flees and won't deal with you for a while — and, like
+  the bondlings, they STAY: a stead's folk are the same folk when you come
+  back, unless the dark got one while you were away.
 - **The Unshaken** — when the world flipped, every shadow was shaken off
   its owner and most of them politely dispersed. One did not. It has
   been down there since, in the gloam under the gloam, growing fat on

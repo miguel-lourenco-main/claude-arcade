@@ -81,6 +81,10 @@ export class World {
                                       // state was seeded (once per world — a
                                       // regenerated chunk never re-deals loot)
     this.delvesSeeded = new Set();    // same contract for the Delvings-Under
+    this.steads = new Map();          // "cx,cz" -> { residents: [{job, homeIdx,
+                                      // hp, trades, tradeDay, dead}] } — a
+                                      // Living Stead's residents, seeded once
+                                      // per world (steads.js)
     this.generator = null;            // set by terrain.js
     this._lastChunk = null;           // 1-entry lookup cache (meshing/physics locality)
   }
@@ -196,6 +200,39 @@ export class World {
       if (typeof key === "string" && /^-?\d+,-?\d+$/.test(key)) {
         this.delvesSeeded.add(key);
       }
+    }
+  }
+
+  // Living Stead resident records (additive save field): [["cx,cz",
+  // [[job, homeIdx, hp, trades, tradeDay, dead], ...]], ...]. The stead's
+  // BLOCKS regenerate from the seed; this is only the mutable resident state
+  // (which are dead, their warmth, their hurt), keyed per stead.
+  serializeSteads() {
+    return [...this.steads].map(([key, rec]) => [key, rec.residents.map((r) => [
+      r.job, r.homeIdx, Math.max(0, Math.round(r.hp)),
+      r.trades | 0, r.tradeDay | 0, r.dead ? 1 : 0,
+    ])]);
+  }
+
+  loadSteads(arr) {
+    if (!Array.isArray(arr)) return;
+    for (const pair of arr) {
+      if (!Array.isArray(pair) || typeof pair[0] !== "string" ||
+          !/^-?\d+,-?\d+$/.test(pair[0]) || !Array.isArray(pair[1])) continue;
+      const residents = [];
+      for (const r of pair[1]) {
+        if (!Array.isArray(r) || r.length < 6) continue;
+        const [job, homeIdx, hp, trades, tradeDay, dead] = r;
+        if (typeof job !== "string" || !Number.isFinite(homeIdx)) continue;
+        residents.push({
+          job, homeIdx: homeIdx | 0,
+          hp: Number.isFinite(hp) ? Math.max(0, hp) : 10,
+          trades: Number.isFinite(trades) ? trades | 0 : 0,
+          tradeDay: Number.isFinite(tradeDay) ? tradeDay | 0 : -1,
+          dead: dead === 1 || dead === true,
+        });
+      }
+      if (residents.length) this.steads.set(pair[0], { residents });
     }
   }
 

@@ -101,6 +101,17 @@ export const SPECIES = {
     cap: 1, halfW: 0.4, height: 1.55, rareChance: 0.12, sound: "bell",
     trades: true, grudge: 60, drops: null,
   },
+  // the Steadfolk: the residents of a Living Stead (steads.js). Never spawned
+  // wild — the stead manager instantiates them from its seeded records and
+  // folds them back when the player leaves — so habitat "stead" (like the
+  // boss's "boss") matches neither the day- nor night-cleanup rule. Passive,
+  // leashed to their well, indoors at dusk; trade from a job table and keep a
+  // 60-second grudge if kicked, exactly like the Peddler.
+  steadfolk: {
+    name: "Steadfolk", hp: 10, speed: 1.5, behavior: "passive", habitat: "stead",
+    cap: 0, halfW: 0.32, height: 1.5, sound: "hum",
+    trades: true, grudge: 60, drops: null,
+  },
 };
 
 // --- procedural skins ---------------------------------------------------------
@@ -234,7 +245,64 @@ export class Mobs {
     }));
     const tuTuft = this._mat(paint(0xa73, [232, 214, 178], 12));
 
+    // Steadfolk: an upright Wanderling — bog-mint skin like the Peddler's, but
+    // homestead cloth instead of a road coat, and no pack. Four seeded tunic
+    // palettes and a matching cap give the residents distinct silhouettes; a
+    // job sash across the chest tells grower from wright from keeper at a
+    // glance. (Shared materials, picked by variant/job — no per-mob leak.)
+    const sfSkin = this._mat(paint(0x5a01, [126, 200, 178], 9));
+    const sfFace = this._mat(paint(0x5a02, [126, 200, 178], 9, (ctx) => {
+      ctx.fillStyle = "#22262e";
+      ctx.fillRect(4, 6, 2, 2); ctx.fillRect(10, 6, 2, 2); // steady eyes
+      ctx.fillStyle = "#3f6f60";
+      ctx.fillRect(6, 11, 4, 1); // a settled mouth
+    }));
+    const sfTunicPal = [[74, 108, 120], [120, 78, 104], [96, 122, 70], [178, 140, 70]];
+    const sfTunic = sfTunicPal.map((c, i) => this._mat(paint(0x5a10 + i, c, 10)));
+    const sfCap = sfTunicPal.map((c, i) =>
+      this._mat(paint(0x5a20 + i, [c[0] * 0.7, c[1] * 0.7, c[2] * 0.7], 8)));
+    const sfSash = {
+      grower: this._mat(paint(0x5a31, [88, 150, 78], 8)),
+      wright: this._mat(paint(0x5a32, [150, 108, 66], 8)),
+      keeper: this._mat(paint(0x5a33, [200, 110, 70], 8)),
+    };
+
     return {
+      // an upright homesteader: tunic torso, capped head, a job sash, swinging
+      // arms and legs. opts.variant picks the cloth palette; opts.job the sash.
+      steadfolk: (opts = {}) => {
+        const v = (opts.variant | 0) % 4;
+        const tunic = sfTunic[v], cap = sfCap[v];
+        const sash = sfSash[opts.job] || sfSash.grower;
+        const g = new THREE.Group();
+        const torso = box(0.44, 0.62, 0.26, tunic);
+        torso.position.y = 0.92;
+        g.add(torso);
+        // the job sash: a thin diagonal band across the chest
+        const band = box(0.48, 0.12, 0.28, sash);
+        band.position.set(0, 1.0, 0.02);
+        band.rotation.z = 0.5;
+        g.add(band);
+        const headMats = [sfSkin, sfSkin, sfSkin, sfSkin, sfFace, sfSkin];
+        const head = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.38, 0.38), headMats);
+        head.position.y = 1.42;
+        g.add(head);
+        const capMesh = box(0.44, 0.14, 0.44, cap);
+        capMesh.position.y = 1.64;
+        g.add(capMesh);
+        const legs = [];
+        for (const side of [-1, 1]) {
+          const arm = box(0.13, 0.5, 0.13, tunic);
+          arm.position.set(side * 0.29, 0.9, 0.02);
+          g.add(arm); legs.push(arm);
+        }
+        for (const side of [-1, 1]) {
+          const leg = box(0.16, 0.44, 0.16, sfSkin);
+          leg.position.set(side * 0.12, 0.22, 0.02);
+          g.add(leg); legs.push(leg);
+        }
+        return { group: g, legs };
+      },
       snuffet: () => {
         const g = new THREE.Group();
         const body = box(0.7, 0.55, 0.85, snBody);
@@ -518,10 +586,10 @@ export class Mobs {
     return n;
   }
 
-  spawnAt(x, y, z, speciesKey = "snuffet") {
+  spawnAt(x, y, z, speciesKey = "snuffet", opts = {}) {
     const spec = SPECIES[speciesKey];
     if (!spec) return null;
-    const { group, legs } = this._builders[speciesKey]();
+    const { group, legs } = this._builders[speciesKey](opts);
     group.position.set(x, y, z);
     this.scene.add(group);
     const mob = {
@@ -565,6 +633,13 @@ export class Mobs {
       lungeCd: 0,        // boss phase 2: seconds to the next lunge
       farT: 0,           // boss: seconds spent >60 blocks from the player
       dimT: 0,           // a Dusk Thread's mark: halved pace while it holds
+      // the Steadfolk (steads.js): a resident manager fills these in — null
+      // here keeps every other creature's update paths untouched
+      stead: null,       // { wx, wy, wz, leash } — the well it's leashed to
+      record: null,      // its persistent resident record (warmth, hp)
+      wp: null,          // current wander waypoint
+      steadWait: 0,      // day-wander pause timer
+      knockCd: 0,        // door-chime throttle
     };
     this.mobs.push(mob);
     return mob;
@@ -914,7 +989,7 @@ export class Mobs {
 
   // --- per-frame update ---------------------------------------------------------
 
-  update(dt, { world, player, sfx, terrain, night }) {
+  update(dt, { world, player, sfx, terrain, night, tod = 0.25 }) {
     this._spawnTimer -= dt;
     if (this._spawnTimer <= 0) {
       this._spawnTimer = SPAWN_INTERVAL;
@@ -933,7 +1008,7 @@ export class Mobs {
 
       // bondlings and tamed companions never despawn — distance is handled
       // by their own teleports; a boss has its own leash below
-      if (distToPlayer > DESPAWN_DIST && !m.bonded && !m.tamed && !spec.boss) {
+      if (distToPlayer > DESPAWN_DIST && !m.bonded && !m.tamed && !spec.boss && !m.stead) {
         this._remove(i); continue;
       }
       // a kited boss doesn't vanish at a distance line — but if the player
@@ -953,6 +1028,13 @@ export class Mobs {
         // a fallen bondling drops nothing; it gets the mourning chime instead
         if (m.bonded) {
           this.onBondlingDeath?.(m);
+          this._remove(i);
+          continue;
+        }
+        // a fallen steadfolk: no drops — the manager marks its record dead so
+        // it stays gone across saves, and mourns it like a bondling
+        if (m.stead) {
+          this.onSteadfolkDeath?.(m);
           this._remove(i);
           continue;
         }
@@ -1182,6 +1264,13 @@ export class Mobs {
         }
       }
 
+      // --- the steadfolk: leashed wander by day, indoors at dusk/night ---
+      // Overrides the ambient idle/walk while it's neither fleeing a kick nor
+      // (impossibly) chasing. The one branch that reads the time of day.
+      if (m.stead && !chasing && m.state !== "flee") {
+        targetSpeed = this._steadBehavior(m, dt, tod);
+      }
+
       // neutral contact damage (leaning on a Prickleback is a mistake)
       if (canFight && spec.contactDamage && m.contactCd <= 0) {
         const pad = 0.15;
@@ -1284,6 +1373,101 @@ export class Mobs {
       return d > 8 ? m.spec.speed : m.spec.speed * 0.7;
     }
     return 0;
+  }
+
+  // a steadfolk's turn: stroll between the buildings and the well by day,
+  // funnel indoors to the hearth torch at dusk and settle there through the
+  // night, and always keep within a leash of the well. Sets m.yaw; returns
+  // the desired speed. The time of day is the phase switch.
+  _steadBehavior(m, dt, tod) {
+    const spec = m.spec;
+    const S = m.stead;
+    const home = m.buildings[m.homeIdx] || m.buildings[0];
+    m.knockCd = Math.max(0, m.knockCd - dt);
+    const distWell = Math.hypot(m.x - S.wx, m.z - S.wz);
+    // leash: strayed past the tether, everything else waits — head for home
+    if (distWell > S.leash) {
+      m.yaw = Math.atan2(S.wx - m.x, S.wz - m.z);
+      return spec.speed * 0.8;
+    }
+    const t = ((tod % 1) + 1) % 1;
+    const phase = (t >= 0.44 && t < 0.52) ? "dusk"
+      : (t >= 0.52 || t < 0.03) ? "night" : "day";
+
+    // door-chime: a soft knock when it passes near its own doorway
+    const dDoor = Math.hypot(m.x - (home.door.x + 0.5), m.z - (home.door.z + 0.5));
+    if (dDoor < 1.1 && m.knockCd <= 0) {
+      m.knockCd = 6;
+      this.onSteadKnock?.(m);
+    }
+
+    if (phase === "day") {
+      // stroll between stops, pausing at each — the living feel
+      m.steadWait -= dt;
+      const wp = m.wp;
+      const atWp = wp && Math.hypot(m.x - wp.x, m.z - wp.z) < 1.2;
+      if (!wp || (atWp && m.steadWait <= 0)) {
+        m.wp = this._steadWaypoint(m);
+        m.steadWait = 1.5 + Math.random() * 3;
+      }
+      if (atWp) return 0; // a pause at the stop
+      m.yaw = Math.atan2(m.wp.x - m.x, m.wp.z - m.z);
+      return spec.speed * 0.55;
+    }
+
+    // dusk / night: funnel through the door to the hearth torch and settle.
+    // Once inside the walls, home in on the torch and stop. Outside, ALIGN to
+    // the door's axis first, then walk straight through the one-wide opening —
+    // approaching head-on (never at a diagonal) keeps a resident from hopping
+    // up onto its own wall instead of stepping through the door.
+    const torch = home.torch;
+    const inside = m.x > home.x0 && m.x < home.x1 && m.z > home.z0 && m.z < home.z1;
+    if (inside) {
+      const dT = Math.hypot(m.x - (torch.x + 0.5), m.z - (torch.z + 0.5));
+      if (dT < 1.2) { m.wp = null; return 0; } // settled by the hearth
+      m.yaw = Math.atan2(torch.x + 0.5 - m.x, torch.z + 0.5 - m.z);
+      return spec.speed * 0.5;
+    }
+    // ALIGN tightly to the door column before advancing: the resident's AABB
+    // (halfW 0.32) only clears a one-wide door within ~0.18 of the cell
+    // centre, so a looser tolerance clips the wall beside the door and stalls
+    const { nx, nz } = home.door;
+    const dcx = home.door.x + 0.5, dcz = home.door.z + 0.5;
+    const tcx = torch.x + 0.5, tcz = torch.z + 0.5; // the hearth, deep inside
+    if (nz !== 0) {
+      // z-facing door: slide onto x = door column, then walk in toward the
+      // hearth (aiming the interior torch, not the door cell, so a resident
+      // sitting on the threshold still steps THROUGH rather than back out)
+      if (Math.abs(m.x - dcx) > 0.15) { m.yaw = Math.atan2(dcx - m.x, 0); return spec.speed * 0.6; }
+      m.yaw = Math.atan2(0, tcz - m.z);
+    } else {
+      if (Math.abs(m.z - dcz) > 0.15) { m.yaw = Math.atan2(0, tcz - m.z); return spec.speed * 0.6; }
+      m.yaw = Math.atan2(tcx - m.x, 0);
+    }
+    return spec.speed * 0.6;
+  }
+
+  // a day-wander stop: pottering about the courtyard just OUTSIDE the home's
+  // door (the central well's curb blocks a straight path between buildings, so
+  // each resident mills near its own cottage — collectively the stead lives).
+  // Points stay on the courtyard side of the door and inside the leash.
+  _steadWaypoint(m) {
+    const home = m.buildings[m.homeIdx] || m.buildings[0];
+    const { nx, nz } = home.door;
+    const fx = home.door.x + nx + 0.5, fz = home.door.z + nz + 0.5;
+    const side = 0.8 + Math.random() * 2.6;  // how far into the courtyard
+    const lat = (Math.random() - 0.5) * 4;   // spread along the wall
+    return {
+      x: fx + nx * side + (nx === 0 ? lat : 0),
+      z: fz + nz * side + (nz === 0 ? lat : 0),
+    };
+  }
+
+  // remove a specific mob (the stead manager folds a resident back into its
+  // saved record this way)
+  removeMob(m) {
+    const i = this.mobs.indexOf(m);
+    if (i >= 0) this._remove(i);
   }
 
   // sampled visibility check between the mob's chest and the player's torso

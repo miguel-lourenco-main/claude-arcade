@@ -13,6 +13,7 @@ import { CHUNK, HEIGHT, SEA_LEVEL } from "./world.js";
 import { Perlin, hash2 } from "./noise.js";
 import { ruinForChunk, stampRuin, seedRuinState } from "./ruins.js";
 import { delveForChunk, stampDelve, seedDelveState } from "./delvings.js";
+import { steadForChunk, stampStead, seedSteadState } from "./steads.js";
 
 const TREE_CELL = 5;   // one tree candidate per 5x5-column cell (grid jitter)
 const TREE_MARGIN = 3; // canopy radius 2 + 1 safety
@@ -420,6 +421,14 @@ export function makeGenerator(seed) {
     if (ruin) {
       stampRuin(chunk, ruin);
       seedRuinState(world, ruin);
+    }
+    // the Living Stead stamps last: an intact homestead. steadForChunk is
+    // mutually exclusive with a ruin/delve chunk, so this never contends for
+    // the surface — it only fires on a chunk the other two declined.
+    const stead = steadForChunk(t, chunk.cx, chunk.cz);
+    if (stead) {
+      stampStead(chunk, stead);
+      seedSteadState(world, stead);
     }
   };
 

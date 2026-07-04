@@ -40,6 +40,10 @@ export function writeSave(world, player, sky, hud, inventory, extra = {}) {
       // additive: delve chunks whose store/sign state was already seeded —
       // absent in older saves, whose delvings simply seed on first generation
       delves: world.serializeDelves(),
+      // additive: Living Stead resident records (dead/warmth/hurt), keyed per
+      // stead — absent in older saves, whose steads seed fresh residents on
+      // first generation
+      steads: world.serializeSteads(),
       saplings: extra.saplings || [],
       // additive: growing meal-root crops [[x,y,z,stage,remain]...] — the
       // stage blocks themselves live in the edit overlay; this is the timers

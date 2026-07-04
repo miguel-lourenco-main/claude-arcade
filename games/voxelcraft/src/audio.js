@@ -107,6 +107,14 @@ export class Sfx {
         this._bellTone(1320, 0.5, 0.05);
         setTimeout(() => this._bellTone(1188, 0.4, 0.035), 210);
         break;
+      case "hum": // Steadfolk: a low, contented two-note hum
+        this._bellTone(392, 0.5, 0.03);
+        setTimeout(() => this._bellTone(440, 0.4, 0.025), 180);
+        break;
+      case "knock": // a steadfolk passing a door: two soft wooden taps
+        this._noiseBurst(220, 0.04, 0.09);
+        setTimeout(() => this._noiseBurst(200, 0.05, 0.08), 120);
+        break;
       case "chirp": // a fed Snuffet: a quick happy two-note trill
         this._bellTone(1568, 0.12, 0.06);
         setTimeout(() => this._bellTone(1976, 0.16, 0.05), 90);

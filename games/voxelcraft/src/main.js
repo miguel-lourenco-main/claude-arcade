@@ -45,6 +45,9 @@ import { makeGenerator, findSpawn, findBiomeLocation } from "./terrain.js";
 import { findNearestRuin, ruinForChunk } from "./ruins.js";
 import { findNearestDelve, delveForChunk } from "./delvings.js";
 import {
+  Steads, findNearestStead, steadForChunk, steadOffers, isWarmed, recordTrade,
+} from "./steads.js";
+import {
   buildMaterials, meshChunk, disposeChunkMeshes, setDayLight, buildBlockGeometry,
   sampleBlockLight,
 } from "./mesher.js";
@@ -263,6 +266,9 @@ if (save && save.signs) world.loadSigns(save.signs); // additive v2 field
 if (save && save.ruins) world.loadRuins(save.ruins);
 // same contract for the Delvings-Under's stores
 if (save && save.delves) world.loadDelves(save.delves);
+// Living Stead resident records (dead/warmth/hurt) — like the ruin markers,
+// must load before any chunk generates so a stead never re-seeds its residents
+if (save && save.steads) world.loadSteads(save.steads);
 // the Notice Posts' text boards — synced against world.signs every frame
 const signBoards = new SignBoards(scene, world);
 
@@ -534,6 +540,11 @@ function teleportTo(kind) {
       y: terrain.heightAt(delve.x, delve.z + 2) + 2.5,
       z: delve.z + 2.5,
     };
+  } else if (kind === "stead") {
+    // land in the courtyard by the well, facing the homestead
+    const stead = findNearestStead(terrain, player.pos.x, player.pos.z);
+    if (!stead) return { ok: false, message: "No stead found within 1000 blocks of here." };
+    dest = { x: stead.x + 0.5, y: stead.h + 2.5, z: stead.z + 4.5 };
   } else {
     dest = findBiomeLocation(terrain, kind, player.pos.x, player.pos.z);
   }
@@ -738,6 +749,27 @@ const fishing = new Fishing(scene, {
   onCue: (text) => hud.announce(text, 1500),
   poleSelected: () => hud.selectedId() === FISHING_POLE,
 });
+
+// a steadfolk's trade window: the day's three offers from its JOB table,
+// discounting the third once the resident has warmed to two trades today.
+// Re-deals the board live the moment warmth flips on, so the discount shows.
+function openSteadTrade(m) {
+  const day = sky.day;
+  const rec = m.record;
+  const open = () => {
+    const warmed = isWarmed(rec, day);
+    const offers = steadOffers(m.steadSeed, m.resIdx, m.job, day, warmed);
+    hud.openTrade(offers, (offer) => {
+      const leftover = executeTrade(offer, inventory); // -1 = can't pay
+      if (leftover < 0) return false;
+      if (leftover > 0) spillStack({ id: offer.get[0], count: leftover });
+      sfx.peddlerHm();
+      if (rec && recordTrade(rec, day)) open(); // warmth just flipped: re-deal
+      return true;
+    });
+  };
+  open();
+}
 
 const interaction = new Interaction(world, player, scene, hud, {
   onEdit: (chunks, info) => {
@@ -1002,13 +1034,18 @@ const interaction = new Interaction(world, player, scene, hud, {
   boats,
   carts,
   fishing,
-  // right-click the Peddler: the trade window with the day's three offers —
-  // unless he's still nursing the grudge from the last kick
+  // right-click a trader — the Peddler, or a Living Stead's steadfolk. Both
+  // open the same trade window (hud.openTrade) with the day's three offers,
+  // and both nurse a 60-second grudge from a kick. The steadfolk pull their
+  // offers from their JOB table and warm to a repeat customer.
   onTradeMob: (m) => {
     if (m.grudgeT > 0) {
-      hud.announce("The Peddler pointedly rearranges his pack.", 2600);
+      hud.announce(m.stead
+        ? "This steadfolk turns away, still smarting."
+        : "The Peddler pointedly rearranges his pack.", 2600);
       return;
     }
+    if (m.stead) { openSteadTrade(m); return; }
     hud.openTrade(dailyOffers(world.seed, sky.day), (offer) => {
       const leftover = executeTrade(offer, inventory); // -1 = can't pay
       if (leftover < 0) return false;
@@ -1175,6 +1212,23 @@ mobs.onBreed = () => {
   awardGleam(1);
   hud.announce("A Snufflet! A loaf in training.", 2600);
 };
+// a fallen steadfolk: mark its record dead (it stays gone) and mourn it
+mobs.onSteadfolkDeath = (m) => {
+  if (m.record) m.record.dead = true;
+  sfx.mourn();
+  hud.announce("A steadfolk falls. The stead is quieter now.", 3600);
+};
+// the door-chime: a soft knock as a resident passes its own doorway
+mobs.onSteadKnock = () => sfx.creature("knock");
+
+// the Living Stead's resident manager: instantiates a stead's Steadfolk as
+// live mobs when the player is near and their chunk is loaded, folds them
+// back into their saved records when the player leaves, and drives the thin
+// roof-smoke life touch. (The Murmur gains no hearth mood: adding one would
+// mean a whole new music bus + scale, which the mood machinery does not make
+// trivial — so that touch is skipped cleanly, per the brief.)
+const steads = new Steads(terrain, mobs, interaction.particles);
+let steadDay = sky.day; // last day a stead warmth-reset ran for
 
 const stopAutosave = startAutosave(() => writeSave(world, player, sky, hud, inventory, {
   saplings: [...saplings].map(([key, due]) => {
@@ -1585,7 +1639,11 @@ function tick(now) {
       }
       return accepted; // a full inventory keeps the rest on the ground
     });
-    mobs.update(frameDt, { world, player, terrain, night: sky.lightLevel < 0.45 });
+    mobs.update(frameDt, { world, player, terrain, night: sky.lightLevel < 0.45, tod: sky.time });
+    // the Living Stead's residents: spawn/despawn near the player, roof smoke.
+    // A crossed dawn re-deals cold trade boards across every seeded stead.
+    if (sky.day !== steadDay) { steadDay = sky.day; steads.resetWarmth(world); }
+    steads.update(frameDt, world, player);
     prowl.update(frameDt, sky); // reads the same night gate the mobs got
     boats.update(frameDt, world, player);
     carts.update(frameDt, world, player);
@@ -1827,6 +1885,13 @@ if (NO_LOCK) {
     // the Delvings-Under: same prediction pair
     findNearestDelve: (x, z) => findNearestDelve(terrain, x, z),
     delveForChunk: (cx, cz) => delveForChunk(terrain, cx, cz),
+    // the Living Stead: placement prediction + the manager + the trade routing,
+    // so tests can find a stead, assert its residents, and drive a barter
+    steads,
+    findNearestStead: (x, z) => findNearestStead(terrain, x, z),
+    steadForChunk: (cx, cz) => steadForChunk(terrain, cx, cz),
+    steadOffers: (m, warmed) => steadOffers(m.steadSeed, m.resIdx, m.job, sky.day, warmed),
+    tradeWithMob: (m) => interaction.onTradeMob(m),
     // wear/model refresh + third-person toggle, so tests can equip the
     // Wanderwing straight into a wear slot and see the model dress + spread
     refreshArmor: () => refreshArmor(),
