@@ -223,13 +223,87 @@ export class PlayerModel {
       overlay(p, 0.32, 0.16, 0.36, 0, -0.66, -0.04, "treads");
     }
 
+    // --- the Wanderwing: a patchwork wing-cape (see LORE.md). Two membrane
+    // planes on quill ribs, rooted at the upper back (-z is the back — the
+    // face rides +z). Hidden until worn; furled flat down the back at rest and
+    // spread wide while gliding (updateWing eases between the two). Seed-tinted
+    // so every Wanderling's wing wears its own hue.
+    const wingRand = mulberry32(seed ^ 0x217e);
+    const WING_MEMBRANE = [
+      88 + ((wingRand() * 40) | 0), 120 + ((wingRand() * 34) | 0), 72 + ((wingRand() * 30) | 0),
+    ];
+    const WING_RIB = [198, 190, 160];
+    const wingMat = mat(paintTexture(seed ^ 0x2a, WING_MEMBRANE, (ctx, rand) => {
+      // patchwork seams + a couple of pale stitch lines across the membrane
+      ctx.fillStyle = "rgba(40,60,34,0.6)";
+      for (const x of [4, 9, 13]) ctx.fillRect(x, 0, 1, 16);
+      for (const y of [5, 11]) ctx.fillRect(0, y, 16, 1);
+      ctx.fillStyle = `rgb(${WING_RIB[0]},${WING_RIB[1]},${WING_RIB[2]})`;
+      for (let i = 0; i < 4; i++) ctx.fillRect((rand() * 15) | 0, (rand() * 15) | 0, 1, 1);
+    }), reg);
+    const ribMat = mat(paintTexture(seed ^ 0x2b, WING_RIB), reg);
+    this._wingRoot = new THREE.Group();
+    this._wingRoot.position.set(0, 1.28, -0.14); // upper back, just behind the torso
+    this._wingRoot.visible = false;
+    this.group.add(this._wingRoot);
+    this._wings = [];
+    for (const side of [-1, 1]) {
+      const pivot = new THREE.Group();
+      pivot.position.set(side * 0.1, 0, 0);
+      // the membrane spreads outward along +x for the right wing (span), with
+      // its inner edge at the pivot; a rib caps the leading (–z) edge
+      const membrane = box(0.5, 0.02, 0.6, wingMat);
+      membrane.position.set(side * 0.28, 0, -0.02);
+      pivot.add(membrane);
+      const rib = box(0.52, 0.04, 0.05, ribMat);
+      rib.position.set(side * 0.28, 0.01, -0.3);
+      pivot.add(rib);
+      this._wingRoot.add(pivot);
+      this._wings.push({ pivot, side });
+    }
+    this._wingSpread = 0; // 0 = furled cape, 1 = wings wide
+    this._setWingPose(0);
+
     this.phase = 0;
     this.swimLean = 0;
     this._swing = 1;
   }
 
+  // per-wing rotation at a given spread (0 furled → 1 wide): furled, the span
+  // rotates down the back into a narrow cape; spread, it lies out level with a
+  // little swept-back dihedral. Lerped so the deploy/fold reads as an unfurl.
+  _setWingPose(t) {
+    this._wingSpread = t;
+    for (const { pivot, side } of this._wings) {
+      // furled: span points down (-side*z-rotation swings +x toward -y) and
+      // wraps slightly around the back
+      const fz = -side * 1.3, fy = side * 0.25, fx = 0.1;
+      // spread: span level, swept back a touch, a hint of upward dihedral
+      const sz = -side * 0.12, sy = -side * 0.22, sx = -0.05;
+      pivot.rotation.z = fz + (sz - fz) * t;
+      pivot.rotation.y = fy + (sy - fy) * t;
+      pivot.rotation.x = fx + (sx - fx) * t;
+    }
+  }
+
+  // ease the wings toward furled (gliding=false) or wide (gliding=true), with
+  // a gentle beat once spread. Called every frame on the WORLD model; the UI
+  // viewer never calls it, so its wing stays furled on the back.
+  updateWing(gliding, dt) {
+    if (!this._wingRoot || !this._wingRoot.visible) return;
+    const target = gliding ? 1 : 0;
+    const next = this._wingSpread + (target - this._wingSpread) * Math.min(1, dt * 8);
+    this._setWingPose(next);
+    if (next > 0.6) { // a slow flap rides on top of the spread pose
+      const beat = Math.sin(this.phase * 1.4) * 0.05 * next;
+      for (const { pivot, side } of this._wings) pivot.rotation.x += beat * side;
+    }
+  }
+
   // dress the model: state maps each wear kind to "bark" | "iron" | null
-  // (null despawns that kind's overlays — unequipped or shattered)
+  // (null despawns that kind's overlays — unequipped or shattered). state.wing
+  // toggles the Wanderwing on the back (its tier "wing" has no plate material,
+  // so the jerkin overlay stays hidden — the wings stand in for it).
   setArmor(state = {}) {
     for (const kind of Object.keys(this._overlays)) {
       const tier = state[kind];
@@ -239,6 +313,7 @@ export class PlayerModel {
         if (material) m.material = material;
       }
     }
+    if (this._wingRoot) this._wingRoot.visible = !!state.wing;
   }
 
   // punch/mine: kick the right arm forward

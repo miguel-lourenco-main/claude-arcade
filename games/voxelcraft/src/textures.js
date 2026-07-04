@@ -169,6 +169,9 @@ export const TILE = {
   // Cinderglass: what the Emberwash becomes when its fire is finally slaked —
   // a dense black volcanic glass. Portal-grade stock for a wave still to come.
   CINDERGLASS: 131,
+  // the Wanderwing (see LORE.md): a folded patchwork wing-cape icon — leaf-
+  // green membrane panels stitched over quill ribs, a mustard collar lashing.
+  WANDERWING: 132,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -2082,6 +2085,42 @@ painters[TILE.CINDERGLASS] = (p) => {
   // glassy highlights
   p.speckle(10, [58, 52, 72], 8);
   p.px(3, 3, 96, 86, 116); p.px(11, 12, 88, 78, 108);
+};
+
+painters[TILE.WANDERWING] = (p) => {
+  // a folded patchwork wing-cape: a green membrane trapezoid stitched from
+  // panels over pale quill ribs, gathered at a mustard collar and hanging to
+  // a split hem. Seed jitter reads as the patchwork; the world model tints it.
+  p.clear();
+  const MID = [96, 138, 78], LO = [72, 108, 60], HI = [116, 156, 96];
+  const RIB = [206, 198, 168], COLLAR = [214, 176, 74];
+  const dot = (x, y, c, j = 8) => {
+    if (x < 0 || y < 0 || x >= TILE_PX || y >= TILE_PX) return;
+    const d = (p.rand() * 2 - 1) * j;
+    p.px(x, y, c[0] + d, c[1] + d, c[2] + d);
+  };
+  for (let y = 2; y <= 14; y++) {
+    // the cape narrows from collar to hem
+    const half = Math.max(3, Math.round(6 - (y - 2) * 0.22));
+    for (let x = 8 - half; x <= 7 + half; x++) {
+      // patchwork: 3×3 panels shaded from a small hash of their cell
+      const panel = ((x / 3) | 0) + ((y / 3) | 0);
+      const edge = x === 8 - half || x === 7 + half || y === 14;
+      dot(x, y, edge ? LO : (panel & 1 ? HI : MID));
+    }
+    // the two quill ribs run the length of each half
+    if (y >= 3) { dot(5, y, RIB, 5); dot(10, y, RIB, 5); }
+    // the fold seam down the middle, and the split at the hem
+    dot(7, y, y >= 11 ? [0, 0, 0] : LO, 4);
+  }
+  // the hem parts into two furled points
+  for (let x = 6; x <= 9; x++) if (x !== 7 && x !== 8) dot(x, 14, MID);
+  // the collar lashing gathers the top
+  for (let x = 3; x <= 12; x++) dot(x, 2, COLLAR, 5);
+  dot(6, 2, [64, 52, 30], 3); dot(9, 2, [64, 52, 30], 3); // lashing knots
+  // a few stitch-cross patches
+  p.px(4, 6, RIB[0], RIB[1], RIB[2]); p.px(11, 8, RIB[0], RIB[1], RIB[2]);
+  p.px(6, 10, RIB[0], RIB[1], RIB[2]);
 };
 
 export function buildAtlas(seed = 1337) {

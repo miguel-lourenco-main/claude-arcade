@@ -11,6 +11,7 @@
 
 import {
   BLOCKS, IRON_INGOT, COAL_ORE, MOSS_CLUMP, STARGLASS, DUSK_PEARL,
+  QUILL, BOGBEAN_POD, WANDERWING,
 } from "./blocks.js";
 
 export const THREADS = {
@@ -52,6 +53,44 @@ export const THREADS = {
     mats: [[DUSK_PEARL, 1]],
   },
 };
+
+// Loom weaves: whole NEW items woven from gleam + materials, offered at the
+// Loomstone regardless of what's selected (unlike Threads, which ride the
+// belt selection). The Wanderwing is the first: a patchwork wing-cape bound
+// from moss-twine, ribbed with quills, and patched with speckled bogbean pods.
+export const WEAVES = {
+  wanderwing: {
+    out: WANDERWING,
+    name: "Wanderwing",
+    blurb: "a patchwork wing-cape — hold Space falling to glide",
+    levels: 4, // whole jars of gleam
+    mats: [[MOSS_CLUMP, 6], [QUILL, 4], [BOGBEAN_POD, 2]],
+  },
+};
+
+// can this weave be woven right now? "" = yes, else a reason string. Checks
+// the jars, the materials, AND a free satchel slot for the finished piece.
+export function weaveItemBlocker(key, gleam, inventory) {
+  const w = WEAVES[key];
+  if (!w) return "nothing to weave";
+  if (gleam.level < w.levels) return `wants ${w.levels} jars`;
+  for (const [id, n] of w.mats) {
+    if (inventory.count(id) < n) return `wants ${n}× ${BLOCKS[id].name}`;
+  }
+  if (!inventory.slots.some((s) => !s)) return "satchel is full";
+  return "";
+}
+
+// commit an item weave: spend the jars, consume the mats, hand over the piece.
+// Everything is re-checked so a stale window can never over-spend.
+export function weaveItem(key, gleam, inventory) {
+  if (weaveItemBlocker(key, gleam, inventory) !== "") return false;
+  const w = WEAVES[key];
+  if (!gleam.spendLevels(w.levels)) return false;
+  for (const [id, n] of w.mats) inventory.removeCount(id, n);
+  inventory.add(w.out, 1); // the free-slot check above guarantees it lands
+  return true;
+}
 
 // the threads that could ever sit in this item (regardless of affordability)
 export function threadsFor(def) {

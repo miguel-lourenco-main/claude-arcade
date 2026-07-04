@@ -274,6 +274,11 @@ export const EMBER_PAIL = 151;
 // Sky-Iron Cracker (iron pick, tier 3) or better. Portal-grade stock for a
 // wave still to come.
 export const CINDERGLASS = 152;
+// the Wanderwing (see LORE.md): a patchwork wing-cape woven at the Loomstone.
+// It takes the JERKIN wear slot — the classic trade, no chest armor while you
+// fly — and gives NO plate; its durability is spent by GLIDE TIME, not by
+// hits. Held Space while falling deploys it; the wind does the rest.
+export const WANDERWING = 153;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -1083,6 +1088,25 @@ defArmor(GLOAM_JERKIN, "Jerkin", "jerkin", "gloam", TILE.JERKIN_GLOAM);
 defArmor(GLOAM_LEGGINGS, "Leggings", "leggings", "gloam", TILE.LEGGINGS_GLOAM);
 defArmor(GLOAM_TREADS, "Treads", "treads", "gloam", TILE.TREADS_GLOAM);
 
+// the Wanderwing: a wing-cape, not plate. It rides the JERKIN wear slot (so
+// it competes with a chest piece — one or the other, never both), gives no
+// protection (prot 0), and carries `armor.glide` so the physics and the wear
+// loops treat it as a glider: player.js spends its dur by GLIDE SECONDS, never
+// by hits, and armorProtection ignores it entirely. tier "wing" has no plate
+// overlay in player-model.js, so the model shows the wings instead of a jerkin.
+BLOCKS[WANDERWING] = def("Wanderwing", {
+  tiles: cube(TILE.WANDERWING),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  hardness: 0.05,
+  placeable: false,
+  sound: "plant",
+  maxStack: 1,
+  armor: { kind: "jerkin", tier: "wing", prot: 0, maxDur: 200, glide: true },
+});
+
 // --- the Pearlfall's gifts ------------------------------------------------------
 // Starstone: a landed pearl of the old sky, dense and still glowing. It only
 // ever enters the world through a meteor landing (meteors.js writes it via
@@ -1347,7 +1371,7 @@ export function armorProtection(slots, fall = false) {
   let total = 0;
   for (const s of slots || []) {
     const a = s && BLOCKS[s.id] ? BLOCKS[s.id].armor : null;
-    if (!a) continue;
+    if (!a || a.glide) continue; // the Wanderwing is a cape, not plate
     total += fall ? a.prot * (a.kind === "treads" ? 1 : 0.25) : a.prot;
     if (!fall && s.mod === "ward") total += WARD_BONUS;
   }

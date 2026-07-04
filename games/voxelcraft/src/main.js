@@ -23,6 +23,7 @@ import { makeKiln, tickKilns } from "./kiln.js";
 import { Gleam } from "./gleam.js";
 import {
   THREADS, threadsFor, weaveBlocker, weave, threadName, wearSkips,
+  WEAVES, weaveItem, weaveItemBlocker,
 } from "./loom.js";
 import {
   PlayerModel, buildHeldFoot, buildHeldTool, buildHeldCompass, buildHeldClock,
@@ -683,6 +684,18 @@ player.onArmorBreak = (id) => {
   sfx.stoneCrack();
   hud.announce(`The ${BLOCKS[id].name} falls to pieces.`, 2200);
 };
+// the Wanderwing's dur is spent by glide seconds (player.js): keep the dur bar
+// honest as it ticks, and announce + fold when it frays out of the sky
+player.onGlideWear = () => {
+  refreshArmor();
+  if (hud.pickerOpen) hud.slotUI.renderAll();
+};
+player.onGlideFray = (id) => {
+  sfx.stoneCrack();
+  hud.announce(`The ${BLOCKS[id].name} frays — the wind lets you go.`, 2600);
+  refreshArmor();
+  if (hud.pickerOpen) hud.slotUI.renderAll();
+};
 
 // --- the Moss Cot: sleep through the night, wake anchored to the bed --------
 
@@ -909,17 +922,39 @@ const interaction = new Interaction(world, player, scene, hud, {
         return `${BLOCKS[s.id].name}${t ? ` — ${t}` : ""}  ·  ${gleam.level} jar${gleam.level === 1 ? "" : "s"} of gleam`;
       },
       rows: () => {
+        const out = [];
+        // item weaves (the Wanderwing): offered always — they don't ride the
+        // selection the way threads do
+        for (const key of Object.keys(WEAVES)) {
+          const w = WEAVES[key];
+          const why = weaveItemBlocker(key, gleam, inventory);
+          const cost = [`${w.levels} jars`,
+            ...w.mats.map(([id, n]) => `${n}× ${BLOCKS[id].name}`)].join(" + ");
+          out.push({ key, name: w.name, blurb: w.blurb, cost, ok: why === "", why });
+        }
+        // thread weaves for the SELECTED tool/worn piece
         const s = inventory.get(hud.selected);
-        if (!s || !BLOCKS[s.id] || (!BLOCKS[s.id].tool && !BLOCKS[s.id].armor)) return [];
-        return threadsFor(BLOCKS[s.id]).map((key) => {
-          const t = THREADS[key];
-          const why = weaveBlocker(key, s, gleam, inventory);
-          const cost = [`${t.levels} jars`,
-            ...t.mats.map(([id, n]) => `${n}× ${BLOCKS[id].name}`)].join(" + ");
-          return { key, name: t.name, blurb: t.blurb, cost, ok: why === "", why };
-        });
+        if (s && BLOCKS[s.id] && (BLOCKS[s.id].tool || BLOCKS[s.id].armor)) {
+          for (const key of threadsFor(BLOCKS[s.id])) {
+            const t = THREADS[key];
+            const why = weaveBlocker(key, s, gleam, inventory);
+            const cost = [`${t.levels} jars`,
+              ...t.mats.map(([id, n]) => `${n}× ${BLOCKS[id].name}`)].join(" + ");
+            out.push({ key, name: t.name, blurb: t.blurb, cost, ok: why === "", why });
+          }
+        }
+        return out;
       },
       weave: (key) => {
+        // an item weave (Wanderwing) hands a new piece to the satchel…
+        if (WEAVES[key]) {
+          if (!weaveItem(key, gleam, inventory)) return false;
+          sfx.craft();
+          hud.announce(`The ${WEAVES[key].name} takes shape.`, 2600);
+          hud.refreshHotbarRow();
+          return true;
+        }
+        // …a thread weave rides the selected stack
         const s = inventory.get(hud.selected);
         if (!s || !weave(key, s, gleam, inventory)) return false;
         sfx.craft();
@@ -1197,6 +1232,8 @@ function refreshArmor() {
     const s = wearSlots[i];
     const a = s && BLOCKS[s.id] ? BLOCKS[s.id].armor : null;
     state[WEAR_KINDS[i]] = a ? a.tier : null;
+    // the Wanderwing rides the jerkin slot but shows wings, not plate
+    if (a && a.glide) state.wing = true;
   }
   playerModel.setArmor(state);
   hud.playerViewer.setArmor(state);
@@ -1628,6 +1665,9 @@ function tick(now) {
     swimming: player.inWater && !seated,
     seated,
   });
+  // the Wanderwing spreads while gliding, furls when folded (harmless when the
+  // model is hidden in first person — the eased pose is ready for the next peek)
+  playerModel.updateWing(player.gliding, frameDt);
 
   // moving water: visible surface drift + a gentle vertex swell
   materials.water.uniforms.uUvOffset.value.set((now * 0.0003) % 1, (now * 0.00019) % 1);
@@ -1653,12 +1693,15 @@ function tick(now) {
   });
 
   // sprint FOV kick (+8°, applies to sprint-flight too): eased both ways
-  // with a ~0.15s time constant, so it swells in and settles out
-  const targetFov = player.sprintActive ? 78 : 70;
+  // with a ~0.15s time constant, so it swells in and settles out. A glide
+  // opens it wider still (+14°) — the wind-in-the-teeth rush.
+  const targetFov = player.gliding ? 84 : player.sprintActive ? 78 : 70;
   if (Math.abs(camera.fov - targetFov) > 0.1) {
     camera.fov += (targetFov - camera.fov) * Math.min(1, frameDt * 6.7);
     camera.updateProjectionMatrix();
   }
+  // the wind-rush layer follows the glide, swelling with the accrued speed
+  sfx.setWind(player.gliding ? Math.min(1, 0.35 + player._glideSpeed / 16) : 0);
 
   interaction.update(frameDt);
   // the crosshair pinches as the Springstave draws (0 = at rest)
@@ -1761,5 +1804,9 @@ if (NO_LOCK) {
     // the Delvings-Under: same prediction pair
     findNearestDelve: (x, z) => findNearestDelve(terrain, x, z),
     delveForChunk: (cx, cz) => delveForChunk(terrain, cx, cz),
+    // wear/model refresh + third-person toggle, so tests can equip the
+    // Wanderwing straight into a wear slot and see the model dress + spread
+    refreshArmor: () => refreshArmor(),
+    setThirdPerson: (on) => { if (!!on !== thirdPerson) toggleThirdPerson(); },
   };
 }

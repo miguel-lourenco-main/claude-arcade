@@ -70,6 +70,26 @@ const ACCEL_WATER = 16;
 const ACCEL_FLY = 45;
 const FRICTION_FLY = 80; // firm enough that sprint-fly (22 bl/s) stops in ~2 blocks
 
+// --- the Wanderwing's glide (see LORE.md + blocks.js) ------------------------
+// Hold Space while falling with a Wanderwing worn: the fall slows to a gentle
+// terminal and forward speed accrues, steered by the camera. Pitch trades
+// height for speed — nose down to dive (faster, steeper), nose up to flare
+// (bleed speed, a breath of lift). Every value here is blocks/second or a
+// per-second easing rate.
+const GLIDE_FALL = 2.5;         // level descent rate — the advertised terminal
+const GLIDE_DIVE_SINK = 12;     // extra descent at a full nose-down dive
+const GLIDE_FLARE_LIFT = 4;     // upward push at a full nose-up flare
+const GLIDE_VY_EASE = 3.5;      // how quickly vy chases its target
+const GLIDE_FWD_MAX = 11;       // the level cruise the forward speed accrues to
+const GLIDE_DIVE_FWD = 5;       // forward-speed bonus at a full dive
+const GLIDE_FLARE_BLEED = 6;    // forward speed shed at a full flare
+const GLIDE_FWD_EASE = 1.6;     // how quickly the forward speed accrues
+const GLIDE_FWD_CAP = 17;       // a hard lid, so a long dive can't run away
+const GLIDE_TURN_EASE = 3.2;    // how hard the camera heading steers the track
+const GLIDE_SECONDS_PER_DUR = 2.5; // glide seconds spent per point of wing wear
+const GLIDE_SAFE_LAND = 12;     // impact speed below this lands clean
+const GLIDE_IMPACT_FACTOR = 0.5;// the wing absorbs most of a hard slam
+
 
 export class Player {
   constructor(world) {
@@ -119,6 +139,15 @@ export class Player {
     this.wear = null;
     this.onArmorBreak = null;   // (blockId) => a worn piece shattered
     this.onArmorWear = null;    // () => dur ticked down on the worn set
+    // the Wanderwing's glide (see the GLIDE_* constants): a soft latch — it
+    // arms while falling with Space held and a wing worn, and holds through a
+    // flare's brief climb until Space releases, the ground arrives, or the
+    // wing frays. `_glideSpeed` is the accrued forward speed it steers.
+    this.gliding = false;
+    this._glideSpeed = 0;
+    this._glideDurTimer = 0;
+    this.onGlideFray = null;    // (blockId) => the wing frayed mid-air
+    this.onGlideWear = null;    // () => a glide-second ticked the wing's dur
     // the Whims: effect id -> seconds left. Survival-only (mode switches
     // and respawns clear it); persisted as an additive save field.
     this.effects = new Map();
@@ -199,7 +228,7 @@ export class Player {
     for (let i = 0; i < wear.length; i++) {
       const s = wear[i];
       const a = s && BLOCKS[s.id] ? BLOCKS[s.id].armor : null;
-      if (!a) continue;
+      if (!a || a.glide) continue; // the Wanderwing wears from gliding, not hits
       // a Knotwood Thread woven through the piece: wear lands half as often
       if (wearSkips(s)) continue;
       const left = (Number.isInteger(s.dur) ? s.dur : a.maxDur) - 1;
@@ -224,6 +253,7 @@ export class Player {
     this.air = AIR_SECONDS;
     this.dead = false;
     this.flying = false;
+    this.gliding = false;
     this._peakY = this.pos.y;
     this._sinceDamage = 999;
   }
@@ -231,7 +261,87 @@ export class Player {
   // forget any fall in progress — must be called on every non-physics
   // relocation (teleport, mode switch, safety net) or the next landing
   // computes fall damage from the stale peak
-  resetFall() { this._peakY = this.pos.y; }
+  resetFall() { this._peakY = this.pos.y; this.gliding = false; }
+
+  // the wear index of a worn Wanderwing (armor.glide), or -1 if none is worn
+  _wingSlot() {
+    const wear = this.wear;
+    if (!wear) return -1;
+    for (let i = 0; i < wear.length; i++) {
+      const s = wear[i];
+      const a = s && BLOCKS[s.id] ? BLOCKS[s.id].armor : null;
+      if (a && a.glide) return i;
+    }
+    return -1;
+  }
+
+  // is the wing carrying the fall this tick? Armed while airborne with Space
+  // held and a wing worn; it STARTS only from a descent (vy < 0) but then
+  // holds through a flare's brief climb until Space frees it or ground/fray
+  // ends it (both cleared where they happen). Water/ladder/riding never reach
+  // here — those are handled by earlier branches / the ride early-return.
+  _wingGlideActive(jumping) {
+    if (this.onGround || !jumping || this._wingSlot() < 0) return false;
+    return this.gliding || this.vel.y < 0;
+  }
+
+  // one tick of glide: ease the descent toward a gentle terminal (steeper on
+  // a dive, a breath of lift on a flare), accrue forward speed, steer the
+  // track by the camera heading, and spend the wing's dur by glide seconds.
+  _glide(dt) {
+    if (!this.gliding) { // just deployed: inherit the current ground speed
+      this._glideSpeed = Math.hypot(this.vel.x, this.vel.z);
+    }
+    this.gliding = true;
+    // pitch in [-π/2, π/2]; lookDir.y = sin(pitch), so nose-down is pitch < 0
+    const dive = -Math.sin(this.pitch); // +1 fully nose-down, -1 fully nose-up
+    const sink = Math.max(0, dive), lift = Math.max(0, -dive);
+    // a flare only lifts by trading the forward speed it has: with speed in
+    // hand it converts to height, and once that speed bleeds off the lift
+    // fades back to terminal — so holding a flare can never climb forever
+    const speedFrac = Math.min(1, this._glideSpeed / GLIDE_FWD_MAX);
+    // vertical: gentle terminal, dive to sink faster, flare for a touch of lift
+    const vyTarget = -GLIDE_FALL - sink * GLIDE_DIVE_SINK
+      + lift * GLIDE_FLARE_LIFT * speedFrac;
+    this.vel.y += (vyTarget - this.vel.y) * Math.min(1, dt * GLIDE_VY_EASE);
+    // forward speed accrues toward cruise — higher diving, bled flaring
+    const fwdTarget = Math.max(2,
+      GLIDE_FWD_MAX + sink * GLIDE_DIVE_FWD - lift * GLIDE_FLARE_BLEED);
+    this._glideSpeed += (fwdTarget - this._glideSpeed) * Math.min(1, dt * GLIDE_FWD_EASE);
+    this._glideSpeed = Math.max(0, Math.min(GLIDE_FWD_CAP, this._glideSpeed));
+    // steer the horizontal track toward where the camera looks (yaw only)
+    const hx = -Math.sin(this.yaw), hz = -Math.cos(this.yaw);
+    const turn = Math.min(1, dt * GLIDE_TURN_EASE);
+    this.vel.x += (hx * this._glideSpeed - this.vel.x) * turn;
+    this.vel.z += (hz * this._glideSpeed - this.vel.z) * turn;
+    // durability: one point per GLIDE_SECONDS_PER_DUR of flight (survival only)
+    if (this.mode === "survival") {
+      this._glideDurTimer += dt;
+      if (this._glideDurTimer >= GLIDE_SECONDS_PER_DUR) {
+        this._glideDurTimer -= GLIDE_SECONDS_PER_DUR;
+        this._wearWing();
+      }
+    }
+  }
+
+  // spend one point of the worn wing's durability; at 0 it frays mid-air —
+  // it shatters out of the slot, the glide folds, and the fall resumes
+  _wearWing() {
+    const i = this._wingSlot();
+    if (i < 0) return;
+    const s = this.wear[i];
+    const a = BLOCKS[s.id].armor;
+    const left = (Number.isInteger(s.dur) ? s.dur : a.maxDur) - 1;
+    if (left <= 0) {
+      const id = s.id;
+      this.wear[i] = null;
+      this.gliding = false; // next tick has no wing: the fall resumes
+      if (this.onGlideFray) this.onGlideFray(id);
+    } else {
+      s.dur = left;
+      if (this.onGlideWear) this.onGlideWear();
+    }
+  }
 
   get eyeY() { return this.pos.y + EYE_HEIGHT; }
 
@@ -455,7 +565,11 @@ export class Player {
           (hasInput || jumping)) {
         this.vel.y = WATER_EXIT_BOOST;
       }
+    } else if (this._wingGlideActive(jumping)) {
+      // the Wanderwing is spread: the wind takes over from gravity
+      this._glide(dt);
     } else {
+      if (this.gliding) this.gliding = false; // Space released / no wing: fold
       // footing: River Glass halves traction (starts and stops alike — the
       // slide), a Snowdrift drags the stride to 0.9x, and Mire Sod sucks at
       // the hand-feet — the bog is crossed at three-quarter pace
@@ -495,8 +609,20 @@ export class Player {
 
     this._sneaking = sneaking;
     const wasAirborne = !this.onGround;
+    const glideVy = this.gliding ? this.vel.y : 0; // impact speed for a slam
     this._moveWithCollisions(dt);
     if (this.flying && this.onGround) this.flying = false;
+    // a glide that meets the ground: a gentle flared touch is free, but
+    // slamming down faster than the safe speed still stings — the wing just
+    // absorbs most of it. The height-based fall path is already neutralized
+    // (gliding zeroes the peak below), so this is the only glide-landing hurt.
+    if (this.gliding && this.onGround) {
+      const impact = -glideVy;
+      if (this.mode === "survival" && impact > GLIDE_SAFE_LAND) {
+        this.damage(Math.round((impact - GLIDE_SAFE_LAND) * GLIDE_IMPACT_FACTOR), "fall");
+      }
+      this.gliding = false;
+    }
 
     if (this.mode === "survival") {
       // re-sample water at the post-move position: a fast landing into
@@ -553,8 +679,10 @@ export class Player {
     }
 
     // fall damage: MC rule, damage = blocks fallen minus 3 (a gripped ladder
-    // is as safe as water — no fall accumulates through it)
-    if (this.flying || this.inWater || this.onLadder) {
+    // is as safe as water — no fall accumulates through it, and a spread
+    // Wanderwing carries the height the way water does: glide-landings are
+    // scored by impact speed in update(), never by how far you soared)
+    if (this.flying || this.inWater || this.onLadder || this.gliding) {
       this._peakY = this.pos.y;
     } else if (!this.onGround) {
       this._peakY = Math.max(this._peakY, this.pos.y);

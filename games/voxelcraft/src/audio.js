@@ -12,6 +12,8 @@ export class Sfx {
     this.enabled = true;
     this._rain = null;  // { src, gain } — the looped shower bed, built once
     this.rainLevel = 0; // last level handed to setRain (test hook)
+    this._wind = null;  // { src, filter, gain } — the glide wind-rush bed
+    this.windLevel = 0; // last level handed to setWind (test hook)
   }
 
   // must be called from a user gesture the first time
@@ -220,6 +222,45 @@ export class Sfx {
       this._rain = { src, gain };
     }
     this._rain.gain.gain.setTargetAtTime(level * 0.14, ctx.currentTime, 0.4);
+  }
+
+  // the Wanderwing's wind-rush: a looped, bandpassed noise bed whose gain and
+  // brightness follow the glide (level 0..1, from the accrued glide speed).
+  // Built lazily on the first glide; eases in and out so deploy/fold breathe.
+  setWind(level) {
+    level = Math.min(1, Math.max(0, level || 0));
+    if (level === this.windLevel && !(level > 0 && !this._wind)) return;
+    this.windLevel = level;
+    if (level <= 0 && !this._wind) return; // never built, nothing to quiet
+    if (!this.enabled || !this._ensure()) return;
+    const ctx = this.ctx;
+    if (!this._wind) {
+      const frames = Math.floor(ctx.sampleRate * 2);
+      const buffer = ctx.createBuffer(1, frames, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      let last = 0;
+      for (let i = 0; i < frames; i++) {
+        // less smoothing than the rain: wind keeps more of its hiss
+        last = last * 0.55 + (Math.random() * 2 - 1) * 0.6;
+        data[i] = last;
+      }
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      src.loop = true;
+      const filter = ctx.createBiquadFilter();
+      filter.type = "bandpass";
+      filter.frequency.value = 700;
+      filter.Q.value = 0.7;
+      const gain = ctx.createGain();
+      gain.gain.value = 0;
+      src.connect(filter).connect(gain).connect(ctx.destination);
+      src.start();
+      this._wind = { src, filter, gain };
+    }
+    const t = ctx.currentTime;
+    this._wind.gain.gain.setTargetAtTime(level * 0.12, t, 0.25);
+    // brighter as the glide speeds up — the whistle climbs with the dive
+    this._wind.filter.frequency.setTargetAtTime(600 + level * 900, t, 0.25);
   }
 
   // hinge creak for the Plank Door: two short wooden squeaks — pitch climbs
