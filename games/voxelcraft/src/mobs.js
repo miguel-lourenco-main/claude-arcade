@@ -1050,7 +1050,7 @@ export class Mobs {
     if (m.spec.behavior === "passive" && !m.bonded) { m.state = "flee"; m.stateT = 3.5; m.yaw = Math.atan2(m.x - fromPos.x, m.z - fromPos.z); }
     // the Peddler adds insult to the injury ledger: no trade for a while
     if (m.spec.grudge) m.grudgeT = m.spec.grudge;
-    if (m.spec.behavior === "neutral" || m.spec.behavior === "hostile") m.angryT = 8;
+    if (m.spec.behavior === "neutral" || m.spec.behavior === "hostile" || m.spec.behavior === "ambush") m.angryT = 8;
     if (m.spec.behavior === "ambush") m.state = "hunt";
     if (opts.attacker) {
       // hit by a bondling: the victim switches its aggro onto it
