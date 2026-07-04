@@ -1,13 +1,16 @@
 // DOM HUD: hotbar with fake-isometric block icons, block picker, debug
 // overlay, pause overlay, underwater tint.
 
-import { BLOCKS, PLACEABLE, AIR, WEAR_KINDS, armorProtection } from "./blocks.js";
+import {
+  BLOCKS, PLACEABLE, AIR, WEAR_KINDS, armorProtection, ARMOR_CAP,
+} from "./blocks.js";
 import { clampSignText, SIGN_LINES, SIGN_COLS } from "./world.js";
 import { shapeBoxes } from "./mesher.js";
 import { ATLAS_TILES, TILE_PX } from "./textures.js";
 import { RECIPES, BASIC_RECIPES, canCraft } from "./craft.js";
 import { canAfford } from "./trade.js";
 import { SMELTS, FUEL_SECONDS, SMELT_SECONDS } from "./kiln.js";
+import { threadName } from "./loom.js";
 import { SlotUI, invRegion, arrayRegion, paletteRegion, slotRegion } from "./slotui.js";
 
 const ICON = 40;
@@ -134,10 +137,12 @@ function drawDurabilityBar(ctx, def, stack) {
   ctx.fillRect(5, ICON - 4, Math.max(1, Math.round((ICON - 10) * ratio)), 2);
 }
 
-const TELEPORTS = ["spawn", "forest", "plains", "desert", "snow", "mountain", "ocean", "ruin"];
+const TELEPORTS = ["spawn", "forest", "plains", "desert", "snow", "bog", "mountain", "ocean", "ruin", "delve"];
 // folk names on the buttons where one exists (the biome KEY stays stable —
 // saves, terrain.js, and the search itself all speak "snow")
-const TELEPORT_LABELS = { snow: "Rimelands", ruin: "Nearest ruin" };
+const TELEPORT_LABELS = {
+  snow: "Rimelands", bog: "Mirelands", ruin: "Nearest ruin", delve: "Nearest delving",
+};
 
 // tiny pixel-art status icons, drawn once and reused as data URLs
 function pixelIcon(rows, colorFor) {
@@ -166,6 +171,22 @@ const BOWL_COLORS = { X: "#c56a2b", m: "#d9a441" };
 const SHIELD_ROWS = [".XXXXX.", "XXXoXXX", "XXooXXX", ".XXXXX.", "..XXX..", "...X..."];
 const SHIELD_COLORS = { X: "#c4ccda", o: "#d6b04a" };
 
+// the Whims' badges: little 7x6 marks in each whim's own register
+const EFFECT_ROWS = {
+  fleetfoot: [".....X.", "..XXX..", ".XXX.X.", "XXXXX..", "..X....", ".X....."], // a stride
+  emberglow: ["...X...", "..XXX..", ".XoXX..", ".XXoX..", "..XXX..", "...X..."], // an ember
+  mirerot:   ["X..X..X", ".XoXoX.", "..XXX..", ".XoXX..", "X..X..X", "..X...X"], // the rot
+  kelpguard: [".XXXXX.", "XoXXXoX", "XXXXXXX", ".XXXXX.", "..XXX..", "...X..."], // a kelp ward
+  dimmed:    [".XXXXX.", "XX...XX", "X..o..X", "XX...XX", ".XXXXX.", "..XXX.."], // a leaned dark
+};
+const EFFECT_COLORS = {
+  fleetfoot: { X: "#e8d874", o: "#fff8c8" },
+  emberglow: { X: "#e07838", o: "#ffd890" },
+  mirerot:   { X: "#7c9a4e", o: "#c8e090" },
+  kelpguard: { X: "#5aa87c", o: "#c0ecd4" },
+  dimmed:    { X: "#6a6a88", o: "#c8c8e0" },
+};
+
 const ICONS = {
   heartFull: pixelIcon(HEART_ROWS, (ch) => (ch === "X" ? "#d4342a" : null)),
   heartHalf: pixelIcon(HEART_ROWS, (ch, x) => (ch === "X" ? (x <= 3 ? "#d4342a" : "#3a3a44") : null)),
@@ -179,6 +200,10 @@ const ICONS = {
   shieldFull: pixelIcon(SHIELD_ROWS, (ch) => SHIELD_COLORS[ch] || null),
   shieldEmpty: pixelIcon(SHIELD_ROWS, (ch) => (SHIELD_COLORS[ch] ? "#3a3a44" : null)),
 };
+const EFFECT_ICONS = {};
+for (const [id, rows] of Object.entries(EFFECT_ROWS)) {
+  EFFECT_ICONS[id] = pixelIcon(rows, (ch) => EFFECT_COLORS[id][ch] || null);
+}
 
 export class Hud {
   constructor(atlasCanvas, opts) {
@@ -208,6 +233,8 @@ export class Hud {
     this.tradeOpen = false;
     this._tradeOffers = null; // the day's offers while the window is open
     this._onTrade = null;     // (offer) => bool: executed?
+    this.loomOpen = false;
+    this._loom = null;        // main.js's loom adapter while the window is open
     this.paused = true; // the boot overlay is showing
     this.gameMode = "creative";
     this._lastHealth = -1;
@@ -338,6 +365,10 @@ export class Hud {
 
   _buildStatus() {
     this.statusEl = document.getElementById("status");
+    this.gleamEl = document.getElementById("gleam");
+    this.gleamFillEl = document.getElementById("gleam-fill");
+    this.gleamJarsEl = document.getElementById("gleam-jars");
+    this.effectsEl = document.getElementById("effects");
     const hearts = document.getElementById("hearts");
     const bubbles = document.getElementById("bubbles");
     const hunger = document.getElementById("hunger");
@@ -368,10 +399,10 @@ export class Hud {
   }
 
   // the shield-pips row above the hearts: pips proportional to the current
-  // damage reduction (10 pips = the 60% cap, so a full sky-iron set fills
-  // the row and a full bark set shows ~4). Hidden with nothing worn.
+  // damage reduction (10 pips = the ARMOR_CAP ceiling, so only a woven
+  // gloamgold set fills the row; full sky-iron shows 8). Hidden bare.
   setArmor(reduction) {
-    const pips = reduction > 0 ? Math.max(1, Math.round((reduction / 0.6) * 10)) : 0;
+    const pips = reduction > 0 ? Math.max(1, Math.round((reduction / ARMOR_CAP) * 10)) : 0;
     if (pips === this._lastArmorPips) return;
     this._lastArmorPips = pips;
     document.getElementById("shields").classList.toggle("hidden", pips === 0);
@@ -381,10 +412,71 @@ export class Hud {
     }
   }
 
+  // the Whims row (top-right): one badge + countdown per active effect.
+  // list is [[id, secondsLeft], ...]; identity-keyed rebuild, cheap since
+  // there are at most five whims in the world.
+  setEffects(list) {
+    const key = list.map(([id, t]) => `${id}:${Math.ceil(t)}`).join(",");
+    if (key === this._lastEffects) return;
+    this._lastEffects = key;
+    const row = this.effectsEl;
+    row.innerHTML = "";
+    for (const [id, t] of list) {
+      if (!EFFECT_ICONS[id]) continue;
+      const badge = document.createElement("div");
+      badge.className = "effect-badge";
+      const icon = document.createElement("div");
+      icon.className = "effect-icon";
+      icon.style.backgroundImage = `url(${EFFECT_ICONS[id]})`;
+      const time = document.createElement("div");
+      time.className = "effect-time";
+      time.textContent = String(Math.ceil(t));
+      badge.appendChild(icon);
+      badge.appendChild(time);
+      row.appendChild(badge);
+    }
+    row.classList.toggle("hidden", list.length === 0);
+  }
+
+  // the boss bar: shown while a boss stalks within hailing distance
+  setBossBar(name, frac) {
+    const key = name ? `${name}:${Math.round(frac * 100)}` : "";
+    if (key === this._lastBoss) return;
+    this._lastBoss = key;
+    const bar = document.getElementById("boss-bar");
+    bar.classList.toggle("hidden", !name);
+    if (name) {
+      document.getElementById("boss-name").textContent = name.toUpperCase();
+      document.getElementById("boss-fill").style.width =
+        Math.max(0, Math.min(100, Math.round(frac * 100))) + "%";
+    }
+  }
+
+  // the Springstave draw: the crosshair pinches toward full pull
+  setDraw(charge) {
+    const step = Math.round(charge * 10);
+    if (step === this._lastDraw) return;
+    this._lastDraw = step;
+    const el = document.getElementById("crosshair");
+    el.style.transform = `translate(-50%, -50%) scale(${1 - 0.35 * charge})`;
+    el.style.opacity = String(0.8 + 0.2 * charge);
+  }
+
+  // the Gleam meter: a slim jar-fill bar over the status rows + jar count
+  setGleam(level, frac) {
+    const pct = Math.round(frac * 100);
+    const state = level * 200 + pct;
+    if (state === this._lastGleam) return;
+    this._lastGleam = state;
+    this.gleamFillEl.style.width = pct + "%";
+    this.gleamJarsEl.textContent = String(level);
+  }
+
   setMode(mode) {
     this.gameMode = mode;
     this.modeBtn.textContent = mode === "survival" ? "Mode: Survival" : "Mode: Creative";
     this.statusEl.classList.toggle("hidden", mode !== "survival");
+    this.gleamEl.classList.toggle("hidden", mode !== "survival");
     this._lastHealth = -1;
     this._lastBubbles = -1;
     this._lastHunger = -1;
@@ -497,7 +589,11 @@ export class Hud {
     this.selected = ((i % 9) + 9) % 9;
     this.refreshHotbarRow();
     const s = this.inventory.get(this.selected);
-    this._announce(s ? BLOCKS[s.id].name : "Bare foot");
+    // a threaded tool announces its thread with its name
+    this._announce(s
+      ? BLOCKS[s.id].name + (threadName(s) ? ` — ${threadName(s)}` : "")
+      : "Bare foot");
+    if (this.loomOpen) this._renderLoomList(); // the basin follows the belt
   }
 
   scroll(delta) { this.select(this.selected + (delta > 0 ? 1 : -1)); }
@@ -815,6 +911,66 @@ export class Hud {
     }
   }
 
+  // the Loomstone window (trade-window idiom): rows are the threads that
+  // could sit in the SELECTED hotbar stack. `loom` is built by main.js:
+  // { describeTarget(), rows(), weave(key) } — rows() re-derives state so
+  // selection changes and successful weaves just re-render.
+  openLoom(loom) {
+    this.loomOpen = true;
+    this._loom = loom;
+    const { hotbar, main } = this._invRegions();
+    this.slotUI.open([
+      { region: main, gridEl: document.getElementById("loom-main-grid") },
+      { region: hotbar, gridEl: document.getElementById("loom-hotbar-grid") },
+    ], { main: [hotbar], hotbar: [main] });
+    this._renderLoomList();
+    document.getElementById("loom-ui").classList.remove("hidden");
+    document.exitPointerLock();
+  }
+
+  closeLoom() {
+    if (!this.loomOpen) return;
+    this.loomOpen = false;
+    this._loom = null;
+    this.slotUI.close();
+    document.getElementById("loom-ui").classList.add("hidden");
+  }
+
+  _renderLoomList() {
+    if (!this._loom) return;
+    document.getElementById("loom-target").textContent = this._loom.describeTarget();
+    const list = document.getElementById("loom-list");
+    list.innerHTML = "";
+    const rows = this._loom.rows();
+    if (rows.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "hint";
+      empty.textContent = "The basin waits. Select a tool or a worn piece on your belt.";
+      list.appendChild(empty);
+      return;
+    }
+    for (const r of rows) {
+      const row = document.createElement("div");
+      row.className = "craft-row" + (r.ok ? "" : " uncraftable");
+      const label = document.createElement("span");
+      label.innerHTML = `<b>${r.name}</b><small>${r.blurb} — ` +
+        `<span class="thread-cost">${r.cost}</span>` +
+        `${r.ok ? "" : ` (${r.why})`}</small>`;
+      row.appendChild(label);
+      if (r.ok) {
+        row.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          if (this._loom && this._loom.weave(r.key)) {
+            this._renderLoomList();
+            this.slotUI.renderAll();
+            this.refreshHotbarRow();
+          }
+        });
+      }
+      list.appendChild(row);
+    }
+  }
+
   // kiln window: input over fuel, smelt-progress arrow, take-only output,
   // plus the usual satchel + belt. `kiln` is the live per-block state object
   // (world.kilns entry) — the tick in main.js mutates it while we're open.
@@ -869,7 +1025,7 @@ export class Hud {
 
   anyWindowOpen() {
     return this.pickerOpen || this.chestOpen || this.benchOpen ||
-      this.kilnOpen || this.signOpen || this.tradeOpen;
+      this.kilnOpen || this.signOpen || this.tradeOpen || this.loomOpen;
   }
 
   closeAllWindows() {
@@ -878,6 +1034,7 @@ export class Hud {
     this.closeBench();
     this.closeKiln();
     this.closeTrade();
+    this.closeLoom();
     this.closeSign(); // commits — a defensive close never eats the writing
   }
 
@@ -888,7 +1045,11 @@ export class Hud {
   }
   hidePause() { this.paused = false; this.overlayEl.classList.add("hidden"); }
 
-  setUnderwater(on) { this.waterTintEl.classList.toggle("hidden", !on); }
+  // the submerged screen tint: cool blue under water, amber in the Emberwash
+  setUnderwater(water, lava = false) {
+    this.waterTintEl.classList.toggle("hidden", !water && !lava);
+    this.waterTintEl.classList.toggle("lava", lava);
+  }
 
   updateDebug(lines, visible) {
     this.debugEl.classList.toggle("hidden", !visible);

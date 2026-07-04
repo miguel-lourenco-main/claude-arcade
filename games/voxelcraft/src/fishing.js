@@ -16,7 +16,7 @@
 // no save field, nothing to validate, v2 saves untouched.
 
 import * as THREE from "three";
-import { BLOCKS, SILVERFIN, BERRIES, SLING_STONE, WATER } from "./blocks.js";
+import { BLOCKS, SILVERFIN, BERRIES, SLING_STONE, WATER, LAVA } from "./blocks.js";
 import { HEIGHT } from "./world.js";
 
 const CAST_SPEED = 13;     // blocks/second off the rod tip
@@ -161,9 +161,18 @@ export class Fishing {
       for (let s = 0; s < steps; s++) {
         const px = b.x, py = b.y, pz = b.z;
         b.x += b.vx * sdt; b.y += b.vy * sdt; b.z += b.vz * sdt;
-        if (world.getBlock(Math.floor(b.x), Math.floor(b.y), Math.floor(b.z)) === WATER) {
+        const cell = world.getBlock(Math.floor(b.x), Math.floor(b.y), Math.floor(b.z));
+        if (cell === WATER) {
           this._touchdown(world, b);
           break;
+        }
+        // the Emberwash is not a fishing spot: the float chars on contact
+        // (without this it would sail through the non-solid lava cells and
+        // sit invisibly on the pool floor, stuck until reeled)
+        if (cell === LAVA) {
+          if (this.onCue) this.onCue("The dib-float chars away.");
+          this._remove();
+          return;
         }
         if (this._solidAt(world, b.x, b.y, b.z)) {
           const def = BLOCKS[world.getBlock(Math.floor(b.x), Math.floor(b.y), Math.floor(b.z))];

@@ -12,9 +12,10 @@ const SKIN = [126, 200, 178];
 const TUNIC = [188, 92, 48];
 const TRIM = [214, 176, 74];
 const TROUSER = [52, 56, 66];
-// armor overlay tints: boiled knotwood-bark plate and pale sky-iron
+// armor overlay tints: boiled knotwood-bark plate, pale sky-iron, dusk-gold
 const ARMOR_BARK = [118, 90, 54];
 const ARMOR_IRON = [196, 204, 218];
+const ARMOR_GLOAM = [198, 156, 82];
 
 function paintTexture(seed, base, decorate) {
   const canvas = document.createElement("canvas");
@@ -191,6 +192,17 @@ export class PlayerModel {
         ctx.fillStyle = `rgb(${TRIM[0]},${TRIM[1]},${TRIM[2]})`;
         ctx.fillRect(7, 12, 2, 1); // mustard lashing
       }), reg),
+      gloam: mat(paintTexture(seed ^ 10, ARMOR_GLOAM, (ctx, rand) => {
+        // dusk-gold plate: a violet-shadowed seam and bright cast gleams
+        ctx.fillStyle = "rgba(110,80,96,0.85)";
+        ctx.fillRect(0, 7, 16, 1);
+        ctx.fillStyle = "rgb(252,226,140)";
+        for (let i = 0; i < 5; i++) {
+          ctx.fillRect((rand() * 15) | 0, (rand() * 15) | 0, 1, 1);
+        }
+        ctx.fillStyle = `rgb(${TRIM[0]},${TRIM[1]},${TRIM[2]})`;
+        ctx.fillRect(7, 12, 2, 1); // mustard lashing
+      }), reg),
     };
     this._overlays = { crown: [], jerkin: [], leggings: [], treads: [] };
     const overlay = (parent, w, h, d, x, y, z, kind) => {
@@ -314,6 +326,7 @@ const HELD_TIER_HEAD = {
   1: [186, 152, 96],  // plank
   2: [138, 140, 148], // stone
   3: [200, 208, 222], // sky-iron
+  4: [198, 156, 82],  // gloamgold (dusk-gold, matching the armor overlay)
 };
 
 // --- wayfinding instruments -------------------------------------------------
@@ -415,6 +428,31 @@ export function buildHeldTool(kind, tier, seed = 0x5eed) {
     const lip = box(0.1, 0.08, 0.05, headMat);
     lip.position.set(0, 0.55, 0.04);
     g.add(lip);
+  } else if (kind === "hoe") {
+    // the Furrower: a swan-neck folding forward off the tip, ending in a
+    // short down-turned tine — the row-asker, not a weapon
+    const neck = box(0.06, 0.06, 0.2, headMat);
+    neck.position.set(0, 0.38, 0.1);
+    g.add(neck);
+    const tine = box(0.055, 0.18, 0.055, headMat);
+    tine.position.set(0, 0.29, 0.19);
+    g.add(tine);
+  } else if (kind === "stave") {
+    // the Springstave: two bent limbs off the grip and a taut cord — the
+    // haft box is the grip; the limbs curve fore and aft
+    for (const side of [-1, 1]) {
+      const limb = box(0.05, 0.34, 0.05, headMat);
+      limb.position.set(0, side * 0.3, 0.05);
+      limb.rotation.x = side * -0.35;
+      g.add(limb);
+      const tip = box(0.04, 0.12, 0.04, headMat);
+      tip.position.set(0, side * 0.52, 0.12);
+      tip.rotation.x = side * -0.7;
+      g.add(tip);
+    }
+    const cord = box(0.015, 1.06, 0.015, haftMat);
+    cord.position.set(0, 0, 0.16);
+    g.add(cord);
   } else {
     // the Shiv: cross-guard over the grip, then a long tapering sliver
     const guard = box(0.2, 0.045, 0.1, haftMat);

@@ -160,31 +160,103 @@ export const STAR_BLADE = 100;
 // was hiding.
 export const SNOW_LAYER = 101;
 export const ICE = 102;
+// the Emberwash: what the flip couldn't cool. Molten pools in the deepest
+// caverns — a static fluid like water (sink, paddle, place into), but it
+// glows (emitter 13), it burns (player.js ticks contact damage), and no
+// tool ever collects it. Terrain floods deep cave cells with it; creative
+// can paint more.
+export const LAVA = 103;
+// the Wispcap: a pale deep-cave mushroom holding a scrap of the buried old
+// daylight (cousin of the Sunwisp). Grows on the floors of the old-sky
+// caves; kicks loose in one hit and replants anywhere solid — a dim,
+// farmable light for delve camps (emit 8: a mushroom, not a campfire).
+export const WISPCAP = 104;
+// Gloamgold: the fourth-tier metal. Sky-iron FELL into the Upturn;
+// gloamgold SANK — it only shows below the Emberwash line (terrain.js
+// oreAt, y < 14), where the pools stand guard over the seams. Iron-pick
+// gated; the kiln renders the ore down to ingots.
+export const GLOAM_ORE = 105;
+export const GLOAM_INGOT = 106;
+export const GLOAM_BLOCK = 107;
+export const GLOAM_PICK = 108;
+export const GLOAM_AXE = 109;
+export const GLOAM_SHOVEL = 110;
+export const GLOAM_BLADE = 111;
+export const GLOAM_CROWN = 112;
+export const GLOAM_JERKIN = 113;
+export const GLOAM_LEGGINGS = 114;
+export const GLOAM_TREADS = 115;
+// the Mirelands (see LORE.md): the bog country. MUD is Mire Sod — wet
+// ground that drags the stride; REEDS are Marsh Reeds, which rarely hand
+// over BOGBEAN_POD (the bog's seed pouch — planting arrives with the
+// bogbean farming wave, so for now it's a curiosity worth keeping).
+export const MUD = 116;
+export const REEDS = 117;
+export const BOGBEAN_POD = 118;
+// tilling: FARMLAND is Turned Earth, written by right-clicking soil with a
+// Furrower (the hoe — the fifth tool kind). Root pips and bogbean pods only
+// plant in it; interact.js owns the tilling routing.
+export const FARMLAND = 119;
+export const PLANK_HOE = 120;
+export const STONE_HOE = 121;
+export const IRON_HOE = 122;
+// bogbean farming: the second crop. Pods plant in Turned Earth as
+// BOGBEAN_SPROUT and grow through the same three-stage clock as meal
+// roots (main.js updateCrops speaks cropStagesFor now). BOGBEAN is the
+// food; POTTAGE is meal root + bogbeans simmered into the real dish.
+export const BOGBEAN_SPROUT = 123;
+export const BOGBEAN_HALF = 124;
+export const BOGBEAN_RIPE = 125;
+export const BOGBEAN = 126;
+export const POTTAGE = 127;
+// the Whims' broths (see LORE.md): kiln-simmered consumables that apply a
+// timed effect (def.food.effect = [id, seconds] — player.js EFFECTS). The
+// Kelp Gland is the Mirewalker's drop, the Kelpsalve its own cure.
+export const EMBER_BROTH = 128;
+export const SUNWISP_BROTH = 129;
+export const KELP_GLAND = 130;
+export const KELPSALVE = 131;
+// the Loomstone: a starstone basin that weaves gleam into gear as Threads
+// (loom.js). Right-click a placed one with a tool/armor piece selected.
+export const LOOMSTONE = 132;
+// the Springstave and its Quills: a bent knotwood stave with a moss-twine
+// cord. Hold right-click to draw, release to loose — interact.js owns the
+// draw, projectiles.js the flight. Quills are whittled darts, stackable.
+export const QUILL = 133;
+export const SPRINGSTAVE = 134;
+// the Murk Lantern and the Dusk Pearl: the way INTO the Upturn's one real
+// fight, and what comes out of it. The lantern is starglass painted out
+// with soot — a lantern that sheds dark; right-clicking ground with it at
+// night summons The Unshaken (mobs.js). The pearl is its heart, and the
+// Dusk Thread's material (loom.js).
+export const MURK_LANTERN = 135;
+export const DUSK_PEARL = 136;
+// --- wave 7 (renumbered above the Deep Wave's last id) ---------------------------
 // Gleam Moss: the old-sky caves' own lamp — a soft moss that took root where
 // sunlight was never reintroduced and learned to make its own (a faint
 // lightEmit-7 gleam). Worldgen seeds it on cave floors and ceilings; it
 // pinches loose instantly, drops itself, and presses back onto ANY solid
 // face — floor, wall, or ceiling (see the placement rule in interact.js).
-export const GLEAM_MOSS = 103;
+export const GLEAM_MOSS = 137;
 // the Waybar: block-guided transport track (see LORE.md) — TEN ids, one per
 // baked track shape, like the stairs. RAIL (the north-south straight) is the
 // only user-visible/craftable/droppable id; the east-west straight, the four
 // corners, and the four slopes are internal placement states written by the
 // auto-shaper (rails.js) as the web of neighboring rails changes.
-export const RAIL = 104;      // straight north-south — the canonical id
-export const RAIL_EW = 105;   // straight east-west
-export const RAIL_NE = 106;   // corner joining north (-z) and east (+x)
-export const RAIL_NW = 107;
-export const RAIL_SE = 108;
-export const RAIL_SW = 109;
-export const RAIL_UP_N = 110; // slope ascending toward north (-z)
-export const RAIL_UP_E = 111;
-export const RAIL_UP_S = 112;
-export const RAIL_UP_W = 113;
+export const RAIL = 138;      // straight north-south — the canonical id
+export const RAIL_EW = 139;   // straight east-west
+export const RAIL_NE = 140;   // corner joining north (-z) and east (+x)
+export const RAIL_NW = 141;
+export const RAIL_SE = 142;
+export const RAIL_SW = 143;
+export const RAIL_UP_N = 144; // slope ascending toward north (-z)
+export const RAIL_UP_E = 145;
+export const RAIL_UP_S = 146;
+export const RAIL_UP_W = 147;
 // the Trundle: an entity-in-waiting like the Reed Skiff — right-clicking a
 // Waybar with it selected sets a cart ENTITY on the track (see interact.js
 // routing and carts.js for its rolling life)
-export const CART = 114;
+export const CART = 148;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -222,6 +294,7 @@ const def = (name, opts) => ({
   toolKind: null,    // which tool kind mines this block fast ('pick'|'axe'|'shovel')
   needsPick: 0,      // survival: drops NOTHING unless mined with a pick of
                      // at least this tier (0 = drops for anyone, bare feet too)
+  gleam: 0,          // motes of Gleam a successful survival mine awards
   ...opts,
 });
 
@@ -306,9 +379,9 @@ BLOCKS[LEAVES_COLD] = def("Rimewood Leaves", { hardness: 0.3, drops: null,
   randomDrop: { id: SAPLING, chance: 0.1 },
   tiles: cube(TILE.LEAVES_COLD), sound: "plant" });
 BLOCKS[COAL_ORE] = def("Coal Ore", { hardness: 2.8, tiles: cube(TILE.COAL_ORE),
-  toolKind: "pick", needsPick: 1 });
+  toolKind: "pick", needsPick: 1, gleam: 1 });
 BLOCKS[IRON_ORE] = def("Sky-Iron Ore", { hardness: 3.2, tiles: cube(TILE.IRON_ORE),
-  toolKind: "pick", needsPick: 2 }); // sky-iron asks for a stone pick at least
+  toolKind: "pick", needsPick: 2, gleam: 2 }); // sky-iron asks for a stone pick at least
 BLOCKS[TORCH] = def("Torch", { hardness: 0.05,
   tiles: cube(TILE.TORCH),
   kind: "cross",
@@ -687,10 +760,150 @@ BLOCKS[SEARED_SILVERFIN] = def("Seared Silverfin", {
   food: { restore: 6 },
 });
 
+// --- bogbean farming: the second crop on the same three-stage clock -----------
+BLOCKS[BOGBEAN_SPROUT] = def("Bogbean Sprouts", cropCross({
+  tiles: cube(TILE.BOGBEAN_SPROUT),
+  drops: BOGBEAN_POD,
+  base: BOGBEAN_POD, // pick-block hands back the pods
+  placeable: false,
+  hidden: true,
+}));
+BLOCKS[BOGBEAN_HALF] = def("Bogbean Vines", cropCross({
+  tiles: cube(TILE.BOGBEAN_HALF),
+  drops: BOGBEAN_POD,
+  base: BOGBEAN_POD,
+  placeable: false,
+  hidden: true,
+}));
+BLOCKS[BOGBEAN_RIPE] = def("Ripe Bogbeans", cropCross({
+  tiles: cube(TILE.BOGBEAN_RIPE),
+  drops: BOGBEAN, // guaranteed beans, then the bonus roll below
+  base: BOGBEAN_POD,
+  // 1-2 beans + 1-2 pods per harvest — the patch always comes out ahead
+  extraDrops: () => {
+    const out = [BOGBEAN_POD];
+    if (Math.random() < 0.5) out.push(BOGBEAN_POD);
+    if (Math.random() < 0.5) out.push(BOGBEAN);
+    return out;
+  },
+  placeable: false,
+  hidden: true,
+}));
+BLOCKS[BOGBEAN] = def("Bogbean", cropCross({
+  tiles: cube(TILE.BOGBEAN),
+  placeable: false,
+  food: { restore: 2 },
+}));
+// the dish every satchel dreams about: the mire and the meadow, one pot
+BLOCKS[POTTAGE] = def("Wanderer's Pottage", cropCross({
+  tiles: cube(TILE.POTTAGE),
+  placeable: false,
+  food: { restore: 10 },
+}));
+
+// --- the Whims' broths ---------------------------------------------------------
+// Effect-bearing consumables: restore is a token 1 (the effect is the meal),
+// and interact.js lets them drink at a full satchel for exactly that reason.
+BLOCKS[EMBER_BROTH] = def("Emberbell Broth", cropCross({
+  tiles: cube(TILE.EMBER_BROTH),
+  placeable: false,
+  food: { restore: 1, effect: ["emberglow", 20] },
+}));
+BLOCKS[SUNWISP_BROTH] = def("Sunwisp Broth", cropCross({
+  tiles: cube(TILE.SUNWISP_BROTH),
+  placeable: false,
+  food: { restore: 1, effect: ["fleetfoot", 45] },
+}));
+// the gland itself is no meal — it's what the kiln renders into the salve
+BLOCKS[KELP_GLAND] = def("Kelp Gland", cropCross({
+  tiles: cube(TILE.KELP_GLAND),
+  placeable: false,
+}));
+BLOCKS[KELPSALVE] = def("Kelpsalve", cropCross({
+  tiles: cube(TILE.KELPSALVE),
+  placeable: false,
+  food: { restore: 1, effect: ["kelpguard", 30] },
+}));
+
+// the Loomstone: a pearl bedded in stone; the light pools in the basin.
+// Glows a little (a hollowed starstone would), pick-work to move.
+BLOCKS[LOOMSTONE] = def("Loomstone", { hardness: 3.0,
+  tiles: { top: TILE.LOOMSTONE_TOP, side: TILE.LOOMSTONE_SIDE, bottom: TILE.STONE },
+  toolKind: "pick", needsPick: 2,
+  lightEmit: 8,
+});
+
+// the Quill: a whittled dart, fletched with leaf-scrap — ammunition, never
+// placed. The Springstave looses them; a landed one often survives to
+// collect (a dart is sturdier than a shattering stone).
+BLOCKS[QUILL] = def("Quill", {
+  tiles: cube(TILE.QUILL),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  hardness: 0.05,
+  placeable: false,
+  sound: "wood",
+});
+// the Springstave: a pseudo-tool so the whole dur/wear-bar machinery works
+// unchanged — "stave" matches no block's toolKind, so it digs at the bare
+// rate, and its damage rides the quill (interact.js scales it by the draw).
+BLOCKS[SPRINGSTAVE] = def("Springstave", {
+  tiles: cube(TILE.SPRINGSTAVE),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  hardness: 0.05,
+  placeable: false,
+  sound: "wood",
+  maxStack: 1,
+  tool: { kind: "stave", tier: 1, speed: 1, damage: 0, maxDur: 128 },
+});
+
+// the Murk Lantern: carried, never placed — the summons IS the use
+BLOCKS[MURK_LANTERN] = def("Murk Lantern", {
+  tiles: cube(TILE.MURK_LANTERN),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  hardness: 0.05,
+  placeable: false,
+  sound: "glass",
+  maxStack: 1,
+});
+// the Dusk Pearl: a pearl of the deep dark — nothing sheds it but the
+// Unshaken itself, and nothing consumes it but the Dusk Thread
+BLOCKS[DUSK_PEARL] = def("Dusk Pearl", {
+  tiles: cube(TILE.DUSK_PEARL),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  hardness: 0.05,
+  placeable: false,
+  sound: "stone",
+});
+
 export const CROP_STAGES = [CROP_SPROUT, CROP_HALF, CROP_RIPE];
-export function isCrop(id) {
-  return id === CROP_SPROUT || id === CROP_HALF || id === CROP_RIPE;
+export const BOGBEAN_STAGES = [BOGBEAN_SPROUT, BOGBEAN_HALF, BOGBEAN_RIPE];
+// the stage ladder a growing block belongs to, or null. New crops add their
+// trio here and the shared clock in main.js updateCrops just works.
+export function cropStagesFor(id) {
+  if (id === CROP_SPROUT || id === CROP_HALF || id === CROP_RIPE) return CROP_STAGES;
+  if (id === BOGBEAN_SPROUT || id === BOGBEAN_HALF || id === BOGBEAN_RIPE) return BOGBEAN_STAGES;
+  return null;
 }
+export function isCrop(id) {
+  return cropStagesFor(id) !== null;
+}
+// the seed item -> the sprout it plants (interact.js placement routing)
+export const SEED_TO_SPROUT = {
+  [ROOT_SEED]: CROP_SPROUT,
+  [BOGBEAN_POD]: BOGBEAN_SPROUT,
+};
 
 // yaw -> cardinal facing index (0 N(-z), 1 E(+x), 2 S(+z), 3 W(-x)).
 // Stairs place with their tall back in the look direction, so the steps
@@ -718,11 +931,14 @@ export const DOOR_TOGGLE = {
 // the STACK ({id, count: 1, dur}) — absent dur means factory-fresh.
 //
 // tier 1 plank: 2× speed, 64 uses; tier 2 stone: 4×, 128; tier 3 sky-iron:
-// 6×, 256 — the field-journal stamp counts (×64) go up the tiers.
+// 6×, 256; tier 4 gloamgold: 8×, 384 — the field-journal stamp counts (×64)
+// go up the tiers. The Star-Edge Shiv (damage 7) stays the apex BLADE;
+// gloamgold wins everywhere else.
 const TOOL_TIERS = [
   { adj: "Plank", tier: 1, speed: 2, damage: 3, maxDur: 64 },
   { adj: "Stone", tier: 2, speed: 4, damage: 4, maxDur: 128 },
   { adj: "Sky-Iron", tier: 3, speed: 6, damage: 5, maxDur: 256 },
+  { adj: "Gloamgold", tier: 4, speed: 8, damage: 6, maxDur: 384 },
 ];
 const defTool = (id, kindName, kind, t, tile) => {
   BLOCKS[id] = def(`${t.adj} ${kindName}`, {
@@ -754,6 +970,18 @@ defTool(IRON_SHOVEL, "Scoop", "shovel", TOOL_TIERS[2], TILE.SHOVEL_IRON);
 defTool(PLANK_BLADE, "Shiv", "blade", TOOL_TIERS[0], TILE.BLADE_PLANK);
 defTool(STONE_BLADE, "Shiv", "blade", TOOL_TIERS[1], TILE.BLADE_STONE);
 defTool(IRON_BLADE, "Shiv", "blade", TOOL_TIERS[2], TILE.BLADE_IRON);
+// the gloamgold set: tier 4 — mined out from under the Emberwash
+defTool(GLOAM_PICK, "Cracker", "pick", TOOL_TIERS[3], TILE.PICK_GLOAM);
+defTool(GLOAM_AXE, "Hewer", "axe", TOOL_TIERS[3], TILE.AXE_GLOAM);
+defTool(GLOAM_SHOVEL, "Scoop", "shovel", TOOL_TIERS[3], TILE.SHOVEL_GLOAM);
+defTool(GLOAM_BLADE, "Shiv", "blade", TOOL_TIERS[3], TILE.BLADE_GLOAM);
+// the Furrower: asks the ground politely to be a garden (the hoe — a fifth
+// kind; "hoe" matches no block's toolKind, so it mines at the bare rate and
+// its real work is the tilling routing in interact.js). No gloam Furrower —
+// tier 4 is for the mines.
+defTool(PLANK_HOE, "Furrower", "hoe", TOOL_TIERS[0], TILE.HOE_PLANK);
+defTool(STONE_HOE, "Furrower", "hoe", TOOL_TIERS[1], TILE.HOE_STONE);
+defTool(IRON_HOE, "Furrower", "hoe", TOOL_TIERS[2], TILE.HOE_IRON);
 
 // the Sky-Iron Ingot: a carried bar, never placed (the kiln makes it from
 // sky-iron ore; four fold back into a Sky-Iron Block at the workbench)
@@ -794,15 +1022,21 @@ BLOCKS[CHART] = instrument("Field Chart", TILE.FIELD_CHART, "wood");
 export const WEAR_KINDS = ["crown", "jerkin", "leggings", "treads"];
 
 // per-piece damage-reduction shares. A full bark set totals 0.25, a full
-// sky-iron set 0.60 (also the hard cap in armorProtection) — the jerkin
-// carries the most plate, the treads the least.
-//   bark:     crown .05  jerkin .08  leggings .07  treads .05   (Σ .25)
-//   sky-iron: crown .12  jerkin .20  leggings .16  treads .12   (Σ .60)
+// sky-iron set 0.60, a full gloamgold set 0.70 — the jerkin carries the
+// most plate, the treads the least. ARMOR_CAP (0.75) is the hard ceiling
+// in armorProtection, leaving a little headroom above full gloamgold for
+// whatever enhancement the Loomstone weaves later.
+//   bark:      crown .05  jerkin .08  leggings .07  treads .05   (Σ .25)
+//   sky-iron:  crown .12  jerkin .20  leggings .16  treads .12   (Σ .60)
+//   gloamgold: crown .14  jerkin .24  leggings .19  treads .13   (Σ .70)
+export const ARMOR_CAP = 0.75;
 const ARMOR_TIERS = {
   bark: { adj: "Bark", maxDur: 64, sound: "wood",
     prot: { crown: 0.05, jerkin: 0.08, leggings: 0.07, treads: 0.05 } },
   iron: { adj: "Sky-Iron", maxDur: 256, sound: "stone",
     prot: { crown: 0.12, jerkin: 0.2, leggings: 0.16, treads: 0.12 } },
+  gloam: { adj: "Gloamgold", maxDur: 384, sound: "stone",
+    prot: { crown: 0.14, jerkin: 0.24, leggings: 0.19, treads: 0.13 } },
 };
 const defArmor = (id, kindName, kind, tierKey, tile) => {
   const t = ARMOR_TIERS[tierKey];
@@ -827,6 +1061,10 @@ defArmor(IRON_CROWN, "Crown", "crown", "iron", TILE.CROWN_IRON);
 defArmor(IRON_JERKIN, "Jerkin", "jerkin", "iron", TILE.JERKIN_IRON);
 defArmor(IRON_LEGGINGS, "Leggings", "leggings", "iron", TILE.LEGGINGS_IRON);
 defArmor(IRON_TREADS, "Treads", "treads", "iron", TILE.TREADS_IRON);
+defArmor(GLOAM_CROWN, "Crown", "crown", "gloam", TILE.CROWN_GLOAM);
+defArmor(GLOAM_JERKIN, "Jerkin", "jerkin", "gloam", TILE.JERKIN_GLOAM);
+defArmor(GLOAM_LEGGINGS, "Leggings", "leggings", "gloam", TILE.LEGGINGS_GLOAM);
+defArmor(GLOAM_TREADS, "Treads", "treads", "gloam", TILE.TREADS_GLOAM);
 
 // --- the Pearlfall's gifts ------------------------------------------------------
 // Starstone: a landed pearl of the old sky, dense and still glowing. It only
@@ -839,6 +1077,7 @@ BLOCKS[STARSTONE] = def("Starstone", {
   toolKind: "pick",
   needsPick: 2,
   lightEmit: 13,
+  gleam: 5, // prying loose a drowned star sheds a proper pinch of it
 });
 // Starglass: starstone run molten in the kiln — a glowing pane, glass-like
 // (cutout + cullSame, exactly the common-glass mesh rules) but too precious
@@ -897,6 +1136,91 @@ BLOCKS[ICE] = def("River Glass", {
   sound: "glass",
 });
 
+// the Emberwash: opaque-bucket render (its own crust texture, no water swell)
+// but non-opaque mesh rules like River Glass — internal lava-lava faces cull,
+// and the BFS block light escapes the pool instead of dying at its skin
+BLOCKS[LAVA] = def("Emberwash", {
+  tiles: cube(TILE.LAVA),
+  hardness: Infinity,
+  drops: null,
+  solid: false,
+  opaque: false,
+  cullSame: true,
+  lightEmit: 13,
+  sound: "stone",
+});
+
+// a fluid cell: the player swims in it, and building into it is allowed
+// (placement replaces the fluid the way it replaces water)
+export function isFluid(id) { return id === WATER || id === LAVA; }
+
+BLOCKS[WISPCAP] = def("Wispcap", { hardness: 0.05,
+  tiles: cube(TILE.WISPCAP),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  sound: "plant",
+  lightEmit: 8,
+});
+
+// --- the Mirelands ---------------------------------------------------------------
+BLOCKS[MUD] = def("Mire Sod", { hardness: 0.6, toolKind: "shovel",
+  tiles: cube(TILE.MUD), sound: "dirt",
+});
+BLOCKS[REEDS] = def("Marsh Reed", { hardness: 0.05, drops: null,
+  randomDrop: { id: BOGBEAN_POD, chance: 0.3 },
+  tiles: cube(TILE.REEDS),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  sound: "plant",
+});
+// the pod "places" only into Turned Earth — interact.js routes it to a
+// BOGBEAN_SPROUT exactly like Root Pips; the pod never exists as a block
+BLOCKS[BOGBEAN_POD] = def("Bogbean Pods", { hardness: 0.05,
+  tiles: cube(TILE.BOGBEAN_POD),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  sound: "plant",
+});
+
+// Turned Earth: worked soil, combed into rows. Stays turned (no reversion
+// busywork); digs back up as plain dirt.
+BLOCKS[FARMLAND] = def("Turned Earth", { hardness: 0.5, drops: DIRT,
+  toolKind: "shovel",
+  tiles: { top: TILE.FARMLAND_TOP, side: TILE.DIRT, bottom: TILE.DIRT },
+  sound: "dirt",
+});
+
+// --- Gloamgold: the fourth tier -------------------------------------------------
+// the ore asks for a sky-iron Cracker (needsPick 3) — the gate ladder's
+// last rung before the metal itself takes over
+BLOCKS[GLOAM_ORE] = def("Gloamgold Ore", { hardness: 4.0,
+  tiles: cube(TILE.GLOAM_ORE),
+  toolKind: "pick", needsPick: 3, gleam: 3,
+});
+// the Gloamgold Ingot: a carried bar, never placed (the kiln raises it
+// from the ore; four fold into a Gloamgold Block at the workbench)
+BLOCKS[GLOAM_INGOT] = def("Gloamgold Ingot", {
+  tiles: cube(TILE.GLOAM_INGOT),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  hardness: 0.05,
+  placeable: false,
+  sound: "stone",
+});
+BLOCKS[GLOAM_BLOCK] = def("Gloamgold Block", { hardness: 3.4,
+  tiles: cube(TILE.GLOAM_BLOCK),
+  toolKind: "pick", needsPick: 3,
+});
+
+// --- wave 7: Gleam Moss, the Waybar & the Trundle -------------------------------
 // Gleam Moss: cross-kind like the flowers (so it pinches loose in a kick and
 // pops off a broken support), but it emits — the block-light BFS in mesher.js
 // spreads its faint glow, and Chunk.set registers the seeded emitters.
@@ -911,7 +1235,6 @@ BLOCKS[GLEAM_MOSS] = def("Gleam Moss", {
   lightEmit: 7,
 });
 
-// --- the Waybar & the Trundle ---------------------------------------------------
 // The Waybar: sky-iron bars pegged over split knotwood ties, laid flat and
 // inset on a solid block top. Non-solid (a Wanderling steps over a waybar,
 // never into it), not opaque, and shaped: the mesher builds ties + bars from
@@ -964,18 +1287,23 @@ BLOCKS[CART] = def("Trundle", {
 });
 
 // total damage-reduction fraction of a wear-slot array (entries are stacks or
-// null), capped at 0.60. Falls are a special case: armor helps a fall at only
-// 25% of its value — EXCEPT the treads, which count in full (it's the
+// null), capped at ARMOR_CAP. Falls are a special case: armor helps a fall at
+// only 25% of its value — EXCEPT the treads, which count in full (it's the
 // hand-feet that take the landing). Full sky-iron: 0.60 vs hits, 0.24 vs
-// falls; full bark: 0.25 vs hits, 0.10 vs falls.
+// falls; full gloamgold: 0.70 vs hits, 0.28 vs falls; full bark: 0.25 / 0.10.
+// a Ward Thread's flat bonus per warded piece (loom.js) — hits only; the
+// fall formula already discounts plate and a thread is thinner than plate
+export const WARD_BONUS = 0.04;
+
 export function armorProtection(slots, fall = false) {
   let total = 0;
   for (const s of slots || []) {
     const a = s && BLOCKS[s.id] ? BLOCKS[s.id].armor : null;
     if (!a) continue;
     total += fall ? a.prot * (a.kind === "treads" ? 1 : 0.25) : a.prot;
+    if (!fall && s.mod === "ward") total += WARD_BONUS;
   }
-  return Math.min(0.6, total);
+  return Math.min(ARMOR_CAP, total);
 }
 
 // a cross block that pops off / is replaced in place when built over (plants;

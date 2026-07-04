@@ -77,6 +77,21 @@ export class Prowl {
       : this._sky ? this._sky.day : GRACE_NIGHTS;
   }
 
+  // the current night's index by this clock (dusk-to-dawn, wrap-aware)
+  _nightIndex() {
+    if (!this._sky) return -1;
+    return this._sky.time >= 0.5 ? this._sky.day : this._sky.day - 1;
+  }
+
+  // does the CURRENT night plan to prowl? The Murk Lantern asks before it
+  // raises The Unshaken: the Prowl, the Pearlfall, and the boss never share
+  // a night — showers are excluded inside nightPlan, and this is the third
+  // leg of that exclusion (see onSummon in main.js for the other half).
+  prowlsTonight() {
+    const n = this._nightIndex();
+    return n >= 0 && this.nightPlan(n).prowls;
+  }
+
   update(dt, sky) {
     this._sky = sky;
     const t = sky.time;
@@ -95,8 +110,12 @@ export class Prowl {
         this.onAnnounce?.("The dark is getting up off its knees tonight. Keep to your light.", 4200);
       }
       // the siege begins — or RESUMES, when a reload lands mid-night on a
-      // prowling night (the seeded plan is the only state that matters)
+      // prowling night (the seeded plan is the only state that matters).
+      // Never while The Unshaken stalks: the lantern is refused on prowling
+      // nights (main.js onSummon), and a boss carried over from an earlier
+      // night holds the dark's attention — the siege waits for it to fall.
       if (t >= BEGIN_TIME && t < 1 && night && this.endedNight !== nightIdx &&
+          !this.mobs.mobs.some((mm) => mm.spec.boss) &&
           this.nightPlan(nightIdx).prowls) {
         this._begin(nightIdx);
       }

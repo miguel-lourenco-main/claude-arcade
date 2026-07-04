@@ -78,6 +78,23 @@ export class Sfx {
         this._noiseBurst(950, 0.03, 0.1);
         setTimeout(() => this._noiseBurst(1150, 0.03, 0.1), 90);
         break;
+      case "chirp": { // Tuftling: a bright two-note trill
+        if (!this._ensure()) break;
+        const ctx = this.ctx, now = ctx.currentTime;
+        for (const [t0, f] of [[0, 1480], [0.09, 1720]]) {
+          const osc = ctx.createOscillator();
+          const g = ctx.createGain();
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(f, now + t0);
+          osc.frequency.exponentialRampToValueAtTime(f * 1.15, now + t0 + 0.06);
+          g.gain.setValueAtTime(0.05, now + t0);
+          g.gain.exponentialRampToValueAtTime(0.001, now + t0 + 0.08);
+          osc.connect(g).connect(ctx.destination);
+          osc.start(now + t0);
+          osc.stop(now + t0 + 0.1);
+        }
+        break;
+      }
       case "rustle": // Prickleback: dry spines
         this._noiseBurst(750, 0.14, 0.07);
         break;
@@ -352,6 +369,45 @@ export class Sfx {
     osc.connect(g).connect(ctx.destination);
     osc.start(now);
     osc.stop(now + 0.1);
+  }
+
+  // the Gleam chime: a small glassy ping, throttled so a mining streak
+  // reads as sparkle rather than an alarm
+  gleam() {
+    if (!this.enabled || !this._ensure()) return;
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    if (this._lastGleamAt !== undefined && now - this._lastGleamAt < 0.18) return;
+    this._lastGleamAt = now;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(1160 + Math.random() * 240, now);
+    osc.frequency.exponentialRampToValueAtTime(1760, now + 0.07);
+    g.gain.setValueAtTime(0.045, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+    osc.connect(g).connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.18);
+  }
+
+  // the Springstave's loose: a cord twang, deeper the harder the draw
+  twang(charge = 1) {
+    if (!this.enabled || !this._ensure()) return;
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = "triangle";
+    const base = 320 - 140 * charge; // a full pull sings lower
+    osc.frequency.setValueAtTime(base, now);
+    osc.frequency.exponentialRampToValueAtTime(base * 0.6, now + 0.12);
+    g.gain.setValueAtTime(0.09, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+    osc.connect(g).connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.18);
+    this._noiseBurst(1500, 0.03, 0.05); // the cord's snap
   }
 
   click() { this._noiseBurst(2200, 0.04, 0.08); }

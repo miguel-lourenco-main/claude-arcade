@@ -182,6 +182,10 @@ let lightScratch = null;            // Uint8Array(LDIM * LDIM * HEIGHT), reused
 
 function computeBlockLight(world, chunk) {
   const emitters = [];
+  // the meshed chunk's footprint, expanded by 1 (faces sample one cell into
+  // the neighbors) — used for the lossless seed prune below
+  const fx0 = chunk.cx * CHUNK - 1, fx1 = chunk.cx * CHUNK + CHUNK;
+  const fz0 = chunk.cz * CHUNK - 1, fz1 = chunk.cz * CHUNK + CHUNK;
   for (let dz = -1; dz <= 1; dz++) {
     for (let dx = -1; dx <= 1; dx++) {
       const c = world.getChunk(chunk.cx + dx, chunk.cz + dz);
@@ -190,7 +194,16 @@ function computeBlockLight(world, chunk) {
         const lx = idx % CHUNK;
         const lz = ((idx / CHUNK) | 0) % CHUNK;
         const y = (idx / (CHUNK * CHUNK)) | 0;
-        emitters.push([c.cx * CHUNK + lx, y, c.cz * CHUNK + lz, level]);
+        const ex = c.cx * CHUNK + lx, ez = c.cz * CHUNK + lz;
+        // block light decays 1 per step (manhattan is a lower bound of the
+        // BFS distance), so an emitter whose closest approach to the
+        // footprint is >= its level can't reach a sampled cell — skipping
+        // it is lossless. This is what keeps a lava lake in a neighboring
+        // chunk from seeding thousands of dead BFS sources per remesh.
+        const ddx = ex < fx0 ? fx0 - ex : ex > fx1 ? ex - fx1 : 0;
+        const ddz = ez < fz0 ? fz0 - ez : ez > fz1 ? ez - fz1 : 0;
+        if (ddx + ddz >= level) continue;
+        emitters.push([ex, y, ez, level]);
       }
     }
   }

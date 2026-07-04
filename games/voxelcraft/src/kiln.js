@@ -10,7 +10,8 @@
 import {
   SAND, GLASS, COBBLE, STONE, IRON_ORE, IRON_INGOT, SNUFFET_LOIN, ROAST_LOIN,
   MEAL_ROOT, BAKED_ROOT, SILVERFIN, SEARED_SILVERFIN, COAL_ORE, LOG, PLANKS,
-  STARSTONE, STARGLASS,
+  STARSTONE, STARGLASS, GLOAM_ORE, GLOAM_INGOT,
+  POPPY, DANDELION, EMBER_BROTH, SUNWISP_BROTH, KELP_GLAND, KELPSALVE,
 } from "./blocks.js";
 import { MAX_STACK } from "./inventory.js";
 
@@ -21,12 +22,20 @@ export const SMELTS = {
   // ore renders down to the Sky-Iron Ingot — the head material of the iron
   // tool tier; four ingots fold back into an Iron Block at the workbench
   [IRON_ORE]: IRON_INGOT,
+  // the deep metal renders down the same way — the head material of the
+  // gloamgold tier (mined under the Emberwash, iron-pick gated)
+  [GLOAM_ORE]: GLOAM_INGOT,
   [SNUFFET_LOIN]: ROAST_LOIN,
   [MEAL_ROOT]: BAKED_ROOT,
   [SILVERFIN]: SEARED_SILVERFIN,
   // a landed pearl of the old sky runs molten into a pane that keeps the
   // glow (see the Pearlfall in meteors.js)
   [STARSTONE]: STARGLASS,
+  // the Whims' broths: meadow flowers and a Mirewalker's gland, simmered
+  // down into their effects (player.js EFFECTS)
+  [POPPY]: EMBER_BROTH,
+  [DANDELION]: SUNWISP_BROTH,
+  [KELP_GLAND]: KELPSALVE,
 };
 
 // seconds of heat per unit of fuel
@@ -53,7 +62,8 @@ function canSmelt(k) {
 // Advance every kiln by dt seconds. Returns true if any SLOT content changed
 // (fuel consumed or an item smelted) — the caller re-renders an open kiln
 // window on that signal; timer-only ticks don't need a grid repaint.
-export function tickKilns(kilns, dt) {
+// onSmelt(outId) fires once per completed smelt (the Gleam hook).
+export function tickKilns(kilns, dt, onSmelt) {
   let changed = false;
   for (const k of kilns.values()) {
     const smeltable = canSmelt(k);
@@ -83,6 +93,7 @@ export function tickKilns(kilns, dt) {
           if (out) out.count += 1;
           else k.slots[2] = { id: outId, count: 1 };
           changed = true;
+          if (onSmelt) onSmelt(outId);
         }
       } else {
         k.progress = 0; // nothing (valid) on the fire — heat escapes

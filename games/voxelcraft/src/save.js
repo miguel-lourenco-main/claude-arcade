@@ -1,6 +1,8 @@
 // World persistence: seed, player state, time of day, and the block-edit
 // overlay, saved to localStorage.
 
+import { stackToSave } from "./inventory.js";
+
 const KEY = "voxelcraft.save.v1";
 
 export function loadSave() {
@@ -35,6 +37,9 @@ export function writeSave(world, player, sky, hud, inventory, extra = {}) {
       // (["cx,cz", ...]) — absent in older saves, whose ruins simply seed
       // on first generation like a new world's
       ruins: world.serializeRuins(),
+      // additive: delve chunks whose store/sign state was already seeded —
+      // absent in older saves, whose delvings simply seed on first generation
+      delves: world.serializeDelves(),
       saplings: extra.saplings || [],
       // additive: growing meal-root crops [[x,y,z,stage,remain]...] — the
       // stage blocks themselves live in the edit overlay; this is the timers
@@ -59,6 +64,14 @@ export function writeSave(world, player, sky, hud, inventory, extra = {}) {
       // additive: the Murmur's settings [on, volume] — absent in older
       // saves, which simply get the defaults (on, modest volume)
       music: extra.music || undefined,
+      // additive: Gleam [jars, progress] — absent in older saves (a fresh jar)
+      gleam: extra.gleam || undefined,
+      // additive: the Whims in progress [[id, secondsLeft], ...] — absent in
+      // older saves (no moods borrowed)
+      effects: extra.effects || undefined,
+      // additive: tamed Tuftlings [[x, y, z, hp, stay], ...] — absent in
+      // older saves, which simply have no little shadows at heel
+      pets: extra.pets || undefined,
       player: {
         x: player.pos.x, y: player.pos.y, z: player.pos.z,
         yaw: player.yaw, pitch: player.pitch, flying: player.flying,
@@ -80,10 +93,9 @@ export function writeSave(world, player, sky, hud, inventory, extra = {}) {
       wear: extra.wear || undefined,
       // additive: the stack held on the drag cursor mid-window — it lives in
       // no slot, so without this field a save written mid-drag deletes it
+      // ([id, count, dur?, mod?] like every other stack entry)
       cursor: hud.slotUI && hud.slotUI.cursor
-        ? (hud.slotUI.cursor.dur !== undefined
-          ? [hud.slotUI.cursor.id, hud.slotUI.cursor.count, hud.slotUI.cursor.dur]
-          : [hud.slotUI.cursor.id, hud.slotUI.cursor.count])
+        ? stackToSave(hud.slotUI.cursor)
         : undefined,
       // additive: stacks awaiting satchel room (v1 migration overflow) —
       // persisted until drained so a reload can never destroy them

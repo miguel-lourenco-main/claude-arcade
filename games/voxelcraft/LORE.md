@@ -137,6 +137,24 @@ specific item vocabulary.
   the sky's gifts), and at dawn it lies back down. The morning after a stood
   Prowl is the quietest, kindest morning there is; Wanderlings swear the
   mending is real, and for once the Wanderlings are right.
+- **Gloamgold** — the fourth metal, and the shy one. Sky-iron FELL into
+  the Upturn; gloamgold SANK — it keeps to the gloam, the deep dark under
+  the Emberwash line where the drowned light pooled and never drained.
+  Dusk-gold with a violet shadow it never quite sheds, harder and keener
+  than sky-iron, and mined only by those willing to work with molten
+  neighbors. Ore, ingot, block, the full tool set, the full wear set.
+- **Wispcap** — a squat pale mushroom of the deep caves, cousin (the
+  botanists insist) of the Sunwisp: when the world flipped, some of the
+  old daylight got buried, and it grows back up through the stone as a
+  mushroom with a lit cap. Dim as lights go — a mushroom is not a
+  campfire — but it kicks loose in one hit, replants anywhere solid,
+  and asks for nothing, which makes it the delver's favorite lamp.
+- **The Emberwash** — what the flip couldn't cool. In the deepest carvings,
+  below even the old-sky caves, the ground still remembers being on fire
+  about the whole arrangement: molten pools with a dark crust and bright
+  seams, glowing like a grudge. It doesn't chase anyone — the Upturn is
+  polite even about lava — but it doesn't move aside either. Wanderlings
+  who want what lies near it bring good treads and better judgment.
 - **The Steads-Before** — the pre-Upturn homesteads: raised when the world
   faced the other way, and carried along when it turned. They came through
   the flip the way crockery comes through a move — mostly. What's left
@@ -145,6 +163,97 @@ specific item vocabulary.
   houses above them. Wanderlings don't rebuild a stead; they read whatever
   the Notice Post still says, take what the chest offers, and leave the
   walls to their sulk. It's agreed this is a fair split.
+
+- **The Unshaken** — when the world flipped, every shadow was shaken off
+  its owner and most of them politely dispersed. One did not. It has
+  been down there since, in the gloam under the gloam, growing fat on
+  the dark the drowned stars left behind. It does not come when called —
+  it comes when INVITED: a **Murk Lantern** (starglass painted out with
+  soot; a lantern that sheds dark) raised on open ground at night. It
+  hits like a falling roof, hangs the dark on you as it does, and at
+  half strength it SPLITS — two murklings peel off its flanks and it
+  stops walking and starts lunging. What's left afterward is a **Dusk
+  Pearl**: nacre in negative, the material of the Dusk Thread, and the
+  only proof the Upturn accepts that you met the last shadow and it
+  shook first.
+- **The Tuftling** — a small tufty burrower of the meadows, mostly tail
+  and opinion, and mad for Silverfin. Offer it one and it might decide
+  you are its person (it keeps the fish either way; it is not a
+  complicated animal). A decided Tuftling follows at heel, waits where
+  it's told, turns up at your side no matter how far you wander, and
+  flings itself — chirping — at whatever you last raised a hand to.
+  It is the only creature of the Upturn that stays.
+- **The Snufflet** — a snuffet pup: a loaf in training. Feed two grown
+  snuffets a pouch of Root Pips each (they snuffle seeds out of the tall
+  grass anyway — offering some by hand is just good manners) and they'll
+  find each other, touch noses, and shortly there is a smaller, rounder,
+  even more earnest snuffet learning to graze. Pups shadow the nearest
+  grown loaf until they're loaf-sized themselves.
+- **The Springstave & the Quill** — a green knotwood limb bent double and
+  corded with moss-twine, and the whittled leaf-fletched darts it looses.
+  Hold the draw and the stave remembers being a tree that wanted to
+  stand back up; let go and it says so, loudly, in the direction you
+  were looking. The polite ranged answer to an impolite distance.
+- **The Loomstone & the Threads** — a landed starstone hollowed like a
+  basin and bedded in worked stone. Gleam pools in the hollow, and a
+  steady pair of hand-feet can weave it THROUGH a tool or a worn piece
+  as a Thread: the **Keen Thread** (a blade that bites two deeper), the
+  **Flint Thread** (a digger half again as eager), the **Knotwood
+  Thread** (wear that lands half as often — named for the wood that
+  refuses to split), the **Ward Thread** (a worn piece that argues a
+  little harder), and the **Dusk Thread** (a pearl's dark woven into an
+  edge: three deeper still, and the struck carry the Dimmed whim). One
+  thread per item, and it never comes out — weaving is a promise, not a
+  coat of paint.
+- **The Whims** — the Upturn's moods, worn briefly. A broth or a bad bite
+  can leave one on you for a minute: **Fleetfoot** (the Sunwisp lightness
+  takes to your feet), **Emberglow** (a warm ember heals you and asks
+  nothing of the satchel), **Mire-rot** (the Mirewalker's gift — a gnaw
+  that armor can't argue with, though it politely stops at half a heart),
+  **Kelpguard** (the salve's steadying — every hurt shaved, the rot
+  washed right out), and **Dimmed** (the dark leaning on you; only one
+  thing in the Upturn hits hard enough to leave it). The broths simmer
+  in any kiln: an Emberbell for the glow, a Sunwisp for the feet, and a
+  Mirewalker's own **Kelp Gland** rendered down into **Kelpsalve** — the
+  disease carries its cure, which the bog considers fair.
+- **Gleam** — the light that clings to work. When the stars drowned, their
+  light didn't all go out; some of it soaked into the ground and the
+  beasts and the making of things, and it sheds as tiny motes when work
+  gets properly finished — ore cracked loose, a beast felled, the kiln's
+  pour, a tool trued at the bench. A Wanderling bottles it without
+  thinking about it (the satchel has a jar row for exactly this), and a
+  full jar is a quiet, warm feeling with a number on it. What the jars
+  are FOR, the weavers say, is coming. Death never spills them — the
+  Upturn is polite about grief.
+- **The Furrower** — the fifth tool. The Cracker cracks, the Hewer hews,
+  the Scoop scoops, the Shiv settles arguments — and the Furrower asks
+  the ground politely to be a garden. One pass turns dirt, turf, or Mire
+  Sod into **Turned Earth**, the combed rows that pips and pods actually
+  agree to grow in. Turned Earth stays turned; the Upturn doesn't undo
+  a politeness once granted.
+- **The Mirelands** — where the flip wrung the land out and it never
+  finished draining. The wettest country of the Upturn: Mire Sod
+  underfoot (wet ground that sucks at the hand-feet — the bog is crossed
+  at three-quarter pace), Marsh Reeds nodding along every water line,
+  bramble thick enough to make the berrying easy, and Mirewalkers
+  patrolling like they pay rent. Wanderlings like the Mirelands the way
+  they like a story with weather in it: from slightly higher ground.
+- **Mire Sod** — the bog's wet dark earth. Scoops like dirt, drags like
+  guilt.
+- **Marsh Reed** — the tall seed-headed reed of the Mirelands. Some
+  stalks keep a twist of **Bogbean Pods** — fat speckled beans the bog
+  folk swore by. Planted in Turned Earth they twine up into vines and
+  hand back **Bogbeans**; a meal root and two bogbeans simmered together
+  make **Wanderer's Pottage**, the dish every satchel dreams about on
+  the fourth night out.
+- **The Delvings-Under** — the Steads-Before didn't just farm; they dug.
+  Timbered galleries chasing sky-iron down into the old-sky dark, rung
+  shafts up to little head-frames that have mostly given up standing
+  straight. The crews left mid-swing — the ground got opinionated — and
+  their stores wait where they set them: torches, coal, spare heads, and
+  now and then the good metal itself. Wanderlings read the notice, climb
+  down, take what the chest offers, and leave the timbers to their work
+  of slowly becoming ground. The seam, it's agreed, is still singing.
 
 Generic category words (Dirt, Sand, Stone, Gravel, Water, Glass, Torch,
 Chest, Workbench, Bricks, Sandstone, Coal Ore, Tall Grass, Cactus) stay

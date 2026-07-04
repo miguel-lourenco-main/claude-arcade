@@ -19,6 +19,15 @@
   <div id="hud">
     <div id="crosshair"></div>
     <div id="block-name"></div>
+    <div id="gleam" class="hidden">
+      <div id="gleam-bar"><div id="gleam-fill"></div></div>
+      <div id="gleam-jars">0</div>
+    </div>
+    <div id="effects" class="hidden"></div>
+    <div id="boss-bar" class="hidden">
+      <div id="boss-name"></div>
+      <div id="boss-track"><div id="boss-fill"></div></div>
+    </div>
     <div id="status" class="hidden">
       <div id="status-left">
         <div id="shields" class="hidden"></div>
@@ -121,6 +130,16 @@
       <div id="trade-list"></div>
       <h3>Satchel</h3><div id="trade-main-grid" class="slot-grid"></div>
       <div id="trade-hotbar-grid" class="slot-grid belt"></div>
+    </div>
+  </div>
+
+  <div id="loom-ui" class="hidden">
+    <div id="loom-panel">
+      <h2>The Loomstone <span class="hint">(select the tool or piece on your belt, then weave &mdash; E to close)</span></h2>
+      <h3 id="loom-target">Nothing selected</h3>
+      <div id="loom-list"></div>
+      <h3>Satchel</h3><div id="loom-main-grid" class="slot-grid"></div>
+      <div id="loom-hotbar-grid" class="slot-grid belt"></div>
     </div>
   </div>
 

@@ -1,20 +1,19 @@
 // Chunked voxel world: storage, block get/set, edit overlay for persistence.
 
 import { AIR, BLOCKS } from "./blocks.js";
-import { validDur } from "./inventory.js";
+import { makeStack, stackToSave } from "./inventory.js";
 
-// container slot -> save entry: tools with wear keep a third element
-// [id, count, dur] (additive — older loaders ignore it)
-const saveSlot = (s) => (s ? (s.dur !== undefined ? [s.id, s.count, s.dur] : [s.id, s.count]) : 0);
-// save entry -> container slot, validating the optional dur
+// container slot -> save entry: tools keep wear as a third element and a
+// woven thread as a fourth [id, count, dur, mod] (additive — older loaders
+// ignore the extras)
+const saveSlot = stackToSave;
+// save entry -> container slot: makeStack is the one validated constructor
+// (per-id count ceiling, dur + thread validation) — no hand-rolled copy here
 function loadSlot(e) {
   if (!Array.isArray(e)) return null;
-  const [id, n, dur] = e;
+  const [id, n, dur, mod] = e;
   if (!Number.isInteger(id) || !BLOCKS[id] || !Number.isInteger(n) || n <= 0) return null;
-  const slot = { id, count: Math.min(64, n) };
-  const d = validDur(id, dur);
-  if (d !== undefined) slot.dur = d;
-  return slot;
+  return makeStack(id, n, dur, mod);
 }
 
 export const CHUNK = 16;
@@ -53,16 +52,20 @@ export class Chunk {
     if (y < 0 || y >= HEIGHT) return AIR;
     return this.data[blockIndex(lx, y, lz)];
   }
+  // the one owner of the emitter registry: every write — generation
+  // (terrain/ruins), player edits (World.setBlock), and the overlay
+  // re-application in ensureChunk — keeps it current through here
   set(lx, y, lz, id) {
     if (y < 0 || y >= HEIGHT) return;
     const idx = blockIndex(lx, y, lz);
-    this.data[idx] = id;
     // keep the emitter registry current here, at the one write everything
-    // funnels through: worldgen seeds glowing blocks now (gleam moss,
-    // buried starstone), and a later stamp (tree, ruin) that overwrites
-    // one must clear its glow
+    // funnels through: worldgen seeds glowing blocks now (gleam moss, wispcaps,
+    // emberwash, buried starstone), and a later stamp (tree, ruin, delving)
+    // that overwrites one must clear its glow
+    const prev = this.data[idx];
+    if (BLOCKS[prev].lightEmit > 0) this.emitters.delete(idx);
     if (BLOCKS[id].lightEmit > 0) this.emitters.set(idx, BLOCKS[id].lightEmit);
-    else if (this.emitters.size > 0) this.emitters.delete(idx);
+    this.data[idx] = id;
   }
 }
 
@@ -77,6 +80,7 @@ export class World {
     this.ruinsSeeded = new Set();     // "cx,cz" ruin chunks whose chest/sign
                                       // state was seeded (once per world — a
                                       // regenerated chunk never re-deals loot)
+    this.delvesSeeded = new Set();    // same contract for the Delvings-Under
     this.generator = null;            // set by terrain.js
     this._lastChunk = null;           // 1-entry lookup cache (meshing/physics locality)
   }
@@ -180,6 +184,21 @@ export class World {
     }
   }
 
+  // delve seeding markers (additive save field): the Delvings-Under's
+  // once-per-world chest/sign dealing, exactly like the ruins pair
+  serializeDelves() {
+    return [...this.delvesSeeded];
+  }
+
+  loadDelves(arr) {
+    if (!Array.isArray(arr)) return;
+    for (const key of arr) {
+      if (typeof key === "string" && /^-?\d+,-?\d+$/.test(key)) {
+        this.delvesSeeded.add(key);
+      }
+    }
+  }
+
   getChunk(cx, cz) {
     const c = this._lastChunk;
     if (c && c.cx === cx && c.cz === cz) return c;
@@ -252,17 +271,21 @@ export class World {
       chunk = new Chunk(cx, cz);
       this.chunks.set(key, chunk);
     }
+    // clear BEFORE generating: the generator registers its own emitters
+    // through Chunk.set (Emberwash pools, glow flora, gleam moss) — clearing
+    // after it would render every generated light dark
     chunk.emitters.clear();
-    this.generator(this, chunk); // seeds emitters via Chunk.set (gleam moss)
-    // apply persisted player edits on top of the generated terrain
-    const overlay = this.edits.get(key);
-    if (overlay) {
-      for (const [idx, id] of overlay) {
-        chunk.data[idx] = id;
-        // the overlay overrides seeded emitters too: a mined gleam moss
-        // must not keep glowing out of its regenerated cell
+    this.generator(this, chunk);
+    // apply persisted player edits on top of the generated terrain: an edit
+    // may add an emitter OR pave over a generated one (a mined gleam moss
+    // must not keep glowing out of its regenerated cell), so set-or-delete
+    const overlayEdits = this.edits.get(key);
+    if (overlayEdits) {
+      for (const [idx, id] of overlayEdits) {
+        const prev = chunk.data[idx];
+        if (BLOCKS[prev].lightEmit > 0) chunk.emitters.delete(idx);
         if (BLOCKS[id].lightEmit > 0) chunk.emitters.set(idx, BLOCKS[id].lightEmit);
-        else chunk.emitters.delete(idx);
+        chunk.data[idx] = id;
       }
     }
     chunk.generated = true;

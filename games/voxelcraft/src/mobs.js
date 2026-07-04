@@ -4,7 +4,11 @@
 // and a rare shoreline bruiser. One shared physics/AI core.
 
 import * as THREE from "three";
-import { BLOCKS, GRASS, SAND, WATER, COAL_ORE, TORCH, SNUFFET_LOIN, MOSS_CLUMP, AIR, LEAVES, LEAVES_COLD, isSolid } from "./blocks.js";
+import {
+  BLOCKS, GRASS, SAND, MUD, WATER, LAVA, isFluid, COAL_ORE, TORCH,
+  SNUFFET_LOIN, MOSS_CLUMP, KELP_GLAND, DUSK_PEARL, STARSTONE, AIR,
+  LEAVES, LEAVES_COLD, isSolid,
+} from "./blocks.js";
 import { mulberry32 } from "./noise.js";
 
 const SPAWN_INTERVAL = 4;   // seconds between spawn attempts
@@ -38,29 +42,55 @@ const FEUD_RANGE = 24;      // mob-vs-mob grudges lapse beyond this
 export const SPECIES = {
   snuffet: {
     name: "Snuffet", hp: 3, speed: 1.4, behavior: "passive", habitat: "meadow",
-    cap: 4, halfW: 0.35, height: 0.85, sound: "snuffle",
+    cap: 4, halfW: 0.35, height: 0.85, sound: "snuffle", gleam: 1,
     drops: [[SNUFFET_LOIN, 1], [MOSS_CLUMP, 1]], // loin + the moss off its back
   },
   murkling: {
     name: "Murkling", hp: 6, speed: 2.6, behavior: "hostile", habitat: "night",
     cap: 4, halfW: 0.25, height: 1.35, damage: 2, aggro: 14, attackRange: 1.3,
-    drops: [[COAL_ORE, 1]], sound: "rasp",
+    drops: [[COAL_ORE, 1]], sound: "rasp", gleam: 3,
   },
   stalkid: {
     name: "Stalkid", hp: 8, speed: 3.1, behavior: "ambush", habitat: "cave",
     cap: 3, halfW: 0.38, height: 0.6, damage: 4, aggro: 4.5, attackRange: 1.3,
-    drops: [[COAL_ORE, 1]], sound: "clicks",
+    drops: [[COAL_ORE, 1]], sound: "clicks", gleam: 4,
   },
   prickleback: {
     name: "Prickleback", hp: 10, speed: 0.9, behavior: "neutral", habitat: "desert",
     cap: 2, halfW: 0.45, height: 0.75, damage: 3, contactDamage: 1,
-    attackRange: 1.5, knockResist: 0.5, sound: "rustle",
+    attackRange: 1.5, knockResist: 0.5, sound: "rustle", gleam: 4,
   },
   mirewalker: {
     name: "Mirewalker", hp: 20, speed: 1.0, behavior: "hostile", habitat: "shore",
     cap: 1, halfW: 0.35, height: 1.9, damage: 5, aggro: 10, attackRange: 1.7,
-    knockResist: 0.85, drops: [[COAL_ORE, 3], [TORCH, 4]], rareChance: 0.15,
-    sound: "bellow",
+    knockResist: 0.85, drops: [[COAL_ORE, 3], [TORCH, 4], [KELP_GLAND, 1]],
+    rareChance: 0.15, sound: "bellow", gleam: 8,
+    inflicts: ["mirerot", 8], // its hit leaves the rot; its gland is the cure
+  },
+  // the Tuftling: a small tufty burrower of the meadows, mad for Silverfin.
+  // Offer it one and it MIGHT decide you are its person (mobs.tame) — a
+  // tamed one follows, teleports after you across any distance, and harries
+  // whatever you strike. Passive, rare, and the only creature that stays.
+  tuftling: {
+    name: "Tuftling", hp: 8, speed: 3.4, behavior: "passive", habitat: "meadow",
+    cap: 1, halfW: 0.28, height: 0.5, damage: 3, attackRange: 1.2,
+    rareChance: 0.25, sound: "chirp", gleam: 2, drops: null,
+  },
+  // The Unshaken: the one shadow the flip couldn't shake off, grown fat in
+  // the dark. Summon-only (the Murk Lantern, at night — habitat "boss"
+  // matches neither cleanup rule and never enters _trySpawn), sunrise-proof,
+  // and the only fight in the Upturn that fights back properly. Under half
+  // health it splits off two murklings and starts LUNGING.
+  unshaken: {
+    name: "The Unshaken", hp: 60, speed: 2.0, behavior: "hostile", habitat: "boss",
+    cap: 1, halfW: 0.6, height: 2.6, damage: 6, aggro: 48, attackRange: 2.2,
+    knockResist: 0.9, gleam: 40, boss: true, sound: "bellow",
+    drops: [[DUSK_PEARL, 1], [STARSTONE, 2]],
+    inflicts: ["dimmed", 5], // its hits hang the dark on you
+    // flavor lines main.js reads — a second boss brings its own words
+    deathLine: "The Unshaken comes apart into ordinary night.",
+    splitLine: "The shadow splits!",
+    goneLine: "The shadow settles back into the ground.",
   },
   // the Peddler: a wandering trader Wanderling, hunched under an enormous
   // patchwork backpack. Day-only (gone by dusk, the way the Murkling is gone
@@ -100,6 +130,7 @@ export class Mobs {
   constructor(scene) {
     this.scene = scene;
     this.mobs = [];
+    this._petTarget = null; // the mob a tamed Tuftling is harrying
     this._spawnTimer = 0;
     this.onMobHurt = null;
     this.onDrop = null;      // (x, y, z, id, n)
@@ -182,6 +213,26 @@ export class Mobs {
     const peStick = this._mat(paint(0xf65, [148, 126, 90], 10));
     // the dangling trinkets: little bright oddments on strings
     const peTrinket = this._mat(paint(0xf66, [200, 168, 84], 20));
+    // The Unshaken: charcoal-indigo bulk, pale unblinking eyes
+    const unBody = this._mat(paint(0xb81, [30, 28, 44], 7, (ctx, rand) => {
+      for (let i = 0; i < 6; i++) {
+        ctx.fillStyle = "rgba(12,10,22,0.7)";
+        ctx.fillRect((rand() * 14) | 0, (rand() * 14) | 0, 2, 3);
+      }
+    }));
+    const unFace = this._mat(paint(0xb82, [30, 28, 44], 7, (ctx) => {
+      ctx.fillStyle = "#cfd4ea";
+      ctx.fillRect(3, 6, 3, 2); ctx.fillRect(10, 6, 3, 2); // the pale stare
+    }));
+    // Tuftling: warm sand-rust coat, cream belly, and the famous tail tuft
+    const tuBody = this._mat(paint(0xa71, [188, 138, 86], 10));
+    const tuFace = this._mat(paint(0xa72, [188, 138, 86], 10, (ctx) => {
+      ctx.fillStyle = "#26221c";
+      ctx.fillRect(4, 6, 3, 3); ctx.fillRect(9, 6, 3, 3); // big dark eyes
+      ctx.fillStyle = "#141210";
+      ctx.fillRect(7, 10, 2, 1); // the nose
+    }));
+    const tuTuft = this._mat(paint(0xa73, [232, 214, 178], 12));
 
     return {
       snuffet: () => {
@@ -210,6 +261,58 @@ export class Mobs {
           ear.position.set(side * 0.26, 0.52, 0.5);
           ear.rotation.z = side * 0.35;
           g.add(ear);
+        }
+        return { group: g, legs };
+      },
+      unshaken: () => {
+        // a murkling silhouette at twice the scale, arms grown too long
+        const g = new THREE.Group();
+        const body = box(0.72, 1.7, 0.56, unBody);
+        body.position.y = 1.5;
+        g.add(body);
+        const headMats = [unBody, unBody, unBody, unBody, unFace, unBody];
+        const head = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.56), headMats);
+        head.position.y = 2.66;
+        g.add(head);
+        const legs = [];
+        for (const side of [-1, 1]) {
+          const leg = box(0.26, 0.7, 0.26, unBody);
+          leg.position.set(side * 0.22, 0.35, 0);
+          g.add(leg); legs.push(leg);
+          const arm = box(0.18, 1.5, 0.18, unBody);
+          arm.position.set(side * 0.5, 1.5, 0.12);
+          arm.rotation.x = 0.25;
+          g.add(arm); legs.push(arm); // arms swing with the stride too
+        }
+        return { group: g, legs };
+      },
+      tuftling: () => {
+        const g = new THREE.Group();
+        const body = box(0.44, 0.3, 0.5, tuBody);
+        body.position.y = 0.22;
+        g.add(body);
+        const headMats = [tuBody, tuBody, tuBody, tuBody, tuFace, tuBody];
+        const head = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.28, 0.24), headMats);
+        head.position.set(0, 0.34, 0.32);
+        g.add(head);
+        for (const side of [-1, 1]) {
+          const ear = box(0.06, 0.16, 0.06, tuBody);
+          ear.position.set(side * 0.1, 0.52, 0.3);
+          g.add(ear);
+        }
+        // the tuft: an oversized plume curling up over the back
+        const tuft1 = box(0.14, 0.16, 0.22, tuTuft);
+        tuft1.position.set(0, 0.34, -0.32);
+        tuft1.rotation.x = 0.5;
+        g.add(tuft1);
+        const tuft2 = box(0.18, 0.2, 0.16, tuTuft);
+        tuft2.position.set(0, 0.5, -0.42);
+        g.add(tuft2);
+        const legs = [];
+        for (const [lx, lz] of [[-0.14, 0.16], [0.14, 0.16], [-0.14, -0.16], [0.14, -0.16]]) {
+          const leg = box(0.1, 0.14, 0.1, tuBody);
+          leg.position.set(lx, 0.07, lz);
+          g.add(leg); legs.push(leg);
         }
         return { group: g, legs };
       },
@@ -355,11 +458,57 @@ export class Mobs {
     }
   }
 
-  // wild-population count for the spawn director: bondlings are kept, not
-  // spawned, so they never crowd the meadow's wild cap
+  // feeding a snuffet its favorite pips (courting — see the pass in update):
+  // an adult with no courting cooldown starts looking fondly around.
+  // Returns whether the bite took. (The BERRY path — bonding — is feed().)
+  court(m) {
+    if (m.species !== "snuffet" || m.baby || m.breedCd > 0 || m.loveT > 0) return false;
+    m.loveT = 30;
+    if (this.onSound) this.onSound(m.spec.sound);
+    return true;
+  }
+
+  // offering a Tuftling a Silverfin: one-in-three it decides you are its
+  // person. Returns "tamed" | "shy" | null (not tameable).
+  tame(m) {
+    if (m.species !== "tuftling" || m.tamed) return null;
+    if (Math.random() < 1 / 3) {
+      m.tamed = true;
+      m.mode = "follow";
+      if (this.onSound) this.onSound(m.spec.sound);
+      return "tamed";
+    }
+    if (this.onSound) this.onSound(m.spec.sound);
+    return "shy";
+  }
+
+  // follow <-> stay, toggled by an empty-hand right-click
+  togglePet(m) {
+    m.mode = m.mode === "stay" ? "follow" : "stay";
+    if (this.onSound) this.onSound(m.spec.sound);
+    return m.mode;
+  }
+
+  // the nearest other mob within range matching pred — the one proximity
+  // scan courting, pup-shadowing, and whatever comes next all share.
+  // Returns {mob, d} or null (d is reused by callers, never recomputed).
+  _nearest(m, range, pred) {
+    let best = null, bestD = range;
+    for (const o of this.mobs) {
+      if (o === m || !pred(o)) continue;
+      const d = Math.hypot(o.x - m.x, o.z - m.z);
+      if (d < bestD) { bestD = d; best = o; }
+    }
+    return best ? { mob: best, d: bestD } : null;
+  }
+
+  // wild-population count for the spawn director: bondlings and tamed
+  // creatures are kept, not spawned, so they never crowd the wild cap
   count(speciesKey) {
     let n = 0;
-    for (const m of this.mobs) if (m.species === speciesKey && !m.bonded) n++;
+    for (const m of this.mobs) {
+      if (m.species === speciesKey && !m.bonded && !m.tamed) n++;
+    }
     return n;
   }
 
@@ -404,6 +553,18 @@ export class Mobs {
       guardTarget: null,   // bondling: the mob it's charging
       targetMob: null,     // hostile/neutral: the bondling that hit it
       strandT: 0,          // seconds stuck while trying to follow
+      // courting (snuffets): fed adults seek each other; pups grow up
+      loveT: 0,          // seconds left seeking a mate
+      breedCd: 0,        // seconds before this adult will court again
+      baby: false,
+      growT: 0,          // seconds until a pup is grown
+      sizeMul: 1,        // presentation + collision scale (pups 0.45)
+      tamed: false,      // a tamed Tuftling stays, follows, and fights
+      mode: "follow",    // tamed: "follow" | "stay"
+      split: false,      // boss: the half-health shadow-split fired
+      lungeCd: 0,        // boss phase 2: seconds to the next lunge
+      farT: 0,           // boss: seconds spent >60 blocks from the player
+      dimT: 0,           // a Dusk Thread's mark: halved pace while it holds
     };
     this.mobs.push(mob);
     return mob;
@@ -537,8 +698,56 @@ export class Mobs {
     }
   }
 
+  // the Murk Lantern's answer: raise The Unshaken from the ground at the
+  // CLICKED cell — a cave summon rises in the cave, not on the surface
+  // sixty blocks up. Returns the boss, or null if one already stalks the
+  // world (callers announce; consume-last discipline lives in main.js).
+  summonBoss(world, x, y, z) {
+    for (const m of this.mobs) if (m.spec.boss) return null;
+    // first open pair of cells above the clicked block (it needs headroom)
+    const bx = Math.floor(x), bz = Math.floor(z);
+    let sy = -1;
+    for (let cy = Math.floor(y); cy < Math.min(Math.floor(y) + 6, 93); cy++) {
+      if (world.getBlock(bx, cy + 1, bz) === AIR &&
+          world.getBlock(bx, cy + 2, bz) === AIR &&
+          world.getBlock(bx, cy + 3, bz) === AIR) { sy = cy; break; }
+    }
+    if (sy < 0) return null;
+    const boss = this.spawnAt(x, sy + 1.01, z, "unshaken");
+    if (boss) {
+      boss.critT = 0.3; // rises with a pop
+      if (this.onSound) this.onSound(boss.spec.sound);
+    }
+    return boss;
+  }
+
+  // tamed companions persist (the ONLY mobs that do): [[x,y,z,hp,stay]...]
+  serializePets() {
+    const r = (v) => Math.round(v * 10) / 10;
+    return this.mobs.filter((m) => m.tamed)
+      .map((m) => [r(m.x), r(m.y), r(m.z), m.hp, m.mode === "stay" ? 1 : 0]);
+  }
+
+  loadPets(arr) {
+    if (!Array.isArray(arr)) return;
+    for (const e of arr) {
+      if (!Array.isArray(e) || e.length < 4) continue;
+      const [x, y, z, hp, stay] = e;
+      if (![x, y, z].every(Number.isFinite) || !Number.isFinite(hp)) continue;
+      const m = this.spawnAt(x, y, z, "tuftling");
+      if (!m) continue;
+      m.tamed = true;
+      m.hp = Math.max(1, Math.min(m.spec.hp, hp));
+      m.mode = stay ? "stay" : "follow";
+    }
+  }
+
   // --- spawn director ---------------------------------------------------------
 
+  // proper lights suppress hostile spawns: torches (14), starstone (13),
+  // the Emberwash (13), starglass (11). The threshold keeps DIM growth —
+  // scattered cave flora like Wispcaps (8) — from sterilizing the deep:
+  // a mushroom is not a campfire.
   _nearTorch(world, x, y, z) {
     const cx = Math.floor(x) >> 4, cz = Math.floor(z) >> 4;
     const r2 = TORCH_SAFE_DIST * TORCH_SAFE_DIST;
@@ -546,14 +755,22 @@ export class Mobs {
       const c = world.getChunk(cx + dx, cz + dz);
       if (!c || c.emitters.size === 0) continue;
       for (const [idx, level] of c.emitters) {
-        const lx = idx % 16, lz = ((idx / 16) | 0) % 16, ly = (idx / 256) | 0;
+        // the safety radius scales with the emitter's strength: proper
+        // lights (torch 14, starstone/Emberwash 13, starglass 11) keep the
+        // full watch; DIM growth — a gleam moss tuft (7), a Wispcap (8) —
+        // only guards its own small pool of light, so the deep stays
+        // dangerous between the tufts (a mushroom is not a campfire)
+        const safe = level >= 11 ? TORCH_SAFE_DIST : TORCH_SAFE_DIST * (level / 14);
+        const s2 = safe * safe;
+        // y first: one compare rejects a surface spawn 30 blocks above the
+        // Emberwash without paying the full distance math per pool cell
+        const ly = (idx / 256) | 0;
+        const dy2 = (ly - y) * (ly - y);
+        if (dy2 >= s2) continue;
+        const lx = idx % 16, lz = ((idx / 16) | 0) % 16;
         const ex = c.cx * 16 + lx, ez = c.cz * 16 + lz;
-        const d2 = (ex - x) ** 2 + (ly - y) ** 2 + (ez - z) ** 2;
-        // the safety radius scales with the emitter's strength: a torch (14)
-        // keeps the full watch; a seeded gleam moss tuft (7) only guards its
-        // own small pool of light, so deep caves stay dangerous between them
-        const safe = TORCH_SAFE_DIST * (level / 14);
-        if (d2 < Math.min(r2, safe * safe)) return true;
+        const d2 = (ex - x) ** 2 + dy2 + (ez - z) ** 2;
+        if (d2 < Math.min(r2, s2)) return true;
       }
     }
     return false;
@@ -601,12 +818,14 @@ export class Mobs {
 
     if (!night && topId === GRASS) {
       candidates.push("snuffet");
-      candidates.push("peddler"); // rare: rareChance thins this out below
+      candidates.push("peddler");  // rare: rareChance thins this out below
+      candidates.push("tuftling"); // rare too, and only one wild at a time
     }
     if (night && isSolid(topId)) candidates.push("murkling");
     if (biome === "desert" && topId === SAND) candidates.push("prickleback");
-    if (topId === SAND || topId === GRASS) {
-      // shoreline: standing water within 3 blocks
+    if (topId === SAND || topId === GRASS || topId === MUD) {
+      // shoreline: standing water within 3 blocks (the Mirelands' Mire Sod
+      // counts as shore ground — the bog is Mirewalker country)
       let shore = false;
       for (let dz = -3; dz <= 3 && !shore; dz++) for (let dx = -3; dx <= 3; dx++) {
         if (world.getBlock(x + dx, surfaceY, z + dz) === WATER) { shore = true; break; }
@@ -712,8 +931,22 @@ export class Mobs {
       // NOT wake up because someone walked overhead
       const dist3 = Math.hypot(m.x - player.pos.x, m.y - player.pos.y, m.z - player.pos.z);
 
-      // a bondling never despawns — distance is handled by the teleport below
-      if (distToPlayer > DESPAWN_DIST && !m.bonded) { this._remove(i); continue; }
+      // bondlings and tamed companions never despawn — distance is handled
+      // by their own teleports; a boss has its own leash below
+      if (distToPlayer > DESPAWN_DIST && !m.bonded && !m.tamed && !spec.boss) {
+        this._remove(i); continue;
+      }
+      // a kited boss doesn't vanish at a distance line — but if the player
+      // dies, or keeps 60+ blocks away for 90 seconds, the shadow settles
+      // back into the ground (and the lantern is owed nothing)
+      if (spec.boss) {
+        m.farT = distToPlayer > 60 ? m.farT + dt : 0;
+        if (player.dead || m.farT > 90) {
+          if (this.onBossGone) this.onBossGone(spec);
+          this._remove(i);
+          continue;
+        }
+      }
       // death pays out BEFORE the dawn cleanup — a kill landed on the
       // dawn-crossing frame still drops its loot
       if (m.hp <= 0) {
@@ -723,11 +956,14 @@ export class Mobs {
           this._remove(i);
           continue;
         }
-        if (spec.drops && this.onDrop) {
+        if (spec.drops && !m.baby && this.onDrop) {
           // a prowler carries double — the night pays for the trouble
           const lootMul = m.prowler ? 2 : 1;
           for (const [id, n] of spec.drops) this.onDrop(m.x, m.y + 0.4, m.z, id, n * lootMul);
         }
+        // gleam clings to a felled WILD beast — never a pup (breeding would
+        // become a cull-farm) and never your own tamed companion
+        if (this.onKill && !m.baby && !m.tamed) this.onKill(m);
         this._remove(i);
         continue;
       }
@@ -755,6 +991,13 @@ export class Mobs {
       m.contactCd = Math.max(0, m.contactCd - dt);
       m.angryT = Math.max(0, m.angryT - dt);
       m.grudgeT = Math.max(0, m.grudgeT - dt);
+      m.breedCd = Math.max(0, m.breedCd - dt);
+      m.dimT = Math.max(0, m.dimT - dt);
+      m.lungeCd = Math.max(0, m.lungeCd - dt);
+      if (m.baby) {
+        m.growT -= dt;
+        if (m.growT <= 0) { m.baby = false; m.sizeMul = 1; }
+      }
 
       // --- behavior selection ---
       // the mob-vs-mob feud: a hostile hit by a bondling turns on it for as
@@ -791,13 +1034,44 @@ export class Mobs {
       if (tgtMob) chasing = true; // the feud stands even at the player's back
 
       let targetSpeed = 0;
-      if (chasing) {
+      if (m.tamed) {
+        targetSpeed = this._petBehavior(m, player);
+      } else if (chasing) {
         // the feud target outranks the player while it holds
         const fx = tgtMob ? tgtMob.x : player.pos.x;
         const fy = tgtMob ? tgtMob.y : player.pos.y;
         const fz = tgtMob ? tgtMob.z : player.pos.z;
         m.yaw = Math.atan2(fx - m.x, fz - m.z);
         targetSpeed = spec.speed;
+        // The Unshaken's phases: crossing half health it SPLITS — two
+        // murklings peel off its flanks — then it moves half again as
+        // fast and starts lunging in bursts the substepped mover handles
+        if (spec.boss) {
+          if (!m.split && m.hp <= spec.hp / 2) {
+            m.split = true;
+            m.critT = 0.3;
+            for (const side of [-1, 1]) {
+              this.spawnAt(m.x + Math.cos(m.yaw) * side * 1.4, m.y + 0.2,
+                m.z - Math.sin(m.yaw) * side * 1.4, "murkling");
+            }
+            if (this.onSound) this.onSound(spec.sound);
+            if (this.onBossSplit) this.onBossSplit(spec);
+          }
+          if (m.split) {
+            targetSpeed = spec.speed * 1.5;
+            // the lunge is aimed at the PLAYER — a bondling feud never
+            // baits the shadow into leaping somewhere else
+            if (!tgtMob && m.lungeCd <= 0 && distToPlayer > 3 && distToPlayer < 14 && m.onGround) {
+              m.lungeCd = 6;
+              const lx = player.pos.x - m.x, lz = player.pos.z - m.z;
+              const ll = Math.max(0.2, Math.hypot(lx, lz));
+              m.vx = (lx / ll) * spec.speed * 4.5;
+              m.vz = (lz / ll) * spec.speed * 4.5;
+              m.vy = 4;
+              if (this.onSound) this.onSound(spec.sound);
+            }
+          }
+        }
         if (tgtMob) {
           // mob-vs-mob melee: no line-of-sight ritual, just reach + cooldown
           if (Math.hypot(fx - m.x, fz - m.z) < spec.attackRange + tgtMob.spec.halfW &&
@@ -811,6 +1085,8 @@ export class Mobs {
           // melee — only with clear line of sight (no biting through walls)
           m.attackCd = 1;
           player.damage(spec.damage, `a ${spec.name}`);
+          // some hits leave a whim behind (the Mirewalker's rot)
+          if (spec.inflicts) player.addEffect(spec.inflicts[0], spec.inflicts[1]);
           this._setGuard(m); // the bondlings take exception
           const kx = player.pos.x - m.x, kz = player.pos.z - m.z;
           const kl = Math.max(0.2, Math.hypot(kx, kz));
@@ -839,9 +1115,41 @@ export class Mobs {
         if (m.state === "walk") targetSpeed = spec.speed * 0.7;
       }
 
+      // snuffet courting: a fed adult seeks the nearest other fed adult;
+      // touching noses makes a Snufflet (a loaf in training). Pups loosely
+      // shadow the nearest adult so the meadow keeps its little families.
+      if (m.species === "snuffet" && !chasing && m.state !== "flee") {
+        if (m.loveT > 0 && !m.baby) {
+          m.loveT -= dt;
+          const mate = this._nearest(m, 8, (o) =>
+            o.species === "snuffet" && !o.baby && o.loveT > 0);
+          if (mate) {
+            m.yaw = Math.atan2(mate.mob.x - m.x, mate.mob.z - m.z);
+            targetSpeed = spec.speed;
+            if (mate.d < 1.2) {
+              m.loveT = 0; mate.mob.loveT = 0;
+              m.breedCd = 120; mate.mob.breedCd = 120;
+              const pup = this.spawnAt((m.x + mate.mob.x) / 2, m.y + 0.1,
+                (m.z + mate.mob.z) / 2, "snuffet");
+              if (pup) { pup.baby = true; pup.growT = 180; pup.sizeMul = 0.45; }
+              if (this.onSound) this.onSound(spec.sound);
+              if (this.onBreed) this.onBreed(m);
+            }
+          }
+        } else if (m.baby) {
+          const adult = this._nearest(m, 12, (o) =>
+            o.species === "snuffet" && !o.baby);
+          if (adult && adult.d > 4) {
+            m.yaw = Math.atan2(adult.mob.x - m.x, adult.mob.z - m.z);
+            targetSpeed = spec.speed * 0.9;
+          }
+        }
+      }
+
       // --- the bondling companion states: SIT / GUARD / FOLLOW ---
-      // Overrides whatever the ambient idle/walk picked above. Inside the
-      // 3-10 follow band the ambient wander stands — that's the living feel.
+      // Overrides whatever the ambient idle/walk (or a courting stroll)
+      // picked above. Inside the 3-10 follow band the ambient wander
+      // stands — that's the living feel.
       if (m.bonded) {
         if (m.sitting) {
           targetSpeed = 0; // planted, until told otherwise
@@ -887,14 +1195,28 @@ export class Mobs {
       }
 
       // --- movement --- (speedMul: the Prowl's +20%; 1 for everything else)
+      if (m.dimT > 0) targetSpeed *= 0.5; // a Dusk-marked stride drags
       const tx = Math.sin(m.yaw) * targetSpeed * m.speedMul;
       const tz = Math.cos(m.yaw) * targetSpeed * m.speedMul;
       m.vx += (tx - m.vx) * Math.min(1, 10 * dt);
       m.vz += (tz - m.vz) * Math.min(1, 10 * dt);
 
-      const inWater = world.getBlock(Math.floor(m.x), Math.floor(m.y + 0.3), Math.floor(m.z)) === WATER;
+      // creatures get the same fluid contract as the player: buoyancy in
+      // any fluid, and the Emberwash BURNS — kiting a hostile into a pool
+      // is supposed to work
+      const cellId = world.getBlock(Math.floor(m.x), Math.floor(m.y + 0.3), Math.floor(m.z));
+      const inWater = isFluid(cellId);
       if (inWater) m.vy = Math.min(2.5, m.vy + 10 * dt);
       else m.vy = Math.max(-30, m.vy - GRAVITY * dt);
+      if (cellId === LAVA) {
+        m.lavaCd = (m.lavaCd || 0) - dt;
+        if (m.lavaCd <= 0) {
+          m.lavaCd = 0.5;
+          m.hp -= 3; // the top-of-loop death check pays out drops next frame
+          m.hurtT = 0.25;
+          if (distToPlayer < 24 && this.onMobHurt) this.onMobHurt(false);
+        }
+      }
 
       this._move(world, m, dt);
 
@@ -922,8 +1244,46 @@ export class Mobs {
       m.group.rotation.y = m.yaw;
       // hurt flinch is a subtle swell; a falling crit lands with a real pop
       // that collapses over ~0.2s
-      m.group.scale.setScalar(1 + (m.hurtT > 0 ? 0.06 : 0) + m.critT * 1.1);
+      const lovePulse = m.loveT > 0 ? 0.04 + Math.sin(m.loveT * 7) * 0.04 : 0;
+      m.group.scale.setScalar(m.sizeMul * (1 + (m.hurtT > 0 ? 0.06 : 0) + m.critT * 1.1 + lovePulse));
     }
+  }
+
+  // a tamed Tuftling's turn: harry the player's marked target if one is
+  // close and alive, else keep to heel (or stay put). Beyond 24 blocks it
+  // simply pops to the player's side — hand-feet don't pathfind.
+  _petBehavior(m, player) {
+    const t = this._petTarget;
+    if (t && t.hp > 0 && this.mobs.includes(t)) {
+      const d = Math.hypot(t.x - m.x, t.z - m.z);
+      if (d > 24) {
+        this._petTarget = null;
+      } else {
+        m.yaw = Math.atan2(t.x - m.x, t.z - m.z);
+        if (d < m.spec.attackRange && m.attackCd <= 0 && Math.abs(t.y - m.y) < 2) {
+          m.attackCd = 0.9;
+          // strike() fires onMobHurt itself — no extra call here
+          this.strike(t, m.spec.damage, { x: m.x, z: m.z }, { byPet: true });
+        }
+        return m.spec.speed;
+      }
+    } else if (t) {
+      this._petTarget = null;
+    }
+    if (m.mode === "stay") return 0;
+    const d = Math.hypot(player.pos.x - m.x, player.pos.z - m.z);
+    if (d > 24) {
+      m.x = player.pos.x + (Math.random() - 0.5) * 1.6;
+      m.z = player.pos.z + (Math.random() - 0.5) * 1.6;
+      m.y = player.pos.y + 0.5;
+      m.vx = m.vy = m.vz = 0;
+      return 0;
+    }
+    if (d > 3) {
+      m.yaw = Math.atan2(player.pos.x - m.x, player.pos.z - m.z);
+      return d > 8 ? m.spec.speed : m.spec.speed * 0.7;
+    }
+    return 0;
   }
 
   // sampled visibility check between the mob's chest and the player's torso
@@ -959,7 +1319,7 @@ export class Mobs {
     if (disp === 0) return;
     m[axis] += disp;
     const eps = 0.001;
-    const hw = m.spec.halfW, hh = m.spec.height;
+    const hw = m.spec.halfW * m.sizeMul, hh = m.spec.height * m.sizeMul;
     const x0 = Math.floor(m.x - hw), x1 = Math.floor(m.x + hw - eps);
     // one row below the feet too: tall blocks (fence/gate, colHeight 1.5)
     // reach into the cell above, so a hopping mob at +1.3 still hits them
@@ -997,7 +1357,7 @@ export class Mobs {
   rayHit(origin, dir, maxDist) {
     let best = null, bestT = maxDist;
     for (const m of this.mobs) {
-      const hw = m.spec.halfW, hh = m.spec.height;
+      const hw = m.spec.halfW * m.sizeMul, hh = m.spec.height * m.sizeMul;
       const min = [m.x - hw, m.y, m.z - hw];
       const max = [m.x + hw, m.y + hh, m.z + hw];
       const o = [origin.x, origin.y, origin.z];
@@ -1034,6 +1394,14 @@ export class Mobs {
   // land a hit on a mob: damage, knockback away from fromPos, and the full
   // reaction suite. Shared by punches and thrown sling-stones.
   strike(m, dmg, fromPos, opts = {}) {
+    // any hit the PLAYER lands marks the target for a following Tuftling.
+    // Mob-landed strikes (byPet, or a bondling/hostile feud's attacker)
+    // never mark — a hostile striking back at a bondling must not point
+    // the Tuftling at the player's own companion.
+    if (!opts.byPet && !opts.attacker && !m.tamed && !m.bonded && !m.spec.trades) {
+      this._petTarget = m;
+    }
+    if (opts.dim) m.dimT = 4; // the Dusk Thread hangs the dark on THEM
     m.hp -= dmg;
     m.hurtT = 0.3;
     if (opts.crit) m.critT = 0.22; // the burst cue: a quick scale-pop

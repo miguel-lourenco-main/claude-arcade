@@ -5,10 +5,10 @@ import * as THREE from "three";
 import { buildAtlas, buildWaterTexture, buildCrackTextures } from "./textures.js";
 import { BLOCKS, AIR, WEAR_KINDS, armorProtection } from "./blocks.js";
 import { World, CHUNK, HEIGHT } from "./world.js";
-import { Inventory, makeStack } from "./inventory.js";
+import { Inventory, makeStack, stackToSave } from "./inventory.js";
 import { ItemDrops } from "./entities.js";
 import { PrimedKegs } from "./explosives.js";
-import { SlingStones } from "./projectiles.js";
+import { Projectiles } from "./projectiles.js";
 import { Mobs } from "./mobs.js";
 import { MeteorShowers } from "./meteors.js";
 import { Prowl } from "./prowl.js";
@@ -20,6 +20,10 @@ import { SignBoards } from "./signs.js";
 import { craft } from "./craft.js";
 import { dailyOffers, executeTrade } from "./trade.js";
 import { makeKiln, tickKilns } from "./kiln.js";
+import { Gleam } from "./gleam.js";
+import {
+  THREADS, threadsFor, weaveBlocker, weave, threadName, wearSkips,
+} from "./loom.js";
 import {
   PlayerModel, buildHeldFoot, buildHeldTool, buildHeldCompass, buildHeldClock,
   setHeldSkinLight,
@@ -27,12 +31,17 @@ import {
 import { Wayfinder, bearingYaw, normAngle } from "./wayfinding.js";
 import { PlayerViewer } from "./player-viewer.js";
 import {
-  SAPLING, LOG, LEAVES, LEAVES_COLD, BED, WATER as WATER_ID, dropFor,
-  CROP_SPROUT, CROP_RIPE, CROP_STAGES, isCrop, SLING_STONE, BOAT, FISHING_POLE,
-  isSign, COMPASS, CLOCK, SNOW_LAYER, CART, BERRIES,
+  SAPLING, LOG, LEAVES, LEAVES_COLD, BED, WATER as WATER_ID, LAVA as LAVA_ID,
+  dropFor, cropStagesFor, isCrop, SEED_TO_SPROUT, SLING_STONE, BOAT,
+  FISHING_POLE, isSign, COMPASS, CLOCK, SNOW_LAYER, CART, BERRIES,
+  KILN as KILN_ID, WORKBENCH as WORKBENCH_ID,
+  IRON_INGOT as IRON_INGOT_ID, GLOAM_INGOT as GLOAM_INGOT_ID,
+  STARGLASS as STARGLASS_ID, QUILL as QUILL_ID,
+  MURK_LANTERN as MURK_LANTERN_ID, LOOMSTONE as LOOMSTONE_ID,
 } from "./blocks.js";
 import { makeGenerator, findSpawn, findBiomeLocation } from "./terrain.js";
 import { findNearestRuin, ruinForChunk } from "./ruins.js";
+import { findNearestDelve, delveForChunk } from "./delvings.js";
 import {
   buildMaterials, meshChunk, disposeChunkMeshes, setDayLight, buildBlockGeometry,
   sampleBlockLight,
@@ -138,17 +147,21 @@ if (save) {
     // additive field: pending overflow stacks from an earlier session
     if (Array.isArray(save.overflowStacks)) {
       for (const e of save.overflowStacks) {
-        // e[2]: additive tool wear (validated on the way into a slot)
-        if (validSaveStack(e)) pendingOverflow.push({ id: e[0], count: e[1], dur: e[2] });
+        // e[2]/e[3]: additive tool wear + thread (validated entering a slot)
+        if (validSaveStack(e)) {
+          pendingOverflow.push({ id: e[0], count: e[1], dur: e[2], mod: e[3] });
+        }
       }
     }
     // additive field: the stack that was held on the drag cursor when the
     // save was written — return it to the satchel, or queue it if full
     if (validSaveStack(save.cursor)) {
       const count = Math.min(64, save.cursor[1]);
-      const left = inventory.add(save.cursor[0], count, save.cursor[2]);
+      const left = inventory.add(save.cursor[0], count, save.cursor[2], save.cursor[3]);
       if (left > 0) {
-        pendingOverflow.push({ id: save.cursor[0], count: left, dur: save.cursor[2] });
+        pendingOverflow.push({
+          id: save.cursor[0], count: left, dur: save.cursor[2], mod: save.cursor[3],
+        });
       }
     }
   } else {
@@ -171,12 +184,36 @@ if (save && Array.isArray(save.wear)) {
     if (!validSaveStack(e)) continue;
     const a = BLOCKS[e[0]].armor;
     if (!a || a.kind !== WEAR_KINDS[i]) continue; // only the matching kind
-    wearSlots[i] = makeStack(e[0], 1, e[2]);
+    wearSlots[i] = makeStack(e[0], 1, e[2], e[3]);
   }
 }
 player.wear = wearSlots;
 
 const drops = new ItemDrops(scene, materials);
+
+// Gleam: the light that clings to work (gleam.js). Earned by mining ores,
+// felling beasts, the kiln's heat, and finishing gear at the bench; spent
+// (eventually) at the Loomstone. Additive save field; death keeps it.
+const gleam = new Gleam();
+if (save && save.gleam) gleam.load(save.gleam);
+
+// the Whims in progress (additive field): validated per entry — the ids
+// must be known and the clocks sane. onEffectStart isn't wired yet, so a
+// loaded whim resumes quietly (no re-announce), which reads right.
+if (save && Array.isArray(save.effects) && player.mode === "survival") {
+  for (const e of save.effects) {
+    if (!Array.isArray(e)) continue;
+    const [id, t] = e;
+    if (typeof id === "string" && Number.isFinite(t) && t > 0) {
+      player.addEffect(id, Math.min(600, t));
+    }
+  }
+}
+function awardGleam(n) {
+  if (player.mode !== "survival" || n <= 0) return;
+  gleam.add(n);
+  sfx.gleam();
+}
 
 // retry pendingOverflow against the satchel; called on a slow timer from the
 // game loop, so freed slots gradually recover everything that once overflowed
@@ -184,7 +221,7 @@ function drainOverflow() {
   if (pendingOverflow.length === 0) return;
   let changed = false;
   pendingOverflow = pendingOverflow.filter((stack) => {
-    const left = inventory.add(stack.id, stack.count, stack.dur);
+    const left = inventory.add(stack.id, stack.count, stack.dur, stack.mod);
     if (left !== stack.count) changed = true;
     stack.count = left;
     return left > 0;
@@ -216,10 +253,14 @@ if (save && Array.isArray(save.carts)) carts.load(save.carts); // additive v2 fi
 // additive v2 field: the bonded companions (bondlings) — species, pos, hp,
 // sitting, scarf seed. Older saves simply have no scarves tied anywhere.
 if (save && Array.isArray(save.bondlings)) mobs.loadBondlings(save.bondlings);
+// additive field: tamed Tuftlings — the other creatures that persist
+if (save && Array.isArray(save.pets)) mobs.loadPets(save.pets);
 if (save && save.signs) world.loadSigns(save.signs); // additive v2 field
 // additive v2 field: ruin chunks whose loot was already dealt — must load
 // before any chunk generates, or a looted stead would re-seed its chest
 if (save && save.ruins) world.loadRuins(save.ruins);
+// same contract for the Delvings-Under's stores
+if (save && save.delves) world.loadDelves(save.delves);
 // the Notice Posts' text boards — synced against world.signs every frame
 const signBoards = new SignBoards(scene, world);
 
@@ -274,24 +315,50 @@ function growTree(x, y, z) {
     }
     for (const c of world.setBlock(x, y + dy, z, LOG)) affected.add(c);
   }
+  // no anchor: the edit spans the whole canopy (trunk 4-6 + crown), so a
+  // single base cell under-measures emitter distance — a torch lit from a
+  // ledge near the NEW leaves but 17+ blocks from the trunk base would skip
+  // the wide remesh and strand stale light in the neighbor chunk. Trees
+  // grow rarely; take the conservative wide check.
   lightAwareRemesh([...affected], lightTouched);
+}
+
+// does any emitter in the 3x3 ring around this chunk sit within block-light
+// reach of the edited cell? Without a location, any emitter counts (the old,
+// conservative answer). The distance check matters now that the Emberwash
+// seeds emitters through half the map's deep chunks — a surface edit forty
+// blocks above a pool must NOT pay the 9-chunk wide remesh.
+const LIGHT_REACH2 = 16 * 16; // BFS range 14, plus a block of margin
+function emitterNearEdit(cx, cz, at) {
+  for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+    const c = world.getChunk(cx + dx, cz + dz);
+    if (!c || c.emitters.size === 0) continue;
+    if (!at) return true;
+    for (const [idx] of c.emitters) {
+      // y first: a surface edit high above the Emberwash rejects every pool
+      // cell on one compare instead of full 3D distance math
+      const ly = (idx / 256) | 0;
+      const dy2 = (ly - at.y) * (ly - at.y);
+      if (dy2 >= LIGHT_REACH2) continue;
+      const lx = idx % 16, lz = ((idx / 16) | 0) % 16;
+      const ex = c.cx * 16 + lx, ez = c.cz * 16 + lz;
+      const d2 = (ex - at.x) ** 2 + dy2 + (ez - at.z) ** 2;
+      if (d2 < LIGHT_REACH2) return true;
+    }
+  }
+  return false;
 }
 
 // remesh after a world edit: widen to the full 3x3 ring when the edit adds/
 // removes an emitter or happens near one (occluders change the light BFS).
 // Handles multi-chunk edit lists (explosions) with each chunk meshed once.
-function lightAwareRemesh(chunks, lightTouched) {
+// `at` ({x, y, z} of the edited cell) narrows the near-emitter test.
+function lightAwareRemesh(chunks, lightTouched, at = null) {
   if (chunks.length === 0) return;
   const toMesh = new Set();
   for (const chunk of chunks) {
     const { cx, cz } = chunk;
-    let wide = lightTouched;
-    if (!wide) {
-      outer: for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
-        const c = world.getChunk(cx + dx, cz + dz);
-        if (c && c.emitters.size > 0) { wide = true; break outer; }
-      }
-    }
+    const wide = lightTouched || emitterNearEdit(cx, cz, at);
     if (wide) {
       for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
         const c = world.getChunk(cx + dx, cz + dz);
@@ -332,6 +399,8 @@ if (save && Array.isArray(save.saplings)) {
 // root just stands there, patiently, until harvested.
 
 const crops = new Map(); // "x,y,z" -> growthSeconds when the next stage lands
+// the sprout ids, precomputed: onEdit asks on every block edit
+const SPROUT_IDS = new Set(Object.values(SEED_TO_SPROUT));
 
 function registerCrop(x, y, z, delay = 45 + Math.random() * 30) {
   crops.set(`${x},${y},${z}`, growthSeconds + delay);
@@ -345,12 +414,17 @@ function updateCrops() {
     if (!world.isGenerated(x >> 4, z >> 4)) continue;
     crops.delete(key);
     // the world block is the truth about the stage — a stale entry (the crop
-    // was broken/overwritten while the timer ran) simply falls out here
-    const stage = CROP_STAGES.indexOf(world.getBlock(x, y, z));
-    if (stage === -1 || stage === CROP_STAGES.length - 1) continue;
-    const next = CROP_STAGES[stage + 1];
-    lightAwareRemesh(world.setBlock(x, y, z, next), false);
-    if (next !== CROP_RIPE) registerCrop(x, y, z);
+    // was broken/overwritten while the timer ran) simply falls out here.
+    // cropStagesFor picks the right ladder (meal root, bogbean, whatever
+    // grows next), so one clock serves every crop.
+    const id = world.getBlock(x, y, z);
+    const stages = cropStagesFor(id);
+    if (!stages) continue;
+    const stage = stages.indexOf(id);
+    if (stage === stages.length - 1) continue;
+    const next = stages[stage + 1];
+    lightAwareRemesh(world.setBlock(x, y, z, next), false, { x, y, z });
+    if (stage + 2 < stages.length) registerCrop(x, y, z);
   }
 }
 // additive v2 field: [[x,y,z,stage,remain]...] — stage is written for
@@ -395,7 +469,8 @@ function settleSnow() {
     if (!support.solid || support.shape || support.colHeight !== 1) continue;
     // never rework a player-edited cell (or bury something player-placed)
     if (world.hasEdit(bx, y, bz) || world.hasEdit(bx, y + 1, bz)) continue;
-    lightAwareRemesh(world.setBlock(bx, y + 1, bz, SNOW_LAYER), false);
+    lightAwareRemesh(world.setBlock(bx, y + 1, bz, SNOW_LAYER), false,
+      { x: bx, y: y + 1, z: bz });
     return;
   }
 }
@@ -448,6 +523,15 @@ function teleportTo(kind) {
       y: terrain.heightAt(ruin.x, ruin.z + 5) + 2.5,
       z: ruin.z + 5.5,
     };
+  } else if (kind === "delve") {
+    // land beside the head-frame; the rungs take it from there
+    const delve = findNearestDelve(terrain, player.pos.x, player.pos.z);
+    if (!delve) return { ok: false, message: "No delving found within 1000 blocks of here." };
+    dest = {
+      x: delve.x + 0.5,
+      y: terrain.heightAt(delve.x, delve.z + 2) + 2.5,
+      z: delve.z + 2.5,
+    };
   } else {
     dest = findBiomeLocation(terrain, kind, player.pos.x, player.pos.z);
   }
@@ -474,15 +558,17 @@ function resolveRespawn() {
 }
 
 // respawn/void landings must respect player edits: if the spawn column was
-// built over (or dug out), climb to the first clear spot above it
+// built over (or dug out), climb to the first clear spot above it — and
+// "clear" excludes the Emberwash: nobody lands IN the melt
 function adjustToClearGround(pos) {
   const bx = Math.floor(pos.x), bz = Math.floor(pos.z);
   if (!world.isGenerated(bx >> 4, bz >> 4)) return;
+  const blocked = (y) => {
+    const id = world.getBlock(bx, y, bz);
+    return BLOCKS[id].solid || id === LAVA_ID;
+  };
   let y = Math.max(1, Math.floor(pos.y));
-  while (y < HEIGHT - 2 &&
-    (BLOCKS[world.getBlock(bx, y, bz)].solid || BLOCKS[world.getBlock(bx, y + 1, bz)].solid)) {
-    y++;
-  }
+  while (y < HEIGHT - 2 && (blocked(y) || blocked(y + 1))) y++;
   pos.y = Math.max(pos.y, y + 0.05);
 }
 
@@ -500,6 +586,7 @@ const hud = new Hud(atlas.canvas, {
   onToggleMode: () => {
     hud.closeAllWindows(); // defensively spill/close before switching rules
     player.mode = player.mode === "survival" ? "creative" : "survival";
+    player.clearEffects(); // the Whims are survival's; a mode switch shrugs them off
     if (player.mode === "survival") {
       player.flying = false;
       player.resetFall(); // creative altitude must not become a survival fall
@@ -522,10 +609,23 @@ const hud = new Hud(atlas.canvas, {
       crafted = true;
       if (leftover > 0) spillStack({ id: recipe.out[0], count: leftover });
     } while (max);
-    if (crafted) sfx.craft();
+    if (crafted) {
+      sfx.craft();
+      // gleam clings to finished GEAR (tools, armor, stations) — never to
+      // brick-spam, so bulk crafting can't farm it
+      const outDef = BLOCKS[recipe.out[0]];
+      if (outDef.tool || outDef.armor ||
+          recipe.out[0] === KILN_ID || recipe.out[0] === WORKBENCH_ID ||
+          recipe.out[0] === LOOMSTONE_ID) {
+        awardGleam(1);
+      }
+    }
   },
   onSpillCursor: (stack) => spillStack(stack),
-  onSlotsChanged: () => { sfx.click(); drainOverflow(); refreshArmor(); },
+  onSlotsChanged: () => {
+    sfx.click(); drainOverflow(); refreshArmor();
+    if (hud.loomOpen) hud._renderLoomList();
+  },
   inventory,
   wearSlots,
   playerViewer: new PlayerViewer(document.getElementById("player-view"), 1337),
@@ -550,10 +650,24 @@ function spillStack(stack) {
   drops.spawn(
     player.pos.x + dir.x * 0.6, player.eyeY - 0.2, player.pos.z + dir.z * 0.6,
     stack.id, stack.count,
-    { vel: { x: dir.x * 4, y: 2, z: dir.z * 4 }, pickupDelay: 1.2, dur: stack.dur });
+    { vel: { x: dir.x * 4, y: 2, z: dir.z * 4 }, pickupDelay: 1.2,
+      dur: stack.dur, mod: stack.mod });
 }
 
 player.onDamage = () => { hud.flashDamage(); sfx.hurt(); };
+// a whim newly taking hold gets a one-line field note
+const EFFECT_NOTES = {
+  fleetfoot: "The Sunwisp lightness takes to your feet.",
+  emberglow: "A warm ember settles behind your ribs.",
+  mirerot: "The mire-rot takes hold.",
+  kelpguard: "Cool kelp-salve steadies your skin.",
+  dimmed: "The dark leans on you.",
+};
+player.onEffectStart = (id) => {
+  if (EFFECT_NOTES[id]) hud.announce(EFFECT_NOTES[id], 2600);
+};
+// the Whims are survival's — a mode switch shrugs them off
+// (wired into onToggleMode below via hud opts)
 player.onDeath = (cause) => {
   hud.showDeath(cause);
   if (document.pointerLockElement) document.exitPointerLock();
@@ -624,15 +738,15 @@ const interaction = new Interaction(world, player, scene, hud, {
       const railChunks = reshapeRails(world, info.x, info.y, info.z);
       if (railChunks.length > 0) all = [...new Set([...chunks, ...railChunks])];
     }
-    lightAwareRemesh(all, lightTouched);
+    lightAwareRemesh(all, lightTouched, info);
     // sapling lifecycle
     if (info) {
       if (info.placed === SAPLING) registerSapling(info.x, info.y, info.z);
       if (info.broken === SAPLING) saplings.delete(`${info.x},${info.y},${info.z}`);
       if (info.popped === SAPLING) saplings.delete(`${info.x},${info.y + 1},${info.z}`);
-      // crop lifecycle: planting pips writes a sprout; breaking or popping
-      // (soil dug out underneath) any growing stage cancels its timer
-      if (info.placed === CROP_SPROUT) registerCrop(info.x, info.y, info.z);
+      // crop lifecycle: planting a seed writes its sprout; breaking or
+      // popping (soil dug out underneath) any growing stage cancels its timer
+      if (SPROUT_IDS.has(info.placed)) registerCrop(info.x, info.y, info.z);
       if (isCrop(info.broken)) crops.delete(`${info.x},${info.y},${info.z}`);
       if (isCrop(info.popped)) crops.delete(`${info.x},${info.y + 1},${info.z}`);
       // breaking a Notice Post takes its writing with it (the board mesh
@@ -648,6 +762,8 @@ const interaction = new Interaction(world, player, scene, hud, {
     }
   },
   onSound: (kind, id) => sfx.block(kind, id),
+  onHint: (text) => hud.announce(text, 2600),
+  onGleam: (n) => awardGleam(n),
   onEat: (kind) => sfx.eat(kind),
   onDoor: (opened) => sfx.door(opened),
   onPick: (id) => hud.pickBlock(id),
@@ -668,6 +784,8 @@ const interaction = new Interaction(world, player, scene, hud, {
     const s = inventory.get(hud.selected);
     const def = s && BLOCKS[s.id];
     if (!def || !def.tool) return;
+    // a Knotwood Thread woven through the haft: wear lands half as often
+    if (wearSkips(s)) return;
     const left = (Number.isInteger(s.dur) ? s.dur : def.tool.maxDur) - 1;
     if (left <= 0) {
       inventory.set(hud.selected, null);
@@ -710,13 +828,37 @@ const interaction = new Interaction(world, player, scene, hud, {
       dir);
     sfx.whip();
   },
+  // the Springstave's loose: charge scales speed and bite (a full second's
+  // draw lands 6 — between a stone's 3 and a gloam blade's melee)
+  onShoot: (charge) => {
+    const dir = player.lookDir();
+    stones.throw(
+      player.pos.x + dir.x * 0.2, player.eyeY + dir.y * 0.2, player.pos.z + dir.z * 0.2,
+      dir, {
+        itemId: QUILL_ID,
+        speed: 14 + 18 * charge,
+        gravity: 18,
+        damage: Math.ceil(2 + 4 * charge),
+        surviveChance: 0.4,
+        scale: 0.3,
+      });
+    sfx.twang(charge);
+  },
+  // quills are consumed from ANYWHERE in the satchel (the stave holds the
+  // selected slot), so the seed-slot canConsume doesn't fit here
+  hasAmmo: (id) => inventory.count(id) > 0,
+  consumeAmmo: (id) => {
+    const ok = inventory.removeCount(id, 1);
+    if (ok) hud.refreshHotbarRow();
+    return ok;
+  },
   // priming swaps the keg BLOCK for a primed keg ENTITY (see explosives.js);
   // `kegs` is a later const, but this callback only fires at runtime
   onPrimeKeg: (x, y, z) => {
     if (!kegs.canPrime()) return; // sixteen already hissing — the keg declines
     const affected = world.setBlock(x, y, z, AIR);
     if (affected.length === 0) return;
-    lightAwareRemesh(affected, false);
+    lightAwareRemesh(affected, false, { x, y, z });
     kegs.prime(x, y, z);
     sfx.kegTick();
   },
@@ -726,12 +868,72 @@ const interaction = new Interaction(world, player, scene, hud, {
     if (!kiln) { kiln = makeKiln(); world.kilns.set(key, kiln); }
     hud.openKiln(kiln);
   },
+  // the Murk Lantern: at night, on ground with headroom, it raises The
+  // Unshaken — every refusal path (day, boss already up, no room) happens
+  // BEFORE the lantern is consumed, so a declined summons costs nothing
+  onSummon: (t) => {
+    if (sky.lightLevel >= 0.45) {
+      hud.announce("The lantern needs a proper dark.", 2600);
+      return;
+    }
+    // the night's ledger holds one event: a prowling night refuses the
+    // lantern outright (the Prowl already never shares a night with the
+    // Pearlfall — this is the third leg of that exclusion). `prowl` is a
+    // later const, but this callback only fires at runtime.
+    if (prowl.active || prowl.prowlsTonight()) {
+      hud.announce("The dark is already spoken for tonight.", 2600);
+      return;
+    }
+    if (mobs.mobs.some((m) => m.spec.boss)) {
+      hud.announce("The dark is already up and walking.", 2600);
+      return;
+    }
+    const boss = mobs.summonBoss(world, t.x + 0.5, t.y, t.z + 0.5);
+    if (!boss) {
+      hud.announce("The dark wants more room than this.", 2600);
+      return;
+    }
+    // consume LAST: the routing guarantees the lantern is the selected
+    // stack, so this cannot fail between the click and here
+    if (player.mode === "survival") interaction.canConsume(MURK_LANTERN_ID);
+    hud.announce("The dark gathers itself…", 3200);
+  },
+  // right-click a Loomstone: the weaving window. The target is always the
+  // SELECTED hotbar stack — the basin follows the belt.
+  onOpenLoom: () => {
+    hud.openLoom({
+      describeTarget: () => {
+        const s = inventory.get(hud.selected);
+        if (!s) return "Nothing selected";
+        const t = threadName(s);
+        return `${BLOCKS[s.id].name}${t ? ` — ${t}` : ""}  ·  ${gleam.level} jar${gleam.level === 1 ? "" : "s"} of gleam`;
+      },
+      rows: () => {
+        const s = inventory.get(hud.selected);
+        if (!s || !BLOCKS[s.id] || (!BLOCKS[s.id].tool && !BLOCKS[s.id].armor)) return [];
+        return threadsFor(BLOCKS[s.id]).map((key) => {
+          const t = THREADS[key];
+          const why = weaveBlocker(key, s, gleam, inventory);
+          const cost = [`${t.levels} jars`,
+            ...t.mats.map(([id, n]) => `${n}× ${BLOCKS[id].name}`)].join(" + ");
+          return { key, name: t.name, blurb: t.blurb, cost, ok: why === "", why };
+        });
+      },
+      weave: (key) => {
+        const s = inventory.get(hud.selected);
+        if (!s || !weave(key, s, gleam, inventory)) return false;
+        sfx.craft();
+        hud.announce(`The ${THREADS[key].name} takes.`, 2600);
+        return true;
+      },
+    });
+  },
   onKilnBreak: (x, y, z) => {
     const key = `${x},${y},${z}`;
     const kiln = world.kilns.get(key);
     if (kiln) {
       for (const s of kiln.slots) {
-        if (s) drops.spawn(x + 0.5, y + 0.6, z + 0.5, s.id, s.count, { dur: s.dur });
+        if (s) drops.spawn(x + 0.5, y + 0.6, z + 0.5, s.id, s.count, { dur: s.dur, mod: s.mod });
       }
       world.kilns.delete(key);
     }
@@ -742,7 +944,7 @@ const interaction = new Interaction(world, player, scene, hud, {
     const store = world.chests.get(key);
     if (store) {
       for (const s of store) {
-        if (s) drops.spawn(x + 0.5, y + 0.6, z + 0.5, s.id, s.count, { dur: s.dur });
+        if (s) drops.spawn(x + 0.5, y + 0.6, z + 0.5, s.id, s.count, { dur: s.dur, mod: s.mod });
       }
       world.chests.delete(key);
     }
@@ -872,7 +1074,7 @@ const prowl = new Prowl(seed, {
   onDawn: () => sfx.prowlDawn(),
 });
 
-const stones = new SlingStones(scene, materials, {
+const stones = new Projectiles(scene, materials, {
   mobs,
   onSpawnDrop: (x, y, z, id) => drops.spawn(x, y, z, id),
   onImpact: (x, y, z, shattered) => {
@@ -894,6 +1096,17 @@ mobs.onBondlingDeath = () => {
   sfx.mourn();
   hud.announce("The scarf lies still. Your bondling is gone.", 3600);
 };
+mobs.onKill = (m) => {
+  awardGleam(m.spec.gleam || 0);
+  if (m.spec.deathLine) hud.announce(m.spec.deathLine, 4200);
+};
+mobs.onBossSplit = (spec) => hud.announce(spec.splitLine, 2600);
+mobs.onBossGone = (spec) => hud.announce(spec.goneLine, 3200);
+// a new Snufflet: a mote of gleam and a field note (life clings to work too)
+mobs.onBreed = () => {
+  awardGleam(1);
+  hud.announce("A Snufflet! A loaf in training.", 2600);
+};
 
 const stopAutosave = startAutosave(() => writeSave(world, player, sky, hud, inventory, {
   saplings: [...saplings].map(([key, due]) => {
@@ -902,14 +1115,14 @@ const stopAutosave = startAutosave(() => writeSave(world, player, sky, hud, inve
   }),
   crops: [...crops].map(([key, due]) => {
     const [x, y, z] = key.split(",").map(Number);
-    const stage = Math.max(0, CROP_STAGES.indexOf(world.getBlock(x, y, z)));
+    const id = world.getBlock(x, y, z);
+    const stages = cropStagesFor(id);
+    const stage = stages ? Math.max(0, stages.indexOf(id)) : 0;
     return [x, y, z, stage, Math.max(1, due - growthSeconds)];
   }),
-  overflowStacks: pendingOverflow.map((s) =>
-    (s.dur !== undefined ? [s.id, s.count, s.dur] : [s.id, s.count])),
-  // additive: the 4 wear slots incl. dur ([id, count, dur?] or 0 each)
-  wear: wearSlots.map((s) =>
-    (s ? (s.dur !== undefined ? [s.id, s.count, s.dur] : [s.id, s.count]) : 0)),
+  overflowStacks: pendingOverflow.map(stackToSave),
+  // additive: the 4 wear slots incl. dur + thread ([id, count, dur?, mod?] or 0)
+  wear: wearSlots.map(stackToSave),
   boats: boats.serialize(), // additive: deployed skiffs [[x,y,z,yaw]...]
   carts: carts.serialize(), // additive: deployed trundles [[x,y,z,yaw]...]
   // additive: the bondlings [[species,x,y,z,hp,sitting,scarfSeed]...]
@@ -922,6 +1135,12 @@ const stopAutosave = startAutosave(() => writeSave(world, player, sky, hud, inve
   chart: wayfinder.serializeChart(), // additive: the Field Chart's inked leaf
   // additive: the Murmur's settings [on, volume] — defaults on absence
   music: [music.enabled ? 1 : 0, Math.round(music.volume * 100) / 100],
+  // additive: Gleam [jars, progress] — absent in older saves (a fresh jar)
+  gleam: gleam.serialize(),
+  // additive: the Whims in progress [[id, secondsLeft], ...]
+  effects: [...player.effects].map(([id, t]) => [id, Math.round(t * 10) / 10]),
+  // additive: tamed Tuftlings [[x, y, z, hp, stay], ...]
+  pets: mobs.serializePets(),
 }));
 
 // --- held item (first-person hand) — its own scene + depth-cleared pass ------
@@ -1164,6 +1383,7 @@ document.addEventListener("mouseup", (e) => interaction.onMouseUp(e.button));
 document.addEventListener("contextmenu", (e) => e.preventDefault());
 
 let debugVisible = false;
+let bootLavaChecked = false; // the one-time load-into-lava rescue (tick loop)
 
 document.addEventListener("keydown", (e) => {
   if (e.repeat) return;
@@ -1184,8 +1404,9 @@ document.addEventListener("keydown", (e) => {
   if (e.code === "KeyQ" && inputActive() && !hud.anyWindowOpen()) {
     const s = inventory.get(hud.selected);
     const dur = s ? s.dur : undefined;
+    const mod = s ? s.mod : undefined;
     if (s && inventory.takeFromSlot(hud.selected, 1)) {
-      spillStack({ id: s.id, count: 1, dur });
+      spillStack({ id: s.id, count: 1, dur, mod });
       hud.refreshHotbarRow();
     }
     return;
@@ -1264,14 +1485,28 @@ function tick(now) {
   const pcx = Math.floor(player.pos.x / CHUNK), pcz = Math.floor(player.pos.z / CHUNK);
   const playerChunkReady = world.isGenerated(pcx, pcz) && neighborsGenerated(pcx, pcz);
 
+  // one-time boot safety: a pre-Emberwash save's deep caves regenerate
+  // flooded, so a player who saved standing in one would load INTO the melt
+  // and start burning before they can orient. Climb them to clear ground.
+  if (playerChunkReady && !bootLavaChecked) {
+    bootLavaChecked = true;
+    const bx = Math.floor(player.pos.x), bz = Math.floor(player.pos.z);
+    const feet = world.getBlock(bx, Math.floor(player.pos.y + 0.2), bz);
+    const head = world.getBlock(bx, Math.floor(player.eyeY), bz);
+    if (feet === LAVA_ID || head === LAVA_ID) {
+      adjustToClearGround(player.pos);
+      player.resetFall();
+    }
+  }
+
   if (playerChunkReady && inputActive()) {
     accumulator = Math.min(accumulator + frameDt, 0.25);
     while (accumulator >= FIXED_DT) {
       player.update(FIXED_DT);
       accumulator -= FIXED_DT;
     }
-    drops.update(frameDt, world, player, (id, qty, dur) => {
-      const leftover = inventory.add(id, qty, dur);
+    drops.update(frameDt, world, player, (id, qty, dur, mod) => {
+      const leftover = inventory.add(id, qty, dur, mod);
       const accepted = qty - leftover;
       if (accepted > 0) {
         sfx.pickup();
@@ -1313,7 +1548,11 @@ function tick(now) {
   // kilns burn whenever the game is up — including while a window is open
   // (the whole point: watch the smelt arrow fill). Paused = time stops.
   if (!hud.paused) {
-    if (tickKilns(world.kilns, frameDt) && hud.kilnOpen) hud.slotUI.renderAll();
+    // metals and starglass shed more gleam than a baked root does
+    const changed = tickKilns(world.kilns, frameDt, (outId) =>
+      awardGleam(outId === IRON_INGOT_ID || outId === GLOAM_INGOT_ID ||
+        outId === STARGLASS_ID ? 2 : 1));
+    if (changed && hud.kilnOpen) hud.slotUI.renderAll();
     hud.updateKilnView();
   }
 
@@ -1321,7 +1560,15 @@ function tick(now) {
     hud.setHealth(player.health);
     hud.setHunger(player.hunger);
     hud.setAir(player.air, player.maxAir, player.eyeInWater);
+    hud.setGleam(gleam.level, gleam.frac());
+    hud.setEffects([...player.effects]);
+  } else {
+    hud.setEffects([]);
   }
+  // the boss bar tracks a stalking boss within hailing distance
+  const boss = mobs.mobs.find((m) => m.spec.boss &&
+    Math.hypot(m.x - player.pos.x, m.z - player.pos.z) < 48);
+  hud.setBossBar(boss ? boss.spec.name : null, boss ? boss.hp / boss.spec.hp : 0);
 
   // void safety net (creative only — in survival the void deals damage and
   // the death screen handles it)
@@ -1403,15 +1650,23 @@ function tick(now) {
   }
 
   interaction.update(frameDt);
+  // the crosshair pinches as the Springstave draws (0 = at rest)
+  hud.setDraw(interaction.drawing ? interaction.drawT : 0);
   // the fishing line hangs from a camera-space rod-tip anchor — rewrite it
   // after the camera has settled for this frame (bob, third-person boom)
   fishing.updateLine(camera);
   // underwater fog/tint follow the RENDERING viewpoint: the boomed camera in
-  // third person, the player's eye otherwise
-  const viewInWater = thirdPerson
+  // third person, the player's eye otherwise. The Emberwash gets the same
+  // treatment with an amber screen tint (no fog change — the pool is small
+  // and the burn timer is the real message).
+  // first person reuses the player's own eye sample (one sampling rule,
+  // owned by player.js — the tint can never disagree with the burn/drown)
+  const camBlock = thirdPerson
     ? world.getBlock(Math.floor(camera.position.x), Math.floor(camera.position.y),
-        Math.floor(camera.position.z)) === WATER_ID
-    : player.eyeInWater;
+        Math.floor(camera.position.z))
+    : AIR;
+  const viewInWater = thirdPerson ? camBlock === WATER_ID : player.eyeInWater;
+  const viewInLava = thirdPerson ? camBlock === LAVA_ID : player.eyeInLava;
   sky.update(frameDt, camera, viewInWater);
   // over the Rimelands the same shower falls as snow (the precip layer
   // switches sprite/speed/color)
@@ -1437,7 +1692,7 @@ function tick(now) {
   });
   setDayLight(materials, sky.lightLevel, sky.lightTint);
   setHeldSkinLight(sky.lightLevel, sky.lightTint);
-  hud.setUnderwater(viewInWater);
+  hud.setUnderwater(viewInWater, viewInLava);
 
   if (debugVisible) {
     const p = player.pos;
@@ -1478,7 +1733,7 @@ if (NO_LOCK) {
     forceProwl: () => prowl.forceProwl(),
     // the waybar auto-shaper's oracle — lets tests assert what a cell wants
     railShape: (x, y, z) => railShape(world, x, y, z),
-    wear: wearSlots, playerModel,
+    wear: wearSlots, playerModel, gleam,
     rain: rainFx, sfx, music, camera,
     // torch-light probe (the same BFS the mesher bakes) — lets tests assert
     // that a landed starstone's glow actually propagates to its neighbors
@@ -1492,5 +1747,8 @@ if (NO_LOCK) {
     // the Steads-Before: placement prediction, for ruin tests
     findNearestRuin: (x, z) => findNearestRuin(terrain, x, z),
     ruinForChunk: (cx, cz) => ruinForChunk(terrain, cx, cz),
+    // the Delvings-Under: same prediction pair
+    findNearestDelve: (x, z) => findNearestDelve(terrain, x, z),
+    delveForChunk: (cx, cz) => delveForChunk(terrain, cx, cz),
   };
 }

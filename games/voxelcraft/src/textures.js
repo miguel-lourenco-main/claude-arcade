@@ -103,15 +103,62 @@ export const TILE = {
   BLADE_STAR: 87,
   // River Glass: the Rimelands' frozen lid over water (ICE block)
   ICE: 88,
+  // the Emberwash: molten pools of the deep (LAVA block)
+  LAVA: 89,
+  // the Wispcap: pale glowing deep-cave mushroom (cross sprite)
+  WISPCAP: 90,
+  // Gloamgold: the fourth tier — the metal that sank when sky-iron fell.
+  // Ore, ingot, block, four tool silhouettes, four armor silhouettes.
+  GLOAM_ORE: 91,
+  GLOAM_INGOT: 92,
+  GLOAM_BLOCK: 93,
+  PICK_GLOAM: 94,
+  AXE_GLOAM: 95,
+  SHOVEL_GLOAM: 96,
+  BLADE_GLOAM: 97,
+  CROWN_GLOAM: 98,
+  JERKIN_GLOAM: 99,
+  LEGGINGS_GLOAM: 100,
+  TREADS_GLOAM: 101,
+  // the Mirelands: bog-country ground and growth
+  MUD: 102,
+  REEDS: 103,
+  BOGBEAN_POD: 104,
+  // tilling: Turned Earth's furrowed top + the Furrower silhouettes
+  FARMLAND_TOP: 105,
+  HOE_PLANK: 106,
+  HOE_STONE: 107,
+  HOE_IRON: 108,
+  // bogbean farming: the second crop's three stages, the bean, the pottage
+  BOGBEAN_SPROUT: 109,
+  BOGBEAN_HALF: 110,
+  BOGBEAN_RIPE: 111,
+  BOGBEAN: 112,
+  POTTAGE: 113,
+  // the Whims' broths: two bottles, the gland, the salve pot
+  EMBER_BROTH: 114,
+  SUNWISP_BROTH: 115,
+  KELP_GLAND: 116,
+  KELPSALVE: 117,
+  // the Loomstone: the basin top and the pearl-seamed sides
+  LOOMSTONE_TOP: 118,
+  LOOMSTONE_SIDE: 119,
+  // the Springstave and its Quills
+  QUILL: 120,
+  SPRINGSTAVE: 121,
+  // the Murk Lantern and the Dusk Pearl (The Unshaken's summons + drop)
+  MURK_LANTERN: 122,
+  DUSK_PEARL: 123,
+  // --- wave 7 (renumbered above the Deep Wave's last slot) ---
   // Gleam Moss: the old-sky caves' own faint lamp (see LORE.md)
-  GLEAM_MOSS: 89,
+  GLEAM_MOSS: 124,
   // the Waybar (rail): split-knotwood ties + a sky-iron bar surface. Two
   // tiles because the shape framework's per-box tile override (mesher.js)
   // dresses tie boxes in wood and bar boxes in metal.
-  RAIL_TIE: 90,
-  RAIL_BAR: 91,
+  RAIL_TIE: 125,
+  RAIL_BAR: 126,
   // the Trundle: the cart item's side-view silhouette (icon + drop)
-  TRUNDLE: 92,
+  TRUNDLE: 127,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -1094,6 +1141,9 @@ const TOOL_PALETTES = {
   plank: { hi: [206, 170, 110], mid: [176, 142, 88], lo: [126, 98, 58] },
   stone: { hi: [178, 180, 188], mid: [138, 140, 148], lo: [92, 94, 102] },
   iron: { hi: [234, 240, 250], mid: [196, 204, 218], lo: [138, 146, 164] },
+  // gloamgold: dusk-gold — a warm bright face falling into violet shadow
+  // (the gloam it was mined out of never quite lets go of it)
+  gloam: { hi: [248, 214, 118], mid: [198, 156, 82], lo: [118, 86, 92] },
 };
 const HAFT_WOOD = { hi: [174, 138, 86], mid: [148, 112, 62], lo: [110, 82, 46] };
 
@@ -1141,6 +1191,15 @@ function toolPainter(kind, pal) {
       }
       for (const [x, y] of [[10, 2], [11, 2], [9, 3], [9, 4]]) dot(x, y, pal.hi);
       for (const [x, y] of [[13, 4], [14, 4], [13, 5], [14, 5], [12, 6], [13, 6]]) dot(x, y, pal.lo);
+    } else if (kind === "hoe") {
+      // the Furrower: a swan-neck blade folding down off the tip — asks the
+      // ground politely to be a garden
+      for (const [x, y] of [[9, 2], [10, 2], [11, 2], [12, 3], [12, 4], [12, 5]]) {
+        dot(x, y, pal.mid);
+      }
+      for (const [x, y] of [[9, 1], [10, 1], [11, 2]]) dot(x, y, pal.hi);
+      for (const [x, y] of [[13, 4], [13, 5], [13, 6], [12, 6]]) dot(x, y, pal.lo);
+      dot(12, 6, pal.hi); // the tine's honed tip
     } else {
       // the Shiv: grip, a short cross-guard, and a long whittled sliver
       dot(1, 15, HAFT_WOOD.lo); // pommel knot
@@ -1168,6 +1227,296 @@ painters[TILE.SHOVEL_IRON] = toolPainter("shovel", TOOL_PALETTES.iron);
 painters[TILE.BLADE_PLANK] = toolPainter("blade", TOOL_PALETTES.plank);
 painters[TILE.BLADE_STONE] = toolPainter("blade", TOOL_PALETTES.stone);
 painters[TILE.BLADE_IRON] = toolPainter("blade", TOOL_PALETTES.iron);
+painters[TILE.PICK_GLOAM] = toolPainter("pick", TOOL_PALETTES.gloam);
+painters[TILE.AXE_GLOAM] = toolPainter("axe", TOOL_PALETTES.gloam);
+painters[TILE.SHOVEL_GLOAM] = toolPainter("shovel", TOOL_PALETTES.gloam);
+painters[TILE.BLADE_GLOAM] = toolPainter("blade", TOOL_PALETTES.gloam);
+painters[TILE.HOE_PLANK] = toolPainter("hoe", TOOL_PALETTES.plank);
+painters[TILE.HOE_STONE] = toolPainter("hoe", TOOL_PALETTES.stone);
+painters[TILE.HOE_IRON] = toolPainter("hoe", TOOL_PALETTES.iron);
+
+painters[TILE.BOGBEAN_SPROUT] = (p) => {
+  // bogbean, first showing: two shy twining threads finding their feet
+  p.clear();
+  for (const [x, lean] of [[5, 1], [10, -1]]) {
+    const h = 3 + ((p.rand() * 2) | 0);
+    for (let i = 0; i < h; i++) {
+      const d = (p.rand() * 2 - 1) * 12;
+      p.px(x + (i >= h - 1 ? lean : 0), 15 - i, 88 + d, 148 + d, 70 + d);
+    }
+    p.px(x + lean, 15 - h - 1, 110, 168, 84); // the curling tip
+  }
+};
+painters[TILE.BOGBEAN_HALF] = (p) => {
+  // half-grown: proper vines now, twining up imagined stakes, first pods
+  p.clear();
+  for (const cx of [4, 11]) {
+    for (let dy = 0; dy <= 9; dy++) {
+      const d = (p.rand() * 2 - 1) * 14;
+      const wob = dy % 3 === 1 ? 1 : dy % 3 === 2 ? -1 : 0;
+      p.px(cx + wob, 15 - dy, 84 + d, 142 + d, 64 + d);
+      if (p.rand() < 0.35) p.px(cx + wob + 1, 15 - dy, 96 + d, 150 + d, 72 + d);
+    }
+    p.px(cx + 1, 9, 140, 152, 96); // a first green pod
+  }
+};
+painters[TILE.BOGBEAN_RIPE] = (p) => {
+  // ripe: heavy vines strung with fat speckled pods, leaves going amber
+  p.clear();
+  for (const cx of [4, 11]) {
+    for (let dy = 0; dy <= 11; dy++) {
+      const d = (p.rand() * 2 - 1) * 14;
+      const wob = dy % 3 === 1 ? 1 : dy % 3 === 2 ? -1 : 0;
+      p.px(cx + wob, 15 - dy, 96 + d, 138 + d, 58 + d);
+      if (p.rand() < 0.3) p.px(cx + wob - 1, 15 - dy, 148 + d, 142 + d, 70 + d);
+    }
+    // the pods: plump speckled drops hung off the vine
+    for (const [dx, dy] of [[1, 5], [-1, 8], [1, 10]]) {
+      p.px(cx + dx, 15 - dy, 168, 178, 120);
+      p.px(cx + dx, 15 - dy + 1, 148, 160, 104);
+      if (p.rand() < 0.6) p.px(cx + dx + (dx > 0 ? 1 : -1), 15 - dy, 120, 134, 84);
+    }
+  }
+};
+painters[TILE.BOGBEAN] = (p) => {
+  // the bogbean: a fat speckled bean, kidney-bent
+  p.clear();
+  for (let y = 6; y <= 10; y++) {
+    const half = y === 6 || y === 10 ? 2 : 3;
+    for (let x = 8 - half; x <= 8 + half; x++) {
+      if (y >= 8 && x <= 6) continue; // the kidney notch
+      const d = (p.rand() * 2 - 1) * 10;
+      const edge = x === 8 - half || x === 8 + half || y === 6 || y === 10;
+      p.px(x, y, (edge ? 118 : 158) + d, (edge ? 134 : 172) + d, (edge ? 80 : 110) + d);
+    }
+  }
+  p.px(7, 7, 96, 110, 66); p.px(9, 9, 96, 110, 66); // the speckles
+  p.px(8, 6, 196, 206, 150); // the shine
+};
+painters[TILE.POTTAGE] = (p) => {
+  // Wanderer's Pottage: a stout bowl, thick amber stew, a curl of steam
+  p.clear();
+  // the bowl
+  for (let y = 9; y <= 13; y++) {
+    const half = y === 9 ? 5 : y <= 11 ? 5 : y === 12 ? 4 : 3;
+    for (let x = 8 - half; x <= 8 + half; x++) {
+      const d = (p.rand() * 2 - 1) * 8;
+      const edge = x === 8 - half || x === 8 + half || y === 13;
+      p.px(x, y, (edge ? 96 : 128) + d, (edge ? 66 : 88) + d, (edge ? 42 : 56) + d);
+    }
+  }
+  // the stew surface: amber with root-and-bean lumps
+  for (let x = 4; x <= 12; x++) {
+    const d = (p.rand() * 2 - 1) * 12;
+    p.px(x, 9, 198 + d, 140 + d, 62 + d);
+  }
+  p.px(6, 9, 158, 170, 108); p.px(10, 9, 202, 146, 82); // a bean, a root lump
+  // steam: two shy curls
+  p.px(6, 7, 226, 228, 232, 150); p.px(7, 6, 226, 228, 232, 120);
+  p.px(10, 7, 226, 228, 232, 150); p.px(9, 5, 226, 228, 232, 110);
+};
+
+// a stoppered field bottle: shared silhouette, per-broth liquid color
+const brothPainter = (liquid, glint) => (p) => {
+  p.clear();
+  // cork + neck
+  p.px(7, 3, 150, 118, 74); p.px(8, 3, 150, 118, 74);
+  p.px(7, 4, 122, 94, 58); p.px(8, 4, 122, 94, 58);
+  for (let y = 5; y <= 6; y++) { p.px(7, y, 210, 222, 228, 200); p.px(8, y, 210, 222, 228, 200); }
+  // body: glass walls holding the simmer
+  for (let y = 7; y <= 12; y++) {
+    const half = y === 7 || y === 12 ? 2 : 3;
+    for (let x = 8 - half; x <= 7 + half; x++) {
+      const edge = x === 8 - half || x === 7 + half || y === 12;
+      if (edge) p.px(x, y, 208, 220, 226, 210);
+      else {
+        const d = (p.rand() * 2 - 1) * 12;
+        p.px(x, y, liquid[0] + d, liquid[1] + d, liquid[2] + d);
+      }
+    }
+  }
+  p.px(6, 8, glint[0], glint[1], glint[2]); // the warm spark in the broth
+};
+painters[TILE.EMBER_BROTH] = brothPainter([196, 88, 44], [255, 190, 90]);
+painters[TILE.SUNWISP_BROTH] = brothPainter([214, 178, 62], [255, 244, 160]);
+
+painters[TILE.KELP_GLAND] = (p) => {
+  // the Mirewalker's kelp gland: a slick dark-green sac with a pale vein
+  p.clear();
+  for (let y = 5; y <= 12; y++) {
+    const half = y <= 6 ? 1 : y <= 10 ? 3 : 2;
+    for (let x = 8 - half; x <= 7 + half; x++) {
+      const d = (p.rand() * 2 - 1) * 10;
+      const edge = x === 8 - half || x === 7 + half || y === 5 || y === 12;
+      p.px(x, y, (edge ? 30 : 52) + d, (edge ? 62 : 96) + d, (edge ? 48 : 70) + d);
+    }
+  }
+  for (let y = 6; y <= 11; y++) p.px(7, y, 122, 168, 132); // the vein
+  p.px(6, 7, 150, 196, 158); // the slick shine
+};
+painters[TILE.KELPSALVE] = (p) => {
+  // Kelpsalve: a squat clay pot of cool green salve, wiped at the rim
+  p.clear();
+  for (let y = 7; y <= 13; y++) {
+    const half = y === 7 || y === 13 ? 3 : 4;
+    for (let x = 8 - half; x <= 7 + half; x++) {
+      const d = (p.rand() * 2 - 1) * 8;
+      const edge = x === 8 - half || x === 7 + half || y === 13;
+      p.px(x, y, (edge ? 118 : 152) + d, (edge ? 84 : 108) + d, (edge ? 58 : 74) + d);
+    }
+  }
+  for (let x = 5; x <= 10; x++) {
+    const d = (p.rand() * 2 - 1) * 10;
+    p.px(x, 7, 108 + d, 176 + d, 132 + d); // the salve surface
+  }
+  p.px(6, 7, 168, 220, 184); // the finger-wipe shine
+};
+
+painters[TILE.LOOMSTONE_TOP] = (p) => {
+  // the basin: worked stone rim around a pooled-light hollow, with four
+  // thread-guide notches — where the gleam gets woven through
+  p.noiseFill([124, 126, 134], 8);
+  for (let y = 3; y <= 12; y++) {
+    for (let x = 3; x <= 12; x++) {
+      const rim = x === 3 || x === 12 || y === 3 || y === 12;
+      const d = (p.rand() * 2 - 1) * 10;
+      if (rim) p.px(x, y, 96 + d, 98 + d, 110 + d);
+      else {
+        // the pooled gleam: pale nacre-green, brighter at the center
+        const cd = Math.abs(x - 7.5) + Math.abs(y - 7.5);
+        const b = 46 - cd * 6;
+        p.px(x, y, 176 + b + d, 214 + b + d, 168 + b + d);
+      }
+    }
+  }
+  // thread-guide notches at the cardinal rim points
+  p.px(7, 2, 210, 200, 232); p.px(8, 2, 210, 200, 232);
+  p.px(7, 13, 210, 200, 232); p.px(8, 13, 210, 200, 232);
+  p.px(2, 7, 210, 200, 232); p.px(2, 8, 210, 200, 232);
+  p.px(13, 7, 210, 200, 232); p.px(13, 8, 210, 200, 232);
+};
+painters[TILE.LOOMSTONE_SIDE] = (p) => {
+  // worked stone with a pearl seam glowing through the mortar line
+  p.noiseFill([116, 118, 128], 9);
+  for (let x = 0; x < TILE_PX; x++) {
+    const d = (p.rand() * 2 - 1) * 12;
+    p.px(x, 5, 196 + d, 192 + d, 226 + d); // the nacre seam
+    if (p.rand() < 0.4) p.px(x, 6, 156, 154, 186);
+  }
+  p.speckle(8, [88, 90, 102], 8);
+  p.px(4, 5, 240, 238, 255); p.px(11, 5, 240, 238, 255); // seam glints
+};
+
+painters[TILE.QUILL] = (p) => {
+  // a whittled dart on the diagonal: pale shaft, iron-dark tip, leaf fletch
+  p.clear();
+  for (let i = 0; i < 9; i++) {
+    const d = (p.rand() * 2 - 1) * 8;
+    p.px(3 + i, 12 - i, 206 + d, 178 + d, 128 + d); // the shaft
+  }
+  p.px(12, 3, 120, 126, 140); p.px(13, 2, 96, 102, 116); // the tip
+  // leaf-scrap fletching at the tail
+  p.px(2, 13, 96, 150, 70); p.px(3, 14, 84, 138, 62);
+  p.px(2, 14, 108, 160, 78); p.px(4, 13, 90, 144, 66);
+};
+painters[TILE.SPRINGSTAVE] = (p) => {
+  // the bent stave: a knotwood arc with a taut moss-twine cord
+  p.clear();
+  const arc = [[4, 2], [3, 3], [2, 4], [2, 6], [2, 8], [2, 10], [3, 12], [4, 13], [5, 14]];
+  for (const [x, y] of arc) {
+    const d = (p.rand() * 2 - 1) * 10;
+    p.px(x, y, 156 + d, 118 + d, 66 + d);
+    p.px(x + 1, y, 128 + d, 96 + d, 54 + d); // the shaded belly
+  }
+  // the grip wrap mid-arc
+  p.px(2, 7, 106, 78, 44); p.px(3, 7, 106, 78, 44);
+  // the cord: taut from horn to horn
+  for (let i = 0; i < 12; i++) {
+    const x = 5 + Math.round(i * 0.55), y = 2 + i;
+    p.px(Math.min(12, x), y, 148, 170, 132, 220);
+  }
+};
+
+painters[TILE.MURK_LANTERN] = (p) => {
+  // a starglass pane painted out with soot, cased and ring-handled: a
+  // lantern that sheds dark — the pane swallows instead of glows
+  p.clear();
+  // the carry ring
+  p.px(7, 1, 120, 126, 138); p.px(8, 1, 120, 126, 138);
+  p.px(6, 2, 120, 126, 138); p.px(9, 2, 120, 126, 138);
+  // the case
+  for (let y = 3; y <= 13; y++) {
+    for (let x = 4; x <= 11; x++) {
+      const frame = x === 4 || x === 11 || y === 3 || y === 13;
+      if (frame) {
+        const d = (p.rand() * 2 - 1) * 8;
+        p.px(x, y, 128 + d, 134 + d, 148 + d);
+      } else {
+        // the sooted pane: near-black with a violet breath at the center
+        const cd = Math.abs(x - 7.5) + Math.abs(y - 8);
+        const b = Math.max(0, 26 - cd * 5);
+        p.px(x, y, 16 + b, 12 + b, 26 + b * 1.6);
+      }
+    }
+  }
+  p.px(5, 4, 60, 54, 80); // one smudged corner the soot missed
+};
+painters[TILE.DUSK_PEARL] = (p) => {
+  // the Dusk Pearl: nacre in negative — a dark orb with an oil-sheen rim
+  p.clear();
+  for (let y = 4; y <= 12; y++) {
+    const half = y === 4 || y === 12 ? 2 : y === 5 || y === 11 ? 3 : 4;
+    for (let x = 8 - half; x <= 7 + half; x++) {
+      const edge = x === 8 - half || x === 7 + half || y === 4 || y === 12;
+      const d = (p.rand() * 2 - 1) * 8;
+      if (edge) p.px(x, y, 74 + d, 58 + d, 104 + d); // the oil-sheen rim
+      else p.px(x, y, 26 + d * 0.5, 20 + d * 0.5, 40 + d * 0.5);
+    }
+  }
+  p.px(6, 6, 148, 130, 190); // the one reluctant glint
+  p.px(9, 10, 96, 82, 132);
+};
+
+painters[TILE.FARMLAND_TOP] = (p) => {
+  // Turned Earth: dark worked soil combed into furrow rows
+  p.noiseFill([88, 64, 42], 10);
+  for (const y of [2, 6, 10, 14]) {
+    for (let x = 0; x < TILE_PX; x++) {
+      const d = (p.rand() * 2 - 1) * 6;
+      p.px(x, y, 58 + d, 42 + d, 28 + d);        // the furrow shadow
+      if (p.rand() < 0.5) p.px(x, y - 1, 112 + d, 84 + d, 54 + d); // the turned crest
+    }
+  }
+  p.speckle(6, [124, 96, 60], 8); // fresh crumbs
+};
+
+// --- Gloamgold ----------------------------------------------------------------
+// The fourth-tier metal: sky-iron FELL into the Upturn; gloamgold SANK. It
+// only shows below the Emberwash line, gold veins in violet-shadowed stone.
+painters[TILE.GLOAM_ORE] = (p) => {
+  p.noiseFill([104, 100, 112], 9); // deep stone, cooler than the common gray
+  for (const [bx, by] of [[4, 3], [10, 5], [3, 10], [11, 11], [7, 8]]) {
+    for (let i = 0; i < 4; i++) {
+      const d = (p.rand() * 2 - 1) * 14;
+      p.px(bx + ((p.rand() * 2) | 0), by + ((p.rand() * 2) | 0), 236 + d, 196 + d, 96 + d);
+    }
+    // each nugget trails a violet shadow pixel — the gloam holding on
+    p.px(bx + 1, by + 2, 96, 72, 104);
+  }
+};
+painters[TILE.GLOAM_BLOCK] = (p) => {
+  // poured plate: warm brushed gold with dusk-violet seams
+  for (let y = 0; y < TILE_PX; y++) {
+    for (let x = 0; x < TILE_PX; x++) {
+      const d = (p.rand() * 2 - 1) * 5;
+      const brush = y % 3 === 1 ? 7 : 0;
+      p.px(x, y, 210 + d + brush, 168 + d + brush, 88 + d);
+    }
+  }
+  for (const y of [0, 15]) for (let x = 0; x < TILE_PX; x++) p.px(x, y, 128, 96, 96);
+  for (const x of [0, 15]) for (let y = 0; y < TILE_PX; y++) p.px(x, y, 128, 96, 96);
+  p.px(2, 2, 252, 226, 140); p.px(13, 13, 252, 226, 140); // cast gleams
+};
 
 // --- the Pearlfall's gifts ----------------------------------------------------
 // Starstone reads as nacre over slate — a fallen pearl of the old sky, still
@@ -1228,6 +1577,7 @@ painters[TILE.BLADE_STAR] = (p) => {
 const ARMOR_PALETTES = {
   bark: { hi: [150, 116, 72], mid: [118, 90, 54], lo: [82, 62, 38] },
   iron: TOOL_PALETTES.iron,
+  gloam: TOOL_PALETTES.gloam,
 };
 const TRIM_MUSTARD = [214, 176, 74];
 
@@ -1304,6 +1654,10 @@ painters[TILE.CROWN_IRON] = armorPainter("crown", ARMOR_PALETTES.iron);
 painters[TILE.JERKIN_IRON] = armorPainter("jerkin", ARMOR_PALETTES.iron);
 painters[TILE.LEGGINGS_IRON] = armorPainter("leggings", ARMOR_PALETTES.iron);
 painters[TILE.TREADS_IRON] = armorPainter("treads", ARMOR_PALETTES.iron);
+painters[TILE.CROWN_GLOAM] = armorPainter("crown", ARMOR_PALETTES.gloam);
+painters[TILE.JERKIN_GLOAM] = armorPainter("jerkin", ARMOR_PALETTES.gloam);
+painters[TILE.LEGGINGS_GLOAM] = armorPainter("leggings", ARMOR_PALETTES.gloam);
+painters[TILE.TREADS_GLOAM] = armorPainter("treads", ARMOR_PALETTES.gloam);
 
 // --- the wayfinding kit -----------------------------------------------------
 painters[TILE.COMPASS] = (p) => {
@@ -1391,11 +1745,10 @@ painters[TILE.FIELD_CHART] = (p) => {
   p.px(11, 14, 150, 48, 34); p.px(13, 14, 150, 48, 34);
 };
 
-painters[TILE.IRON_INGOT] = (p) => {
-  // the Sky-Iron Ingot: a squat cast bar, bright-topped, stamped like a
-  // field-journal specimen — the sky that fell, folded and poured
+// a squat cast bar, bright-topped, stamped like a field-journal specimen —
+// one painter per metal (pal picks the material, stamp its foundry mark)
+const ingotPainter = (pal, stamp) => (p) => {
   p.clear();
-  const pal = TOOL_PALETTES.iron;
   const dot = (x, y, c, j = 6) => {
     const d = (p.rand() * 2 - 1) * j;
     p.px(x, y, c[0] + d, c[1] + d, c[2] + d);
@@ -1408,8 +1761,12 @@ painters[TILE.IRON_INGOT] = (p) => {
   }
   for (let x = 4; x <= 11; x++) dot(x, 10, pal.lo);     // the shaded underside
   // the foundry stamp: a two-pip mark, counted like everything else
-  p.px(7, 8, 96, 104, 122); p.px(9, 8, 96, 104, 122);
+  p.px(7, 8, ...stamp); p.px(9, 8, ...stamp);
 };
+// the Sky-Iron Ingot: the sky that fell, folded and poured
+painters[TILE.IRON_INGOT] = ingotPainter(TOOL_PALETTES.iron, [96, 104, 122]);
+// the Gloamgold Ingot: the metal that sank, raised and poured
+painters[TILE.GLOAM_INGOT] = ingotPainter(TOOL_PALETTES.gloam, [110, 78, 96]);
 
 painters[TILE.ICE] = (p) => {
   // River Glass: milky pale blue with darker old-water depths leaning
@@ -1538,6 +1895,98 @@ painters[TILE.TRUNDLE] = (p) => {
     }
     p.px(cx, 12, 150, 156, 170);
   }
+};
+
+painters[TILE.MUD] = (p) => {
+  // Mire Sod: wet dark earth with a sheen — puddle glints and rot flecks
+  p.noiseFill([74, 60, 44], 10);
+  p.speckle(14, [52, 42, 30], 8);   // sodden clods
+  p.speckle(8, [104, 92, 70], 6);   // drier crumbs
+  p.speckle(5, [96, 104, 96], 4);   // the wet sheen catching light
+};
+
+painters[TILE.REEDS] = (p) => {
+  // Marsh Reed: tall thin stalks with seed-heads nodding off the tops
+  p.clear();
+  for (const [sx, sway] of [[4, 0], [8, 1], [12, -1]]) {
+    for (let y = 3; y < 16; y++) {
+      const x = sx + (y < 8 ? sway : 0);
+      const d = (p.rand() * 2 - 1) * 10;
+      p.px(x, y, 96 + d, 134 + d, 74 + d);
+    }
+    // the seed-head: a fat brown tip
+    const hx = sx + sway;
+    p.px(hx, 2, 122, 92, 58); p.px(hx, 3, 134, 100, 62); p.px(hx, 4, 122, 92, 58);
+  }
+};
+
+painters[TILE.BOGBEAN_POD] = (p) => {
+  // Bogbean Pods: a little burlap twist of fat speckled beans
+  p.clear();
+  for (let y = 8; y <= 12; y++) {
+    for (let x = 5; x <= 10; x++) {
+      const edge = x === 5 || x === 10 || y === 12;
+      const d = (p.rand() * 2 - 1) * 8;
+      p.px(x, y, (edge ? 118 : 150) + d, (edge ? 96 : 124) + d, (edge ? 62 : 82) + d);
+    }
+  }
+  p.px(7, 7, 150, 124, 82); p.px(8, 7, 150, 124, 82); // the tied twist
+  p.px(7, 6, 96, 76, 50); p.px(8, 6, 96, 76, 50);
+  // beans peeking out of the mouth
+  p.px(6, 9, 168, 178, 120); p.px(9, 10, 158, 170, 112); p.px(7, 11, 148, 160, 104);
+  p.px(6, 10, 120, 134, 84);
+};
+
+painters[TILE.WISPCAP] = (p) => {
+  // a squat pale mushroom holding a scrap of the buried old daylight:
+  // moon-white cap with a faint green-gold rim glow, slim stem
+  p.clear();
+  // stem
+  for (let y = 10; y < 16; y++) {
+    const d = (p.rand() * 2 - 1) * 6;
+    p.px(7, y, 214 + d, 218 + d, 198 + d);
+    p.px(8, y, 196 + d, 200 + d, 180 + d);
+  }
+  // cap: a dome from y6..y9, widest at the base
+  const rows = [[7, 8], [6, 9], [5, 10], [4, 11]];
+  rows.forEach(([x0, x1], i) => {
+    const y = 6 + i;
+    for (let x = x0; x <= x1; x++) {
+      const d = (p.rand() * 2 - 1) * 8;
+      p.px(x, y, 232 + d, 238 + d, 212 + d);
+    }
+  });
+  // the wisp in the cap: a warm glowing heart + rim motes
+  p.px(7, 7, 255, 246, 190); p.px(8, 7, 255, 246, 190);
+  p.px(7, 8, 250, 240, 170); p.px(8, 8, 244, 236, 168);
+  p.px(4, 9, 210, 232, 170); p.px(11, 9, 210, 232, 170);
+  // gills: a darker underline where cap meets stem
+  for (let x = 5; x <= 10; x++) p.px(x, 10, 168, 176, 150);
+  // a spore mote drifting off the cap
+  p.px(11, 5, 226, 240, 190); p.px(3, 6, 218, 234, 184);
+};
+
+painters[TILE.LAVA] = (p) => {
+  // the Emberwash: a dark crust webbed with molten seams. The shader lights
+  // it by its own emitter, so the brights here read as glow without any
+  // animation — deep chars for the crust, saturated oranges for the melt.
+  p.noiseFill([96, 34, 12], 14);
+  // molten seams: bright meanders that fork across the crust
+  for (let v = 0; v < 5; v++) {
+    let x = (p.rand() * TILE_PX) | 0, y = (p.rand() * TILE_PX) | 0;
+    const len = 5 + ((p.rand() * 6) | 0);
+    for (let i = 0; i < len; i++) {
+      const d = (p.rand() * 2 - 1) * 20;
+      p.px(x, y, 244 + d * 0.2, 140 + d, 30 + d * 0.4);
+      if (p.rand() < 0.4) p.px(x + 1, y, 210, 96, 20);
+      x = Math.max(0, Math.min(TILE_PX - 1, x + ((p.rand() * 3) | 0) - 1));
+      y = Math.max(0, Math.min(TILE_PX - 1, y + ((p.rand() * 3) | 0) - 1));
+    }
+  }
+  // white-hot pinpricks where the crust has just given way
+  p.speckle(6, [252, 208, 96], 20);
+  // cooled slag flecks
+  p.speckle(10, [58, 22, 10], 8);
 };
 
 export function buildAtlas(seed = 1337) {
