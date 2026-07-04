@@ -257,6 +257,23 @@ export const RAIL_UP_W = 147;
 // Waybar with it selected sets a cart ENTITY on the track (see interact.js
 // routing and carts.js for its rolling life)
 export const CART = 148;
+// the Pail (see LORE.md): the Wanderlings' fluid carry-tub, riveted from
+// sky-iron. PAIL is the empty item (workbench: 3 Sky-Iron Ingots); right-
+// clicking a Water source or the Emberwash with it swaps the slot to the
+// matching FULL pail, and right-clicking a block face with a full pail pours
+// the fluid back out and hands the empty pail back. Carried items, never
+// world blocks, never stacked (one tub per hand). The fluids poured are the
+// SAME Water/Emberwash cells the world uses — static source cells (the Upturn
+// has no flow simulation), so a poured pool is a single cell and that's fine.
+export const PAIL = 149;
+export const WATER_PAIL = 150;
+export const EMBER_PAIL = 151;
+// Cinderglass: the Emberwash slaked. When Water meets the Emberwash (a pail
+// pour, or either fluid placed against the other) the molten cell hardens to
+// this dense black volcanic glass — very hard, drops itself, and asks for a
+// Sky-Iron Cracker (iron pick, tier 3) or better. Portal-grade stock for a
+// wave still to come.
+export const CINDERGLASS = 152;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -1283,6 +1300,37 @@ BLOCKS[CART] = def("Trundle", {
   opaque: false,
   hardness: 0.05,
   placeable: false,
+  sound: "stone",
+});
+
+// the Pail set: three carried items (empty / water / ember), never placed,
+// never stacked. interact.js owns the scoop-and-pour routing; the fill state
+// IS the item id, so it saves and loads with the inventory for free.
+const pail = (name, tile) => def(name, {
+  tiles: cube(tile),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  hardness: 0.05,
+  placeable: false,
+  sound: "stone",
+  maxStack: 1,
+});
+BLOCKS[PAIL] = pail("Sky-Iron Pail", TILE.PAIL);
+BLOCKS[WATER_PAIL] = pail("Water Pail", TILE.PAIL_WATER);
+// the Ember Pail glows faintly held — the warmth is painted into the icon
+// (a carried item casts no world light), see textures.js
+BLOCKS[EMBER_PAIL] = pail("Ember Pail", TILE.PAIL_EMBER);
+
+// Cinderglass: the slaked Emberwash. Opaque cube (unlike River Glass it keeps
+// no light through), very hard, iron-pick gated, drops itself.
+BLOCKS[CINDERGLASS] = def("Cinderglass", {
+  tiles: cube(TILE.CINDERGLASS),
+  hardness: 18,
+  toolKind: "pick",
+  needsPick: 3,
+  gleam: 2,
   sound: "stone",
 });
 

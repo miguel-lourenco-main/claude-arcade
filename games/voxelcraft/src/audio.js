@@ -263,6 +263,14 @@ export class Sfx {
   // the dib-float touching down on the water: a soft slap
   splash() { this._noiseBurst(560, 0.09, 0.09); }
 
+  // water meeting the Emberwash: a hard bright hiss falling into a low
+  // steam-roll as the molten cell slakes into Cinderglass
+  sizzle() {
+    this._noiseBurst(4200, 0.16, 0.13);
+    setTimeout(() => this._noiseBurst(2600, 0.22, 0.1), 40);
+    setTimeout(() => this._noiseBurst(900, 0.3, 0.07), 120);
+  }
+
   // a bite pulling the float under: a quick hollow descending plip
   plip() {
     if (!this.enabled || !this._ensure()) return;

@@ -1031,6 +1031,17 @@ const interaction = new Interaction(world, player, scene, hud, {
     const yaw = railDef.rail && railDef.rail.axis === "x" ? Math.PI / 2 : 0;
     carts.deploy(x + 0.5, y + 0.06, z + 0.5, yaw);
   },
+  // the Pail scoop/pour swaps the selected slot's item in place (empty <->
+  // full); the tub itself is never spent, so this works the same in both modes
+  swapHeld: (newId) => {
+    const s = inventory.get(hud.selected);
+    if (!s) return false;
+    inventory.set(hud.selected, { id: newId, count: 1 });
+    hud.refreshHotbarRow();
+    return true;
+  },
+  onSplash: () => sfx.splash(),
+  onSizzle: () => sfx.sizzle(),
   crackTextures: buildCrackTextures(1337),
   avgColor: atlas.avgColor,
 });

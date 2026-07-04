@@ -8,7 +8,7 @@ import {
   BERRIES, IRON_ORE, COBBLE, TORCH, MEAL_ROOT, SLING_STONE, PLANKS, BOAT,
   COAL_ORE, GLASS, GRAVEL, MOSS_CLUMP, ROOT_SEED, SILVERFIN, ROAST_LOIN,
   STONE_PICK, COMPASS, BARK_JERKIN, IRON_TREADS, IRON_INGOT, STARSTONE, RAIL,
-  KELPSALVE, QUILL,
+  KELPSALVE, QUILL, PAIL,
 } from "./blocks.js";
 import { mulberry32 } from "./noise.js";
 
@@ -52,6 +52,9 @@ export const OFFERS = [
   { give: [[BERRIES, 6]], get: [KELPSALVE, 1] },
   // lumber for quills: he whittles as he walks — it keeps the hands honest
   { give: [[PLANKS, 2]], get: [QUILL, 8] },
+  // ore for a riveted Pail: he hammers and rivets one watertight on the road —
+  // a peddler who fords as many streams as he does swears by a full tub
+  { give: [[IRON_ORE, 4]], get: [PAIL, 1] },
 ];
 
 export const OFFERS_PER_DAY = 3;

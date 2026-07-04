@@ -5,8 +5,9 @@ import * as THREE from "three";
 import {
   AIR, BEDROCK, CHEST, WORKBENCH, KILN, BED, LADDER, DOOR, DOOR_TOP, BLAST_KEG,
   GATE, GATE_OPEN, SEED_TO_SPROUT, DIRT, GRASS, MUD, FARMLAND, LOOMSTONE,
-  SLING_STONE, BOAT, WATER, FISHING_POLE, SNOW_LAYER, QUILL, ROOT_SEED,
+  SLING_STONE, BOAT, WATER, LAVA, FISHING_POLE, SNOW_LAYER, QUILL, ROOT_SEED,
   SILVERFIN, MURK_LANTERN, GLEAM_MOSS, RAIL, CART,
+  PAIL, WATER_PAIL, EMBER_PAIL, CINDERGLASS,
   BLOCKS, isSolid, isPlant, isFluid, isDoor, isDoorLower, isGate, isSign, isRail,
   DOOR_TOGGLE, dropFor, yawToFacing,
 } from "./blocks.js";
@@ -82,6 +83,34 @@ function raycastWater(world, origin, dir, maxDist) {
   return null;
 }
 
+// The pail-scooping ray: like raycastWater, but STOPS at the first fluid cell
+// of EITHER kind (Water or the Emberwash) and reports which. Any other non-air
+// block blocks the scoop — you can't dip a pail through a wall.
+function raycastFluid(world, origin, dir, maxDist) {
+  let x = Math.floor(origin.x), y = Math.floor(origin.y), z = Math.floor(origin.z);
+  const stepX = dir.x > 0 ? 1 : -1, stepY = dir.y > 0 ? 1 : -1, stepZ = dir.z > 0 ? 1 : -1;
+  const tDeltaX = dir.x !== 0 ? Math.abs(1 / dir.x) : Infinity;
+  const tDeltaY = dir.y !== 0 ? Math.abs(1 / dir.y) : Infinity;
+  const tDeltaZ = dir.z !== 0 ? Math.abs(1 / dir.z) : Infinity;
+  let tMaxX = dir.x !== 0 ? (dir.x > 0 ? (x + 1 - origin.x) : (origin.x - x)) * tDeltaX : Infinity;
+  let tMaxY = dir.y !== 0 ? (dir.y > 0 ? (y + 1 - origin.y) : (origin.y - y)) * tDeltaY : Infinity;
+  let tMaxZ = dir.z !== 0 ? (dir.z > 0 ? (z + 1 - origin.z) : (origin.z - z)) * tDeltaZ : Infinity;
+  let t = 0;
+  while (t <= maxDist) {
+    const id = world.getBlock(x, y, z);
+    if (id === WATER || id === LAVA) return { x, y, z, id };
+    if (id !== AIR) return null;
+    if (tMaxX < tMaxY && tMaxX < tMaxZ) {
+      t = tMaxX; tMaxX += tDeltaX; x += stepX;
+    } else if (tMaxY < tMaxZ) {
+      t = tMaxY; tMaxY += tDeltaY; y += stepY;
+    } else {
+      t = tMaxZ; tMaxZ += tDeltaZ; z += stepZ;
+    }
+  }
+  return null;
+}
+
 export class Interaction {
   constructor(world, player, scene, hotbar, opts) {
     this.world = world;
@@ -124,6 +153,9 @@ export class Interaction {
     this.onDeployBoat = opts.onDeployBoat; // (x, topWaterY, z) => launch one
     this.onBoardCart = opts.onBoardCart;   // (cart) => seat the player
     this.onDeployCart = opts.onDeployCart; // (x, y, z, railDef) => set one down
+    this.swapHeld = opts.swapHeld;   // (newId) => swap the selected slot's item
+    this.onSplash = opts.onSplash;   // () => a pail scoop/pour water sound
+    this.onSizzle = opts.onSizzle;   // () => the quench (water meets Emberwash)
     this.avgColor = opts.avgColor;   // tile -> [r,g,b]
 
     this.target = null;
@@ -730,6 +762,90 @@ export class Interaction {
     this.onSound("place", CART);
   }
 
+  // the Pail's right-click. An empty pail scoops the fluid the crosshair is
+  // over (the source cell goes to air and the slot becomes the matching full
+  // pail); a full pail pours its fluid against the targeted face and hands the
+  // empty pail back. No survival consume here — the pail is not spent, it just
+  // changes state, so swapHeld does the whole exchange in both modes.
+  _usePail(heldId) {
+    if (!this.swapHeld) return;
+    if (heldId === PAIL) this._scoopFluid();
+    else this._pourFluid(heldId);
+  }
+
+  _scoopFluid() {
+    const eye = { x: this.player.pos.x, y: this.player.eyeY, z: this.player.pos.z };
+    const dir = this.player.lookDir();
+    const reach = this.player.mode === "survival" ? REACH_SURVIVAL : REACH_CREATIVE;
+    const f = raycastFluid(this.world, eye, dir, reach);
+    if (!f) return;
+    // lift the source cell into the pail: the cell empties, the slot fills
+    const affected = this.world.setBlock(f.x, f.y, f.z, AIR);
+    if (affected.length === 0) return;
+    if (!this.swapHeld(f.id === WATER ? WATER_PAIL : EMBER_PAIL)) return;
+    this.onEdit(affected, { ids: [AIR, f.id], x: f.x, y: f.y, z: f.z, broken: f.id });
+    if (this.onSplash) this.onSplash();
+    if (this.onSwing) this.onSwing();
+  }
+
+  _pourFluid(heldId) {
+    const t = this.target;
+    if (!t) return;
+    const fluidId = heldId === WATER_PAIL ? WATER : LAVA;
+    // pour against the hit face (into a plant/Snowdrift's cell in place)
+    let px = t.x, py = t.y, pz = t.z;
+    if (!isPlant(t.id) && t.id !== SNOW_LAYER) {
+      px += t.normal[0]; py += t.normal[1]; pz += t.normal[2];
+    }
+    const existing = this.world.getBlock(px, py, pz);
+    const canReplace = existing === AIR || isPlant(existing) || existing === SNOW_LAYER ||
+      isFluid(existing);
+    if (!canReplace) return;
+    if (py < 0 || py >= HEIGHT) return;
+    const targetChunk = this.world.getChunk(px >> 4, pz >> 4);
+    if (!targetChunk || !targetChunk.generated) return;
+    if (!this.swapHeld(PAIL)) return; // hand back the empty pail
+    this._popReplacedPlant(existing, px, py, pz);
+    const affected = this.world.setBlock(px, py, pz, fluidId);
+    this.onEdit(affected, { ids: [fluidId, existing], x: px, y: py, z: pz, placed: fluidId });
+    if (this.onSplash) this.onSplash();
+    if (this.onSwing) this.onSwing();
+    // slake on contact: the pour may have set water next to the Emberwash
+    // (or ember next to water) — harden the molten cell to Cinderglass
+    this._quenchCheck(px, py, pz, fluidId);
+  }
+
+  // Cinderglass forms where Water meets the Emberwash. Pouring/placing WATER
+  // hardens every adjacent Emberwash cell; pouring/placing the Emberwash next
+  // to Water hardens the cell that was just laid. Each conversion is its own
+  // edit so the light BFS drops the molten cell's glow (emit 13 -> opaque
+  // stone) correctly.
+  _quenchCheck(px, py, pz, fluidId) {
+    const N = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+    let quenched = false;
+    const harden = (x, y, z) => {
+      const affected = this.world.setBlock(x, y, z, CINDERGLASS);
+      if (affected.length === 0) return;
+      this.onEdit(affected, { ids: [CINDERGLASS, LAVA], x, y, z, placed: CINDERGLASS });
+      quenched = true;
+    };
+    if (fluidId === WATER) {
+      for (const [dx, dy, dz] of N) {
+        if (this.world.getBlock(px + dx, py + dy, pz + dz) === LAVA) {
+          harden(px + dx, py + dy, pz + dz);
+        }
+      }
+    } else if (fluidId === LAVA) {
+      for (const [dx, dy, dz] of N) {
+        if (this.world.getBlock(px + dx, py + dy, pz + dz) === WATER) {
+          harden(px, py, pz);
+          break;
+        }
+      }
+    }
+    if (quenched && this.onSizzle) this.onSizzle();
+  }
+
   _place() {
     const t = this.target;
     // right-click a Reed Skiff to board it — checked before any block
@@ -836,6 +952,15 @@ export class Interaction {
     // override escape hatch as the stone and the skiff
     if (this.hotbar.selectedId() === FISHING_POLE && !this._interactiveTarget()) {
       this._fish();
+      return;
+    }
+    // a Pail in hand owns right-click: an empty one scoops the fluid the
+    // crosshair is over; a full one pours against the targeted face. Sneak to
+    // override (place-against escape hatch), like the skiff and the stone.
+    const pailHeld = this.hotbar.selectedId();
+    if ((pailHeld === PAIL || pailHeld === WATER_PAIL || pailHeld === EMBER_PAIL) &&
+        !this._interactiveTarget()) {
+      this._usePail(pailHeld);
       return;
     }
     if (!t) return;
@@ -995,6 +1120,9 @@ export class Interaction {
     // include the replaced block: overwriting a torch must clear its light
     this.onEdit(affected, { ids: [placeId, existing], x: px, y: py, z: pz, placed: placeId });
     this.onSound("place", id);
+    // a fluid placed against the other fluid quenches on contact (creative
+    // painting reaches the same Cinderglass the pail does)
+    if (isFluid(placeId)) this._quenchCheck(px, py, pz, placeId);
   }
 
   _popReplacedPlant(existing, px, py, pz) {

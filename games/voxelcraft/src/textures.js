@@ -159,6 +159,16 @@ export const TILE = {
   RAIL_BAR: 126,
   // the Trundle: the cart item's side-view silhouette (icon + drop)
   TRUNDLE: 127,
+  // the Sky-Iron Pail (see LORE.md): a riveted carry-tub for fluids. Three
+  // icons — empty, brimful of old water, and holding a scoop of the Emberwash
+  // (the ember tub is painted with a warm inner glow: the "glows faintly held"
+  // reads off the icon, since a carried item casts no world light).
+  PAIL: 128,
+  PAIL_WATER: 129,
+  PAIL_EMBER: 130,
+  // Cinderglass: what the Emberwash becomes when its fire is finally slaked —
+  // a dense black volcanic glass. Portal-grade stock for a wave still to come.
+  CINDERGLASS: 131,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -1987,6 +1997,91 @@ painters[TILE.LAVA] = (p) => {
   p.speckle(6, [252, 208, 96], 20);
   // cooled slag flecks
   p.speckle(10, [58, 22, 10], 8);
+};
+
+// the Sky-Iron Pail: a riveted tub, drawn side-on like the Trundle. A shared
+// body painter (the sky-iron staves, the hoop bands, the two big rivets and
+// the arched bail handle), then each fill paints its own contents into the
+// mouth. Sky-iron reads bright-cool, per the tool palette.
+const pailBody = (p, fill) => {
+  p.clear();
+  const iron = TOOL_PALETTES.iron;
+  const band = (x, y, c, j = 8) => {
+    const d = (p.rand() * 2 - 1) * j;
+    p.px(x, y, c[0] + d, c[1] + d, c[2] + d);
+  };
+  // the bail handle: an arch of thin iron over the mouth
+  for (const [hx, hy] of [[4, 2], [5, 1], [6, 1], [7, 1], [8, 1], [9, 1], [10, 1], [11, 2]]) {
+    band(hx, hy, iron.lo, 4);
+  }
+  // the tub body: a slightly tapered bucket, mouth at y=3, base at y=13
+  for (let y = 3; y <= 13; y++) {
+    const inset = y >= 12 ? 1 : 0;          // the base draws in a touch
+    const x0 = 3 + inset, x1 = 12 - inset;
+    for (let x = x0; x <= x1; x++) {
+      const rim = y === 3;                  // the bright lip catches the light
+      const wall = x === x0 || x === x1;
+      const hoop = y === 5 || y === 10;     // two reinforcing hoop bands
+      if (rim) band(x, y, iron.hi, 6);
+      else if (fill && y >= 4 && y <= 6 && x > x0 && x < x1) fill(p, x, y); // contents
+      else if (hoop) band(x, y, iron.lo, 5);
+      else band(x, y, wall ? iron.lo : iron.mid, 7);
+    }
+  }
+  // two riveted studs on the near stave
+  p.px(6, 8, iron.hi[0], iron.hi[1], iron.hi[2]);
+  p.px(9, 8, iron.hi[0], iron.hi[1], iron.hi[2]);
+};
+painters[TILE.PAIL] = (p) => {
+  // empty: the mouth shows the dark inner wall of the tub
+  pailBody(p, (pp, x, y) => {
+    const d = (pp.rand() * 2 - 1) * 5;
+    pp.px(x, y, 70 + d, 76 + d, 88 + d);
+  });
+};
+painters[TILE.PAIL_WATER] = (p) => {
+  // brimful of the old water: a cool blue surface with a bright glint
+  pailBody(p, (pp, x, y) => {
+    const d = (pp.rand() * 2 - 1) * 10;
+    pp.px(x, y, 60 + d, 118 + d, 176 + d);
+    if (y === 4 && pp.rand() < 0.4) pp.px(x, y, 150, 198, 232); // surface glint
+  });
+};
+painters[TILE.PAIL_EMBER] = (p) => {
+  // a scoop of the Emberwash: a dark crust broken by bright molten seams —
+  // and it glows in the tub, a warm light the icon carries in the hand
+  pailBody(p, (pp, x, y) => {
+    const hot = pp.rand() < 0.45;
+    const d = (pp.rand() * 2 - 1) * 18;
+    if (hot) pp.px(x, y, 244 + d * 0.2, 150 + d, 44 + d * 0.5); // molten seam
+    else pp.px(x, y, 60 + d * 0.3, 26 + d * 0.3, 16 + d * 0.3); // dark crust
+  });
+  // a warm bloom leaking over the near rim — the faint held glow
+  p.px(5, 3, 255, 196, 96); p.px(10, 3, 255, 196, 96);
+  p.px(7, 2, 255, 214, 128, 200);
+};
+
+// Cinderglass: the Emberwash slaked. A near-black volcanic glass with a faint
+// warm/violet sheen still trapped in it — dense, glassy, and very hard. Opaque
+// cube (unlike River Glass, this keeps no light through), pick-gated iron+.
+painters[TILE.CINDERGLASS] = (p) => {
+  p.noiseFill([26, 22, 30], 6);
+  // conchoidal glass fractures: short pale-violet arcs catching the light
+  for (let f = 0; f < 4; f++) {
+    let x = 2 + ((p.rand() * 12) | 0), y = 2 + ((p.rand() * 12) | 0);
+    const len = 3 + ((p.rand() * 4) | 0);
+    for (let i = 0; i < len; i++) {
+      const d = (p.rand() * 2 - 1) * 10;
+      p.px(x, y, 68 + d, 58 + d, 84 + d);
+      x = Math.max(0, Math.min(TILE_PX - 1, x + ((p.rand() * 3) | 0) - 1));
+      y = Math.max(0, Math.min(TILE_PX - 1, y + 1));
+    }
+  }
+  // a couple of trapped ember glints the quench never fully cooled
+  p.px(4, 11, 128, 74, 46); p.px(12, 5, 110, 66, 42);
+  // glassy highlights
+  p.speckle(10, [58, 52, 72], 8);
+  p.px(3, 3, 96, 86, 116); p.px(11, 12, 88, 78, 108);
 };
 
 export function buildAtlas(seed = 1337) {
