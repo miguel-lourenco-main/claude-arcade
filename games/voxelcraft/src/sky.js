@@ -19,6 +19,10 @@ export class Sky {
   constructor(scene, seed) {
     this.scene = scene;
     this.time = 0.3; // fraction of a day; 0.25 = noon-ish start
+    // whole days lived in this world: bumps when time wraps past midnight
+    // (and when a Moss Cot nap skips it — main.js). The Peddler's offer
+    // board rotates on it.
+    this.day = 0;
 
     // world lighting is driven through the voxel-shader uniforms, not scene
     // lights: main.js reads lightLevel/lightTint each frame
@@ -28,18 +32,28 @@ export class Sky {
     this._tintDay = new THREE.Color(1, 1, 1);
     this._tintDusk = new THREE.Color(1.0, 0.82, 0.7);
 
+    // weather: every so often the old sea overhead wrings itself out.
+    // rain is the 0..1 intensity that everything else reads; the phase
+    // machine drives it toward 0 or 1 with an ~8s fade at each edge.
+    this.weatherPhase = "clear";
+    this.weatherTimer = 300 + Math.random() * 420; // first shower 5-12 min out
+    this.rain = 0;
+    this._tintRain = new THREE.Color(0.62, 0.66, 0.72); // gray, desaturating
+    this._skyRain = new THREE.Color(0x53616e);
+    this._scratch = new THREE.Color();
+
     // celestial rig follows the camera so bodies stay on the horizon
     this.rig = new THREE.Group();
     scene.add(this.rig);
 
     const sunGeo = new THREE.PlaneGeometry(26, 26);
     this.sunMesh = new THREE.Mesh(sunGeo, new THREE.MeshBasicMaterial({
-      color: 0xffe680, fog: false, side: THREE.DoubleSide,
+      color: 0xffe680, fog: false, side: THREE.DoubleSide, transparent: true,
     }));
     this.rig.add(this.sunMesh);
 
     this.moonMesh = new THREE.Mesh(new THREE.PlaneGeometry(18, 18), new THREE.MeshBasicMaterial({
-      color: 0xdde4f0, fog: false, side: THREE.DoubleSide,
+      color: 0xdde4f0, fog: false, side: THREE.DoubleSide, transparent: true,
     }));
     this.rig.add(this.moonMesh);
 
@@ -111,11 +125,39 @@ export class Sky {
     return mesh;
   }
 
+  // test/debug hook: jump the weather machine (this.rain still eases over)
+  forceWeather(phase, seconds) {
+    this.weatherPhase = phase === "rainy" ? "rainy" : "clear";
+    this.weatherTimer = Number.isFinite(seconds) && seconds > 0
+      ? seconds
+      : this.weatherPhase === "rainy"
+        ? 60 + Math.random() * 90
+        : 300 + Math.random() * 420;
+  }
+
   update(dt, camera, eyeInWater) {
+    const prevTime = this.time;
     this.time = (this.time + dt / DAY_LENGTH) % 1;
+    // a real midnight wrap lands near a full -1 delta; tiny negative jitter
+    // (a rAF timestamp preceding the boot clock) must not gain a day
+    if (this.time < prevTime - 0.5) this.day++;
     const angle = this.time * Math.PI * 2; // 0.25 => noon
     const elev = Math.sin(angle);
     const sunDir = new THREE.Vector3(Math.cos(angle) * 0.9, elev, 0.35).normalize();
+
+    // weather machine: long clear stretches, minute-or-two showers
+    this.weatherTimer -= dt;
+    if (this.weatherTimer <= 0) {
+      const toRain = this.weatherPhase === "clear";
+      this.weatherPhase = toRain ? "rainy" : "clear";
+      this.weatherTimer = toRain
+        ? 60 + Math.random() * 90     // rain lasts 60-150s
+        : 300 + Math.random() * 420;  // next arrives in 5-12 min
+    }
+    const rainStep = dt / 8; // ~8s fade in/out
+    const rainTarget = this.weatherPhase === "rainy" ? 1 : 0;
+    this.rain += Math.max(-rainStep, Math.min(rainStep, rainTarget - this.rain));
+    const rain = this.rain;
 
     const day = smoothstep(-0.08, 0.18, elev);
     const duskiness = (1 - smoothstep(0.12, 0.32, Math.abs(elev))) * day;
@@ -127,12 +169,25 @@ export class Sky {
     this.lightTint.copy(this._tintNight).lerp(this._tintDay, day)
       .lerp(this._tintDusk, duskiness * 0.6);
 
+    // a shower dims and grays everything: sky, world light, its tint
+    if (rain > 0) {
+      this._scratch.copy(this._skyRain).multiplyScalar(0.2 + 0.8 * day);
+      this.skyColor.lerp(this._scratch, rain * 0.85);
+      this.lightLevel *= 1 - 0.35 * rain;
+      this.lightTint.lerp(this._tintRain, rain * 0.7);
+    }
+
     this.rig.position.copy(camera.position);
     this.sunMesh.position.copy(sunDir).multiplyScalar(350);
     this.sunMesh.lookAt(camera.position);
     this.moonMesh.position.copy(sunDir).multiplyScalar(-350);
     this.moonMesh.lookAt(camera.position);
-    this.stars.material.opacity = 1 - smoothstep(-0.18, 0.0, elev);
+    // overcast hides the celestial bodies and the pearls alike
+    this.sunMesh.material.opacity = 1 - rain;
+    this.sunMesh.visible = rain < 0.98;
+    this.moonMesh.material.opacity = 1 - rain;
+    this.moonMesh.visible = rain < 0.98;
+    this.stars.material.opacity = (1 - smoothstep(-0.18, 0.0, elev)) * (1 - rain);
 
     this.clouds.position.x = camera.position.x;
     this.clouds.position.z = camera.position.z;
@@ -142,7 +197,8 @@ export class Sky {
     const oy = -camera.position.z / 466;
     this.clouds.material.map.offset.x = ox - Math.floor(ox);
     this.clouds.material.map.offset.y = oy - Math.floor(oy);
-    this.clouds.material.color.setScalar(0.4 + 0.6 * day);
+    this.clouds.material.color.setScalar((0.4 + 0.6 * day) * (1 - 0.45 * rain));
+    this.clouds.material.opacity = 0.55 + 0.35 * rain;
 
     const fog = this.scene.fog;
     if (eyeInWater) {
@@ -151,7 +207,8 @@ export class Sky {
       this.scene.background = fog.color;
     } else {
       fog.color.copy(this.skyColor);
-      fog.near = 45; fog.far = 82;
+      // rain pulls the fog in (still swallowing the meshed world edge)
+      fog.near = 45 - 18 * rain; fog.far = 82 - 20 * rain;
       this.scene.background = this.skyColor;
     }
   }

@@ -19,14 +19,35 @@
   <div id="hud">
     <div id="crosshair"></div>
     <div id="block-name"></div>
+    <div id="gleam" class="hidden">
+      <div id="gleam-bar"><div id="gleam-fill"></div></div>
+      <div id="gleam-jars">0</div>
+    </div>
+    <div id="effects" class="hidden"></div>
+    <div id="boss-bar" class="hidden">
+      <div id="boss-name"></div>
+      <div id="boss-track"><div id="boss-fill"></div></div>
+    </div>
     <div id="status" class="hidden">
-      <div id="hearts"></div>
-      <div id="bubbles"></div>
+      <div id="status-left">
+        <div id="shields" class="hidden"></div>
+        <div id="hearts"></div>
+      </div>
+      <div id="status-right">
+        <div id="bubbles"></div>
+        <div id="hunger"></div>
+      </div>
     </div>
     <div id="hotbar"></div>
+    <div id="wayfinding">
+      <canvas id="needle-widget" width="56" height="56" class="hidden"></canvas>
+      <canvas id="dial-widget" width="56" height="56" class="hidden"></canvas>
+    </div>
+    <canvas id="chart-widget" width="256" height="256" class="hidden"></canvas>
     <pre id="debug" class="hidden"></pre>
     <div id="water-tint" class="hidden"></div>
     <div id="damage-flash"></div>
+    <div id="sleep-fade"></div>
   </div>
 
   <div id="death" class="hidden">
@@ -40,22 +61,24 @@
   <div id="picker" class="hidden">
     <div id="inv-panel">
       <div id="inv-head">
-        <h2>Satchel <span class="hint">(click a card to bind it to the glowing slot — E to close)</span></h2>
-        <div id="inv-ribbon"></div>
+        <h2>Satchel <span class="hint">(drag stacks with the cursor — shift-click to quick-move — E to close)</span></h2>
       </div>
       <div id="inv-cols">
         <div id="inv-you">
           <h3>You</h3>
-          <canvas id="player-view"></canvas>
-          <p class="lore-blurb">A Wanderling of the Upturn. Hands like feet, feet like hands. It works out fine. Drag to spin.</p>
+          <div id="you-row">
+            <canvas id="player-view"></canvas>
+            <div id="wear-grid" class="slot-grid wear"></div>
+          </div>
+          <p class="lore-blurb">A Wanderling of the Upturn. Hands like feet, feet like hands. It works out fine. Drag to spin. Wear goes in the column.</p>
         </div>
-        <div id="inv-satchel">
-          <h3>Carried</h3>
-          <div id="picker-grid"></div>
-        </div>
-        <div id="inv-workbench">
-          <h3>Workbench</h3>
-          <div id="craft-list"></div>
+        <div id="inv-slots">
+          <h3 id="inv-main-label">Satchel</h3>
+          <div id="palette-grid" class="slot-grid hidden"></div>
+          <div id="main-grid" class="slot-grid"></div>
+          <h3>Belt</h3>
+          <div id="hotbar-grid" class="slot-grid"></div>
+          <div id="field-recipes"></div>
         </div>
       </div>
     </div>
@@ -63,13 +86,75 @@
 
   <div id="chest-ui" class="hidden">
     <div id="chest-panel">
-      <h2>Chest <span class="hint">(click a stack to move it — E to close)</span></h2>
-      <div class="chest-cols">
-        <div><h3>Chest</h3><div id="chest-grid" class="mini-grid"></div></div>
-        <div><h3>Inventory</h3><div id="chest-inv-grid" class="mini-grid"></div></div>
+      <h2>Chest <span class="hint">(shift-click to quick-move — E to close)</span></h2>
+      <h3>Chest</h3><div id="chest-grid" class="slot-grid"></div>
+      <h3>Satchel</h3><div id="chest-main-grid" class="slot-grid"></div>
+      <div id="chest-hotbar-grid" class="slot-grid belt"></div>
+    </div>
+  </div>
+
+  <div id="bench-ui" class="hidden">
+    <div id="bench-panel">
+      <h2>Workbench <span class="hint">(the cookbook — shift-click a recipe to craft max — E to close)</span></h2>
+      <div id="bench-cols">
+        <div id="bench-book"><h3>Cookbook</h3><div id="craft-list"></div></div>
+        <div id="bench-inv">
+          <h3>Satchel</h3><div id="bench-main-grid" class="slot-grid"></div>
+          <div id="bench-hotbar-grid" class="slot-grid belt"></div>
+        </div>
       </div>
     </div>
   </div>
+
+  <div id="kiln-ui" class="hidden">
+    <div id="kiln-panel">
+      <h2>Kiln <span class="hint">(ore up top, fuel below the fire — E to close)</span></h2>
+      <div id="kiln-machine">
+        <div id="kiln-stack">
+          <div id="kiln-in-grid" class="slot-grid one"></div>
+          <div id="kiln-ember" title="the fire"></div>
+          <div id="kiln-fuel-grid" class="slot-grid one"></div>
+        </div>
+        <div id="kiln-arrow"><div id="kiln-progress"></div></div>
+        <div id="kiln-out-grid" class="slot-grid one"></div>
+      </div>
+      <h3>Satchel</h3><div id="kiln-main-grid" class="slot-grid"></div>
+      <div id="kiln-hotbar-grid" class="slot-grid belt"></div>
+    </div>
+  </div>
+
+  <div id="trade-ui" class="hidden">
+    <div id="trade-panel">
+      <h2>The Peddler <span class="hint">(three offers a day, take them or leave them &mdash; E to close)</span></h2>
+      <h3>Today&rsquo;s offers</h3>
+      <div id="trade-list"></div>
+      <h3>Satchel</h3><div id="trade-main-grid" class="slot-grid"></div>
+      <div id="trade-hotbar-grid" class="slot-grid belt"></div>
+    </div>
+  </div>
+
+  <div id="loom-ui" class="hidden">
+    <div id="loom-panel">
+      <h2>The Loomstone <span class="hint">(select the tool or piece on your belt, then weave &mdash; E to close)</span></h2>
+      <h3 id="loom-target">Nothing selected</h3>
+      <div id="loom-list"></div>
+      <h3>Satchel</h3><div id="loom-main-grid" class="slot-grid"></div>
+      <div id="loom-hotbar-grid" class="slot-grid belt"></div>
+    </div>
+  </div>
+
+  <div id="sign-ui" class="hidden">
+    <div id="sign-panel">
+      <h2>Notice Post <span class="hint">(4 lines of 16 — the field-journal way)</span></h2>
+      <textarea id="sign-text" rows="4" spellcheck="false" autocomplete="off"></textarea>
+      <div id="sign-buttons">
+        <button id="sign-done">Done</button>
+        <button id="sign-cancel" class="secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="cursor-stack" class="hidden"><canvas width="40" height="40"></canvas><span class="n"></span></div>
 
   <div id="overlay">
     <div id="overlay-panel">
@@ -93,6 +178,13 @@
         </label>
         <button id="movement-toggle" class="secondary"></button>
         <button id="mode-toggle" class="secondary"></button>
+      </div>
+      <div class="row">
+        <label id="music-setting">Music
+          <input id="music-volume" type="range" min="0" max="1" step="0.05">
+          <span id="music-val"></span>
+        </label>
+        <button id="music-toggle" class="secondary"></button>
       </div>
       <div class="row">
         <button id="reset" class="danger">Reset world</button>

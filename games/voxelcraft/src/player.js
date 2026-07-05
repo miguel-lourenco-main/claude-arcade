@@ -1,7 +1,11 @@
 // First-person player: pointer-lock look, AABB voxel collision, walking /
 // sprinting / sneaking / jumping / swimming / creative flight.
 
-import { isSolid, WATER, CACTUS } from "./blocks.js";
+import {
+  BLOCKS, isSolid, WATER, LAVA, isFluid, CACTUS, LADDER, ICE, SNOW_LAYER,
+  MUD, armorProtection,
+} from "./blocks.js";
+import { wearSkips } from "./loom.js";
 
 const HALF_W = 0.3;
 const PLAYER_HEIGHT = 1.8;
@@ -11,7 +15,7 @@ const GRAVITY = 32;
 const TERMINAL_VELOCITY = 78;
 const JUMP_SPEED = 8.95;          // ~1.25 block jump
 const WALK_SPEED = 4.32;
-const SPRINT_SPEED = 5.6;
+const SPRINT_SPEED = 6.7;         // 1.55x walk — a real commitment of hunger
 const SNEAK_SPEED = 1.31;
 const FLY_SPEED = 11;
 const FLY_SPRINT_SPEED = 22;
@@ -19,15 +23,42 @@ const SWIM_SPEED = 2.2;
 const SWIM_SPRINT_SPEED = 3.9;
 const SWIM_UP_MAX = 3.5;
 const WATER_EXIT_BOOST = 6;       // upward kick when swimming into a bank
+const LADDER_CLIMB = 2.3;         // blocks/s up (forward/jump) or down (sneak)
+const LADDER_SLIDE = 0.8;         // idle drift down the rungs
+const LADDER_SIDE_SPEED = 2.0;    // damped horizontal shuffle while gripping
 const MAX_STEP_DISP = 0.4;        // max movement per collision substep (anti-tunneling)
 const STEP_DISTANCE = 2.2;        // blocks walked between footstep sounds
 
+// the Whims: timed statuses worn briefly (see LORE.md). The table is the
+// whole framework — a whim is an id, a display name, and at most a speed
+// multiplier; the timed behaviors (Emberglow's regen, Mire-rot's gnaw,
+// Kelpguard's damage shave) live in _updateSurvival/damage below.
+export const EFFECTS = {
+  fleetfoot: { name: "Fleetfoot", speed: 1.3 },   // Sunwisp Broth
+  emberglow: { name: "Emberglow" },               // Emberbell Broth: quiet regen
+  mirerot: { name: "Mire-rot" },                  // the Mirewalker's gift
+  kelpguard: { name: "Kelpguard" },               // Kelpsalve: damage shave + cure
+  dimmed: { name: "Dimmed", speed: 0.6 },         // the dark leaning on you
+};
+const EMBERGLOW_INTERVAL = 2.5;  // seconds per healed heart-half
+const MIREROT_INTERVAL = 2;      // seconds per gnawed heart-half
+const KELPGUARD_SHAVE = 0.8;     // incoming damage multiplier
+
 // survival ("normal") limitations
 export const MAX_HEALTH = 20;     // 10 hearts
+export const MAX_HUNGER = 20;     // 10 bowls
 const AIR_SECONDS = 15;           // breath underwater before drowning
 const FALL_SAFE = 3;              // blocks of fall that deal no damage (MC rule)
 const REGEN_DELAY = 5;            // seconds after damage before regen starts
-const REGEN_RATE = 0.5;           // HP per second (no hunger system, peaceful-style)
+const REGEN_RATE = 0.5;           // HP per second, gated on a well-fed satchel
+const REGEN_MIN_HUNGER = 18;      // regen only while this fed or better
+const REGEN_HUNGER_COST = 0.4;    // hunger spent per HP healed
+const HUNGER_PASSIVE = 0.02;      // hunger per second while doing anything
+const HUNGER_SPRINT = 0.06;       // extra while sprinting (total 0.08 = 4x walking)
+const HUNGER_JUMP = 0.12;         // hunger per jump
+const SPRINT_JUMP_EXTRA = 0.2;    // additional cost of a jump taken at a sprint
+const SPRINT_MIN_HUNGER = 3;      // too hungry to run: sprint needs hunger > this
+const STARVE_INTERVAL = 2.5;      // seconds between starvation ticks at 0 hunger
 
 // horizontal acceleration (blocks/s²): crisp starts, crisper stops on ground,
 // deliberately weaker steering in the air — replaces the old exponential
@@ -39,6 +70,28 @@ const ACCEL_WATER = 16;
 const ACCEL_FLY = 45;
 const FRICTION_FLY = 80; // firm enough that sprint-fly (22 bl/s) stops in ~2 blocks
 
+// --- the Wanderwing's glide (see LORE.md + blocks.js) ------------------------
+// Hold Space while falling with a Wanderwing worn: the fall slows to a gentle
+// terminal and forward speed accrues, steered by the camera. Pitch trades
+// height for speed — nose down to dive (faster, steeper), nose up to flare
+// (bleed speed, a breath of lift). Every value here is blocks/second or a
+// per-second easing rate.
+const GLIDE_FALL = 2.5;         // level descent rate — the advertised terminal
+const GLIDE_DIVE_SINK = 12;     // extra descent at a full nose-down dive
+const GLIDE_FLARE_LIFT = 4;     // upward push at a full nose-up flare
+const GLIDE_VY_EASE = 3.5;      // how quickly vy chases its target
+const GLIDE_FWD_MAX = 11;       // the level cruise the forward speed accrues to
+const GLIDE_DIVE_FWD = 5;       // forward-speed bonus at a full dive
+const GLIDE_FLARE_BLEED = 6;    // forward speed shed at a full flare
+const GLIDE_FWD_EASE = 1.6;     // how quickly the forward speed accrues
+const GLIDE_FWD_CAP = 17;       // a hard lid, so a long dive can't run away
+const GLIDE_TURN_EASE = 3.2;    // how hard the camera heading steers the track
+const GLIDE_SECONDS_PER_DUR = 2.5; // glide seconds spent per point of wing wear
+const GLIDE_SAFE_LAND = 12;     // impact speed below this lands clean
+const GLIDE_IMPACT_FACTOR = 0.5;// the wing absorbs most of a hard slam
+const GLIDE_BOOST = 8;          // a Festival Rocket's mid-glide thrust (bl/s)
+const GLIDE_BOOST_CAP = 16;     // the ceiling a boost can raise cruise to
+
 
 export class Player {
   constructor(world) {
@@ -49,9 +102,16 @@ export class Player {
     this.pitch = 0;
     this.onGround = false;
     this.flying = false;
-    this.sprinting = false;
-    this.inWater = false;
-    this.eyeInWater = false;
+    this.sprinting = false;   // the double-tap latch (hold keys bypass it)
+    this.isEating = null;     // () => bool hook — main.js wires interact.eating
+    this.inWater = false;     // any FLUID at feet/torso (water or Emberwash)
+    this.inLava = false;      // specifically the Emberwash — it burns
+    this.eyeInWater = false;  // water only: drowning + underwater fog
+    this.eyeInLava = false;   // molten over the eyes — burns like contact
+    this.onLadder = false;
+    // riding a Reed Skiff: the boat entity that owns this player's physics
+    // (boats.js seats, drives, and dismounts; update() suspends everything)
+    this.riding = null;
     // "camera": classic FPS movement, WASD relative to where you look.
     // "static": WASD along fixed world axes (W=north/-z), camera independent.
     this.moveMode = "camera";
@@ -66,22 +126,80 @@ export class Player {
 
     // survival state ("creative" ignores all of it)
     this.mode = "creative";     // "creative" | "survival"
+    // respawn anchor set by sleeping in a Moss Cot: {x, y, z} feet position on
+    // top of the bed, or null for the world spawn. main.js validates the bed
+    // still stands before using it (and clears it when the cot is broken).
+    this.spawnPoint = null;
     this.health = MAX_HEALTH;
+    this.hunger = MAX_HUNGER;
     this.air = AIR_SECONDS;
     this.dead = false;
     this.onDamage = null;       // (amount, cause) => void
     this.onDeath = null;        // (cause) => void
+    // the 4 wear slots (main.js owns the array; the Satchel window edits it).
+    // Entries are stacks {id, count: 1, dur?} or null, in WEAR_KINDS order.
+    this.wear = null;
+    this.onArmorBreak = null;   // (blockId) => a worn piece shattered
+    this.onArmorWear = null;    // () => dur ticked down on the worn set
+    // the Wanderwing's glide (see the GLIDE_* constants): a soft latch — it
+    // arms while falling with Space held and a wing worn, and holds through a
+    // flare's brief climb until Space releases, the ground arrives, or the
+    // wing frays. `_glideSpeed` is the accrued forward speed it steers.
+    this.gliding = false;
+    this._glideSpeed = 0;
+    this._glideDurTimer = 0;
+    this.onGlideFray = null;    // (blockId) => the wing frayed mid-air
+    this.onGlideWear = null;    // () => a glide-second ticked the wing's dur
+    // the Whims: effect id -> seconds left. Survival-only (mode switches
+    // and respawns clear it); persisted as an additive save field.
+    this.effects = new Map();
+    this.onEffectStart = null;  // (id) => a whim newly took hold (HUD note)
+    this._glowTimer = 0;
+    this._rotTimer = 0;
     this._peakY = 0;            // highest point of the current fall
     this._sinceDamage = 999;
     this._drownTimer = 0;
+    this._lavaTimer = 0;
     this._cactusTimer = 0;
     this._voidTimer = 0;
+    this._starveTimer = 0;
   }
 
   get maxAir() { return AIR_SECONDS; }
 
+  // a whim takes hold: refreshed to the longer of current/new, never stacked.
+  // Kelpguard is also the cure — applying it washes the Mire-rot out.
+  addEffect(id, seconds) {
+    if (!EFFECTS[id] || this.mode !== "survival" || this.dead) return;
+    const fresh = !this.effects.has(id);
+    this.effects.set(id, Math.max(this.effects.get(id) || 0, seconds));
+    if (id === "kelpguard") this.effects.delete("mirerot");
+    if (fresh && this.onEffectStart) this.onEffectStart(id);
+  }
+
+  hasEffect(id) { return this.effects.has(id); }
+
+  // the combined speed multiplier of every active whim (1 = unaffected)
+  effectSpeedMul() {
+    let mul = 1;
+    for (const id of this.effects.keys()) {
+      const s = EFFECTS[id].speed;
+      if (s) mul *= s;
+    }
+    return mul;
+  }
+
+  clearEffects() {
+    this.effects.clear();
+    this._glowTimer = 0;
+    this._rotTimer = 0;
+  }
+
   damage(amount, cause) {
     if (this.mode !== "survival" || this.dead || amount <= 0) return;
+    // Kelpguard: the salve shaves every hurt before the plate weighs in
+    if (this.effects.has("kelpguard")) amount *= KELPGUARD_SHAVE;
+    amount = this._absorb(amount, cause);
     this.health = Math.max(0, this.health - amount);
     this._sinceDamage = 0;
     if (this.onDamage) this.onDamage(amount, cause);
@@ -93,13 +211,51 @@ export class Player {
     }
   }
 
+  // worn armor absorbs a fraction of PHYSICAL damage (mob hits, spines,
+  // cactus, keg blasts, falls) — drowning, starvation, and the void go
+  // straight through the plate. Falls use armorProtection's reduced formula
+  // (25% value, treads in full — see blocks.js). Every absorbing hit costs
+  // 1 dur on EACH worn piece (they all contributed); a piece at 0 shatters
+  // out of its wear slot. Death never touches the wear slots — the set keeps
+  // protecting after a respawn (there is no death-drop in the Upturn).
+  _absorb(amount, cause) {
+    const wear = this.wear;
+    if (!wear) return amount;
+    if (cause === "drowning" || cause === "starvation" || cause === "the void" ||
+        cause === "the mire-rot") { // sickness ignores the plate
+      return amount;
+    }
+    const red = armorProtection(wear, cause === "fall");
+    if (red <= 0) return amount;
+    for (let i = 0; i < wear.length; i++) {
+      const s = wear[i];
+      const a = s && BLOCKS[s.id] ? BLOCKS[s.id].armor : null;
+      if (!a || a.glide) continue; // the Wanderwing wears from gliding, not hits
+      // a Knotwood Thread woven through the piece: wear lands half as often
+      if (wearSkips(s)) continue;
+      const left = (Number.isInteger(s.dur) ? s.dur : a.maxDur) - 1;
+      if (left <= 0) {
+        wear[i] = null;
+        if (this.onArmorBreak) this.onArmorBreak(s.id);
+      } else {
+        s.dur = left;
+      }
+    }
+    if (this.onArmorWear) this.onArmorWear();
+    return amount * (1 - red);
+  }
+
   respawn(spawnPoint) {
+    this.riding = null; // death unseats — the skiff stays where it was
+    this.clearEffects(); // the grave keeps the whims
     Object.assign(this.pos, spawnPoint);
     this.vel.x = this.vel.y = this.vel.z = 0;
     this.health = MAX_HEALTH;
+    this.hunger = MAX_HUNGER;
     this.air = AIR_SECONDS;
     this.dead = false;
     this.flying = false;
+    this.gliding = false;
     this._peakY = this.pos.y;
     this._sinceDamage = 999;
   }
@@ -107,7 +263,109 @@ export class Player {
   // forget any fall in progress — must be called on every non-physics
   // relocation (teleport, mode switch, safety net) or the next landing
   // computes fall damage from the stale peak
-  resetFall() { this._peakY = this.pos.y; }
+  resetFall() { this._peakY = this.pos.y; this.gliding = false; }
+
+  // the wear index of a worn Wanderwing (armor.glide), or -1 if none is worn
+  _wingSlot() {
+    const wear = this.wear;
+    if (!wear) return -1;
+    for (let i = 0; i < wear.length; i++) {
+      const s = wear[i];
+      const a = s && BLOCKS[s.id] ? BLOCKS[s.id].armor : null;
+      if (a && a.glide) return i;
+    }
+    return -1;
+  }
+
+  // is the wing carrying the fall this tick? Armed while airborne with Space
+  // held and a wing worn; it STARTS only from a descent (vy < 0) but then
+  // holds through a flare's brief climb until Space frees it or ground/fray
+  // ends it (both cleared where they happen). Water/ladder/riding never reach
+  // here — those are handled by earlier branches / the ride early-return.
+  _wingGlideActive(jumping) {
+    if (this.onGround || !jumping || this._wingSlot() < 0) return false;
+    return this.gliding || this.vel.y < 0;
+  }
+
+  // one tick of glide: ease the descent toward a gentle terminal (steeper on
+  // a dive, a breath of lift on a flare), accrue forward speed, steer the
+  // track by the camera heading, and spend the wing's dur by glide seconds.
+  _glide(dt) {
+    if (!this.gliding) { // just deployed: inherit the current ground speed
+      this._glideSpeed = Math.hypot(this.vel.x, this.vel.z);
+    }
+    this.gliding = true;
+    // pitch in [-π/2, π/2]; lookDir.y = sin(pitch), so nose-down is pitch < 0
+    const dive = -Math.sin(this.pitch); // +1 fully nose-down, -1 fully nose-up
+    const sink = Math.max(0, dive), lift = Math.max(0, -dive);
+    // a flare only lifts by trading the forward speed it has: with speed in
+    // hand it converts to height, and once that speed bleeds off the lift
+    // fades back to terminal — so holding a flare can never climb forever
+    const speedFrac = Math.min(1, this._glideSpeed / GLIDE_FWD_MAX);
+    // vertical: gentle terminal, dive to sink faster, flare for a touch of lift
+    const vyTarget = -GLIDE_FALL - sink * GLIDE_DIVE_SINK
+      + lift * GLIDE_FLARE_LIFT * speedFrac;
+    this.vel.y += (vyTarget - this.vel.y) * Math.min(1, dt * GLIDE_VY_EASE);
+    // forward speed accrues toward cruise — higher diving, bled flaring
+    const fwdTarget = Math.max(2,
+      GLIDE_FWD_MAX + sink * GLIDE_DIVE_FWD - lift * GLIDE_FLARE_BLEED);
+    this._glideSpeed += (fwdTarget - this._glideSpeed) * Math.min(1, dt * GLIDE_FWD_EASE);
+    this._glideSpeed = Math.max(0, Math.min(GLIDE_FWD_CAP, this._glideSpeed));
+    // steer the horizontal track toward where the camera looks (yaw only)
+    const hx = -Math.sin(this.yaw), hz = -Math.cos(this.yaw);
+    const turn = Math.min(1, dt * GLIDE_TURN_EASE);
+    this.vel.x += (hx * this._glideSpeed - this.vel.x) * turn;
+    this.vel.z += (hz * this._glideSpeed - this.vel.z) * turn;
+    // durability: one point per GLIDE_SECONDS_PER_DUR of flight (survival only)
+    if (this.mode === "survival") {
+      this._glideDurTimer += dt;
+      if (this._glideDurTimer >= GLIDE_SECONDS_PER_DUR) {
+        this._glideDurTimer -= GLIDE_SECONDS_PER_DUR;
+        this._wearWing();
+      }
+    }
+  }
+
+  // can a Festival Rocket boost the glide right now? (mid-glide, wing worn —
+  // interact.js checks this BEFORE consuming the rocket, so a boost that can't
+  // happen never eats one)
+  canGlideBoost() { return this.gliding && this._wingSlot() >= 0; }
+
+  // a rocket spent mid-glide: thrust along the look vector. The forward cruise
+  // jumps by the impulse (capped, so repeated rockets plateau rather than run
+  // away), the horizontal track snaps onto the look heading, and a nose-up aim
+  // trades the thrust into a climb — the long-distance flight loop. The wing
+  // pays one point of dur for the push.
+  glideBoost() {
+    if (!this.canGlideBoost()) return false;
+    const dir = this.lookDir();
+    this._glideSpeed = Math.min(GLIDE_BOOST_CAP, this._glideSpeed + GLIDE_BOOST);
+    const hlen = Math.hypot(dir.x, dir.z) || 1;
+    this.vel.x = (dir.x / hlen) * this._glideSpeed;
+    this.vel.z = (dir.z / hlen) * this._glideSpeed;
+    this.vel.y += dir.y * GLIDE_BOOST; // aim up to climb, down to dive
+    this._wearWing();                   // one point of the wing for the thrust
+    return true;
+  }
+
+  // spend one point of the worn wing's durability; at 0 it frays mid-air —
+  // it shatters out of the slot, the glide folds, and the fall resumes
+  _wearWing() {
+    const i = this._wingSlot();
+    if (i < 0) return;
+    const s = this.wear[i];
+    const a = BLOCKS[s.id].armor;
+    const left = (Number.isInteger(s.dur) ? s.dur : a.maxDur) - 1;
+    if (left <= 0) {
+      const id = s.id;
+      this.wear[i] = null;
+      this.gliding = false; // next tick has no wing: the fall resumes
+      if (this.onGlideFray) this.onGlideFray(id);
+    } else {
+      s.dur = left;
+      if (this.onGlideWear) this.onGlideWear();
+    }
+  }
 
   get eyeY() { return this.pos.y + EYE_HEIGHT; }
 
@@ -179,6 +437,22 @@ export class Player {
     if (this.dead) return;
     this._updateWaterState();
 
+    // riding a skiff: all physics is the boat's problem (boats.js moves the
+    // seat and reads WASD/Sneak itself). No swimming, no hunger drain, no
+    // fall — a seated Wanderling exerts nothing. Space does nothing here.
+    if (this.riding) {
+      this._sneaking = this.keys.has("ShiftLeft") || this.keys.has("ShiftRight");
+      this.sprintActive = false; // no pounding down the bench — FOV settles
+      this.vel.x = this.vel.y = this.vel.z = 0;
+      this.onGround = false;
+      this._peakY = this.pos.y;
+      this._sinceDamage += dt;
+      if (!this.eyeInWater) { // catching breath on the bench
+        this.air = Math.min(AIR_SECONDS, this.air + dt * 4);
+      }
+      return;
+    }
+
     const forward = (this.keys.has("KeyW") ? 1 : 0) - (this.keys.has("KeyS") ? 1 : 0);
     const strafe = (this.keys.has("KeyD") ? 1 : 0) - (this.keys.has("KeyA") ? 1 : 0);
     const sneaking = this.keys.has("ShiftLeft") || this.keys.has("ShiftRight");
@@ -204,14 +478,32 @@ export class Player {
     // direction in static mode
     const sprintInput = this.moveMode === "static"
       ? (forward !== 0 || strafe !== 0) : forward > 0;
+    // sprint intent: the double-tap latch OR a held sprint key. A too-empty
+    // satchel (hunger <= 3, survival) both blocks it and drops the latch, so
+    // running yourself hungry ends the sprint until you eat back over the line
+    const holdSprint = this.keys.has("CapsLock") || this.keys.has("ControlLeft");
+    const starvedOut = this.mode === "survival" && this.hunger <= SPRINT_MIN_HUNGER;
+    if (starvedOut) this.sprinting = false;
+    // sneaking and eating suppress the sprint without dropping the latch —
+    // release the crouch mid-run and the stride picks right back up
+    const wantSprint = (this.sprinting || holdSprint) && !starvedOut &&
+      !sneaking && !(this.isEating && this.isEating());
     let speed;
-    if (this.flying) speed = this.sprinting ? FLY_SPRINT_SPEED : FLY_SPEED;
-    else if (this.inWater) speed = this.sprinting && sprintInput ? SWIM_SPRINT_SPEED : SWIM_SPEED;
+    if (this.flying) speed = wantSprint ? FLY_SPRINT_SPEED : FLY_SPEED;
+    else if (this.inWater) {
+      speed = wantSprint && sprintInput ? SWIM_SPRINT_SPEED : SWIM_SPEED;
+      if (this.inLava) speed *= 0.55; // the melt is thicker than any river
+    }
     else if (sneaking) speed = SNEAK_SPEED;
-    else if (this.sprinting && sprintInput) speed = SPRINT_SPEED;
+    else if (wantSprint && sprintInput) speed = SPRINT_SPEED;
     else speed = WALK_SPEED;
     this.sprintActive = speed === SPRINT_SPEED || speed === SWIM_SPRINT_SPEED ||
-      (this.flying && this.sprinting);
+      (this.flying && wantSprint);
+    // the Whims' pace: Fleetfoot quickens, Dimmed drags — applied after the
+    // sprint check reads the base speed, and never to hunger drain rates
+    if (this.mode === "survival" && this.effects.size > 0) {
+      speed *= this.effectSpeedMul();
+    }
 
     // linear acceleration toward the wanted velocity, applied as a VECTOR
     // approach (not per-axis): a rotating camera swings the target around
@@ -244,6 +536,22 @@ export class Player {
         const s = Math.min(1, accel / d);
         this.vel.x += dvx * s; this.vel.y += dvy * s; this.vel.z += dvz * s;
       }
+    } else if (this.onLadder) {
+      // ladder grip (Wanderling hand-feet were made for this): gravity is
+      // suspended; forward/jump climbs, sneak descends, idle drifts down a
+      // slow slide; horizontal movement is damped to a shuffle
+      const accel = (hasInput ? ACCEL_GROUND : FRICTION_GROUND) * 0.5 * dt;
+      const side = Math.min(speed, LADDER_SIDE_SPEED);
+      const dvx = dirX * side - this.vel.x;
+      const dvz = dirZ * side - this.vel.z;
+      const d = Math.hypot(dvx, dvz);
+      if (d > 1e-9) {
+        const s = Math.min(1, accel / d);
+        this.vel.x += dvx * s; this.vel.z += dvz * s;
+      }
+      if (forward > 0 || jumping) this.vel.y = LADDER_CLIMB;
+      else if (sneaking) this.vel.y = -LADDER_CLIMB;
+      else this.vel.y = Math.max(-LADDER_SLIDE, this.vel.y - GRAVITY * dt);
     } else if (this.inWater) {
       // swimming follows the camera: look down + forward dives, look up
       // surfaces — Space/Shift still push straight up/down
@@ -281,11 +589,29 @@ export class Player {
           (hasInput || jumping)) {
         this.vel.y = WATER_EXIT_BOOST;
       }
+    } else if (this._wingGlideActive(jumping)) {
+      // the Wanderwing is spread: the wind takes over from gravity
+      this._glide(dt);
     } else {
-      const accel = (this.onGround ? (hasInput ? ACCEL_GROUND : FRICTION_GROUND)
+      if (this.gliding) this.gliding = false; // Space released / no wing: fold
+      // footing: River Glass halves traction (starts and stops alike — the
+      // slide), a Snowdrift drags the stride to 0.9x, and Mire Sod sucks at
+      // the hand-feet — the bog is crossed at three-quarter pace
+      let traction = 1, stride = 1;
+      if (this.onGround) {
+        const fx = Math.floor(this.pos.x), fz = Math.floor(this.pos.z);
+        const below = this.world.getBlock(fx, Math.floor(this.pos.y - 0.05), fz);
+        // the feet cell too: standing ON a drift puts the feet INSIDE its
+        // cell (y = cell + 0.12), so the below-probe alone can miss it
+        const feet = this.world.getBlock(fx, Math.floor(this.pos.y + 0.05), fz);
+        if (below === ICE) traction = 0.5;
+        else if (below === SNOW_LAYER || feet === SNOW_LAYER) stride = 0.9;
+        else if (below === MUD) stride = 0.75;
+      }
+      const accel = (this.onGround ? (hasInput ? ACCEL_GROUND : FRICTION_GROUND) * traction
         : ACCEL_AIR) * dt;
-      const dvx = dirX * speed - this.vel.x;
-      const dvz = dirZ * speed - this.vel.z;
+      const dvx = dirX * speed * stride - this.vel.x;
+      const dvz = dirZ * speed * stride - this.vel.z;
       const d = Math.hypot(dvx, dvz);
       if (d > 1e-9) {
         const s = Math.min(1, accel / d);
@@ -296,13 +622,31 @@ export class Player {
       if (jumping && this.onGround) {
         this.vel.y = JUMP_SPEED;
         this.onGround = false;
+        if (this.mode === "survival") {
+          // a jump taken at a sprint costs extra — bunny-hopping is fast
+          // but it eats
+          this.hunger = Math.max(0, this.hunger -
+            (HUNGER_JUMP + (this.sprintActive ? SPRINT_JUMP_EXTRA : 0)));
+        }
       }
     }
 
     this._sneaking = sneaking;
     const wasAirborne = !this.onGround;
+    const glideVy = this.gliding ? this.vel.y : 0; // impact speed for a slam
     this._moveWithCollisions(dt);
     if (this.flying && this.onGround) this.flying = false;
+    // a glide that meets the ground: a gentle flared touch is free, but
+    // slamming down faster than the safe speed still stings — the wing just
+    // absorbs most of it. The height-based fall path is already neutralized
+    // (gliding zeroes the peak below), so this is the only glide-landing hurt.
+    if (this.gliding && this.onGround) {
+      const impact = -glideVy;
+      if (this.mode === "survival" && impact > GLIDE_SAFE_LAND) {
+        this.damage(Math.round((impact - GLIDE_SAFE_LAND) * GLIDE_IMPACT_FACTOR), "fall");
+      }
+      this.gliding = false;
+    }
 
     if (this.mode === "survival") {
       // re-sample water at the post-move position: a fast landing into
@@ -333,8 +677,36 @@ export class Player {
   _updateSurvival(dt, wasAirborne) {
     this._sinceDamage += dt;
 
-    // fall damage: MC rule, damage = blocks fallen minus 3
-    if (this.flying || this.inWater) {
+    // the Whims run their clocks down (and off)
+    if (this.effects.size > 0) {
+      for (const [id, left] of this.effects) {
+        if (left - dt <= 0) this.effects.delete(id);
+        else this.effects.set(id, left - dt);
+      }
+      // Emberglow: a warm ember heals steadily and asks NOTHING of the
+      // satchel (that's the point of a broth over a meal)
+      if (this.effects.has("emberglow")) {
+        this._glowTimer += dt;
+        if (this._glowTimer >= EMBERGLOW_INTERVAL) {
+          this._glowTimer -= EMBERGLOW_INTERVAL;
+          this.health = Math.min(MAX_HEALTH, this.health + 1);
+        }
+      } else this._glowTimer = 0;
+      // Mire-rot: gnaws like starvation — down to (never past) half a heart
+      if (this.effects.has("mirerot")) {
+        this._rotTimer += dt;
+        if (this._rotTimer >= MIREROT_INTERVAL) {
+          this._rotTimer -= MIREROT_INTERVAL;
+          if (this.health > 1) this.damage(Math.min(1, this.health - 1), "the mire-rot");
+        }
+      } else this._rotTimer = 0;
+    }
+
+    // fall damage: MC rule, damage = blocks fallen minus 3 (a gripped ladder
+    // is as safe as water — no fall accumulates through it, and a spread
+    // Wanderwing carries the height the way water does: glide-landings are
+    // scored by impact speed in update(), never by how far you soared)
+    if (this.flying || this.inWater || this.onLadder || this.gliding) {
       this._peakY = this.pos.y;
     } else if (!this.onGround) {
       this._peakY = Math.max(this._peakY, this.pos.y);
@@ -360,6 +732,14 @@ export class Player {
       this._drownTimer = 0;
     }
 
+    // the Emberwash: fast ticking burns while any of the body is in the melt
+    // (armor absorbs its share — heat is physical enough for plate to matter)
+    this._lavaTimer -= dt;
+    if (this._lavaTimer <= 0 && (this.inLava || this.eyeInLava)) {
+      this._lavaTimer = 0.4;
+      this.damage(3, "the Emberwash");
+    }
+
     // cactus contact
     this._cactusTimer -= dt;
     if (this._cactusTimer <= 0 && this._touchesCactus()) {
@@ -375,10 +755,40 @@ export class Player {
       this._voidTimer = 0;
     }
 
-    // passive regen (no hunger system — peaceful-style)
-    if (!this.dead && this.health < MAX_HEALTH && this._sinceDamage > REGEN_DELAY) {
-      this.health = Math.min(MAX_HEALTH, this.health + REGEN_RATE * dt);
+    // hunger drain: nothing while standing perfectly still, a slow burn
+    // while doing anything, extra while sprinting (jumps charge separately)
+    const idle = Math.hypot(this.vel.x, this.vel.z) < 0.05 && Math.abs(this.vel.y) < 0.05;
+    if (!idle) {
+      let drain = HUNGER_PASSIVE;
+      if (this.sprintActive) drain += HUNGER_SPRINT;
+      this.hunger = Math.max(0, this.hunger - drain * dt);
     }
+
+    // starvation: an empty satchel gnaws down to (never below) half a heart
+    if (this.hunger <= 0) {
+      this._starveTimer += dt;
+      if (this._starveTimer >= STARVE_INTERVAL) {
+        this._starveTimer -= STARVE_INTERVAL;
+        if (this.health > 1) this.damage(Math.min(1, this.health - 1), "starvation");
+      }
+    } else {
+      this._starveTimer = 0;
+    }
+
+    // passive regen: requires a well-fed Wanderling, and healing costs food
+    if (!this.dead && this.health < MAX_HEALTH && this._sinceDamage > REGEN_DELAY &&
+        this.hunger >= REGEN_MIN_HUNGER) {
+      const heal = Math.min(REGEN_RATE * dt, MAX_HEALTH - this.health);
+      this.health += heal;
+      this.hunger = Math.max(0, this.hunger - heal * REGEN_HUNGER_COST);
+    }
+  }
+
+  // eat a food item: restore hunger (clamped). Returns false at full hunger.
+  eat(restore) {
+    if (this.hunger >= MAX_HUNGER - 1e-9) return false;
+    this.hunger = Math.min(MAX_HUNGER, this.hunger + restore);
+    return true;
   }
 
   _touchesCactus() {
@@ -397,8 +807,15 @@ export class Player {
     const { x, y, z } = this.pos;
     const feet = w.getBlock(Math.floor(x), Math.floor(y + 0.2), Math.floor(z));
     const torso = w.getBlock(Math.floor(x), Math.floor(y + 0.9), Math.floor(z));
-    this.inWater = feet === WATER || torso === WATER;
-    this.eyeInWater = w.getBlock(Math.floor(x), Math.floor(this.eyeY), Math.floor(z)) === WATER;
+    const eye = w.getBlock(Math.floor(x), Math.floor(this.eyeY), Math.floor(z));
+    // inWater is really "in a fluid": the Emberwash carries the swimmer the
+    // same way water does (or you'd fall through it like air) — it just burns
+    this.inWater = isFluid(feet) || isFluid(torso);
+    this.inLava = feet === LAVA || torso === LAVA;
+    this.eyeInWater = eye === WATER;
+    this.eyeInLava = eye === LAVA;
+    // ladder grip is sampled exactly like water: feet or torso in a rung cell
+    this.onLadder = feet === LADDER || torso === LADDER;
   }
 
   _moveWithCollisions(dt) {
@@ -448,34 +865,82 @@ export class Player {
     const eps = 0.001;
 
     const x0 = Math.floor(minX), x1 = Math.floor(maxX - eps);
-    const y0 = Math.floor(minY), y1 = Math.floor(maxY - eps);
+    // scan one row BELOW the feet too: tall blocks (fence/gate, colHeight
+    // 1.5) reach into the cell above them — a jumper at +1.2 must still hit
+    // the fence standing in the cell underneath. The `minY >= top` check
+    // below skips that row for every normal-height block.
+    const y0 = Math.floor(minY) - 1, y1 = Math.floor(maxY - eps);
     const z0 = Math.floor(minZ), z1 = Math.floor(maxZ - eps);
+
+    // Downward Y sweeps clamp to the HIGHEST overlapped block top, not the
+    // first cell found (the scan runs bottom-up): a fast fall can cross a
+    // Snowdrift's 0.12 shell AND its support block in one substep, and
+    // clamping to the support would leave the feet embedded in the drift.
+    let landTop = -Infinity;
 
     for (let by = y0; by <= y1; by++) {
       for (let bz = z0; bz <= z1; bz++) {
         for (let bx = x0; bx <= x1; bx++) {
-          if (!isSolid(this.world.getBlock(bx, by, bz))) continue;
-          if (axis === "x") {
-            p.x = disp > 0 ? bx - HALF_W - eps : bx + 1 + HALF_W + eps;
-            this.vel.x = 0;
-            this._hitWall = true;
-          } else if (axis === "z") {
-            p.z = disp > 0 ? bz - HALF_W - eps : bz + 1 + HALF_W + eps;
-            this.vel.z = 0;
+          const bDef = BLOCKS[this.world.getBlock(bx, by, bz)];
+          if (!bDef.solid) continue;
+          // partial-height blocks (slabs) only collide up to their colHeight:
+          // feet at or above the block top means no overlap at all
+          const top = by + bDef.colHeight;
+          if (minY >= top - eps) continue;
+          if (axis === "x" || axis === "z") {
+            // auto-step onto low blocks (colHeight <= 0.5): a slab's half rise
+            // is walked, not jumped — but only from the ground, moving level
+            // or down, and only when the lifted AABB is fully clear
+            if (wasOnGround && !this.flying && bDef.colHeight <= 0.5 &&
+                this.vel.y <= 0.01 && top - p.y <= 0.5 + eps &&
+                !this._boxCollides(p.x, top + eps, p.z)) {
+              p.y = top + eps;
+              this.onGround = true;
+              return;
+            }
+            if (axis === "x") {
+              p.x = disp > 0 ? bx - HALF_W - eps : bx + 1 + HALF_W + eps;
+              this.vel.x = 0;
+            } else {
+              p.z = disp > 0 ? bz - HALF_W - eps : bz + 1 + HALF_W + eps;
+              this.vel.z = 0;
+            }
             this._hitWall = true;
           } else {
             if (disp > 0) {
               p.y = by - PLAYER_HEIGHT - eps;
+              this.vel.y = 0;
             } else {
-              p.y = by + 1 + eps;
-              this.onGround = true;
+              // don't resolve yet — a taller partial block (a drift's shell
+              // above its support) may still be found later in the scan
+              landTop = Math.max(landTop, top);
+              continue;
             }
-            this.vel.y = 0;
           }
           return;
         }
       }
     }
+    if (landTop > -Infinity) {
+      p.y = landTop + eps; // stand ON the block's real top (slab: +0.5, drift: +0.12)
+      this.onGround = true;
+      this.vel.y = 0;
+    }
+  }
+
+  // does the player AABB, moved to (px, py, pz), intersect any solid block?
+  // Uses per-block colHeight — the auto-step clearance test.
+  _boxCollides(px, py, pz) {
+    const eps = 0.001;
+    const x0 = Math.floor(px - HALF_W), x1 = Math.floor(px + HALF_W - eps);
+    // one row below the feet: tall blocks (colHeight > 1) reach up here
+    const y0 = Math.floor(py) - 1, y1 = Math.floor(py + PLAYER_HEIGHT - eps);
+    const z0 = Math.floor(pz - HALF_W), z1 = Math.floor(pz + HALF_W - eps);
+    for (let by = y0; by <= y1; by++) for (let bz = z0; bz <= z1; bz++) for (let bx = x0; bx <= x1; bx++) {
+      const d = BLOCKS[this.world.getBlock(bx, by, bz)];
+      if (d.solid && py < by + d.colHeight - eps) return true;
+    }
+    return false;
   }
 
   // AABB used to block placing solid blocks inside the player

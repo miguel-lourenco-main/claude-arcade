@@ -29,11 +29,14 @@ export class ItemDrops {
     return geo;
   }
 
-  spawn(x, y, z, id, qty = 1) {
+  // opts.dur / opts.mod: tool wear and a woven thread riding on the drop —
+  // handed back on pickup so a tossed half-worn threaded Cracker comes back
+  // exactly as it left
+  spawn(x, y, z, id, qty = 1, opts = {}) {
     if (!BLOCKS[id]) return;
     if (this.drops.length >= MAX_DROPS) {
-      // evict the oldest SINGLE first — FIFO could delete a 9999-item
-      // chest-spill stack to make room for one leaf
+      // evict the oldest SINGLE first — FIFO could delete a huge chest-spill
+      // stack to make room for one leaf
       let evict = this.drops.findIndex((d) => d.qty === 1);
       if (evict === -1) {
         evict = 0;
@@ -52,12 +55,16 @@ export class ItemDrops {
     this.scene.add(mesh);
     this.drops.push({
       id, qty, mesh,
+      dur: opts.dur,
+      mod: opts.mod,
       x, y, z,
-      vx: (Math.random() - 0.5) * 2.2,
-      vy: 2.4 + Math.random() * 1.2,
-      vz: (Math.random() - 0.5) * 2.2,
+      vx: opts.vel ? opts.vel.x : (Math.random() - 0.5) * 2.2,
+      vy: opts.vel ? opts.vel.y : 2.4 + Math.random() * 1.2,
+      vz: opts.vel ? opts.vel.z : (Math.random() - 0.5) * 2.2,
       age: Math.random() * 6, // desync the bob/spin phases
       life: 0,
+      pickupDelay: opts.pickupDelay ?? 0.5, // Q-drops/spills must not boomerang
+      retryAt: 0, // full-inventory pickups back off instead of thrashing
     });
   }
 
@@ -80,9 +87,24 @@ export class ItemDrops {
       let grounded = false;
       for (let s = 0; s < steps; s++) {
         const ny = d.y + d.vy * sdt;
-        const yCell = Math.floor(d.vy < 0 ? ny - 0.12 : ny + 0.12);
-        if (isSolid(world.getBlock(Math.floor(d.x), yCell, Math.floor(d.z)))) {
-          if (d.vy < 0) { d.y = yCell + 1.12; grounded = true; }
+        const sampleY = d.vy < 0 ? ny - 0.12 : ny + 0.12;
+        const yCell = Math.floor(sampleY);
+        const yDef = BLOCKS[world.getBlock(Math.floor(d.x), yCell, Math.floor(d.z))];
+        // partial-height blocks (slabs) only catch below their actual top
+        if (yDef.solid && sampleY < yCell + yDef.colHeight) {
+          if (d.vy < 0) {
+            let top = yCell + yDef.colHeight;
+            // a fast substep can cross a low shell (Snowdrift 0.12, slab 0.5)
+            // AND its support in one go — landing on the support would embed
+            // the drop in the shell above, so rest on the shell's top instead
+            const aDef = BLOCKS[world.getBlock(Math.floor(d.x), yCell + 1, Math.floor(d.z))];
+            if (aDef.solid && aDef.colHeight <= 0.5 && top > yCell + 1 - 0.001 &&
+                top < yCell + 1 + aDef.colHeight) {
+              top = yCell + 1 + aDef.colHeight;
+            }
+            d.y = top + 0.12;
+            grounded = true;
+          }
           d.vy = 0;
         } else {
           d.y = ny;
@@ -100,16 +122,22 @@ export class ItemDrops {
       }
       if (d.y < -40) { this._remove(i); continue; }
 
-      // pickup: drift toward a living player, collect on contact
-      if (!player.dead) {
+      // pickup: drift toward a living player, collect on contact. onPickup
+      // returns how many were ACCEPTED — a full inventory keeps the rest on
+      // the ground and backs off before retrying
+      if (!player.dead && d.life > d.pickupDelay) {
         const px = player.pos.x - d.x, py = player.pos.y + 0.9 - d.y, pz = player.pos.z - d.z;
         const dist = Math.hypot(px, py, pz);
-        if (dist < PICKUP_DIST) {
-          onPickup(d.id, d.qty);
-          this._remove(i);
-          continue;
+        if (dist < PICKUP_DIST && d.life >= d.retryAt) {
+          const accepted = onPickup(d.id, d.qty, d.dur, d.mod);
+          if (accepted >= d.qty) {
+            this._remove(i);
+            continue;
+          }
+          d.qty -= accepted;
+          d.retryAt = d.life + 0.6;
         }
-        if (dist < MAGNET_DIST && d.life > 0.5) {
+        if (dist < MAGNET_DIST) {
           const pull = 26 * dt / Math.max(dist, 0.3);
           d.vx += px * pull; d.vy += py * pull; d.vz += pz * pull;
         }

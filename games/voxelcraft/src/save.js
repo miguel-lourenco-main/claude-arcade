@@ -1,6 +1,8 @@
 // World persistence: seed, player state, time of day, and the block-edit
 // overlay, saved to localStorage.
 
+import { stackToSave } from "./inventory.js";
+
 const KEY = "voxelcraft.save.v1";
 
 export function loadSave() {
@@ -20,11 +22,60 @@ let warnedQuota = false;
 export function writeSave(world, player, sky, hud, inventory, extra = {}) {
   try {
     localStorage.setItem(KEY, JSON.stringify({
-      v: 1,
+      v: 2, // slot-based inventory + slot-array chests
       seed: world.seed,
       time: sky.time,
+      // additive: whole days lived (the Peddler's offer rotation) — absent
+      // in older saves, which simply restart the calendar at day 0
+      day: sky.day,
       chests: world.serializeChests(),
+      kilns: world.serializeKilns(), // additive: absent in older saves
+      // additive: Notice Post text [["x,y,z", text]...] — absent in older
+      // saves, which simply have no writing anywhere
+      signs: world.serializeSigns(),
+      // additive: ruin chunks whose chest/sign state was already seeded
+      // (["cx,cz", ...]) — absent in older saves, whose ruins simply seed
+      // on first generation like a new world's
+      ruins: world.serializeRuins(),
+      // additive: delve chunks whose store/sign state was already seeded —
+      // absent in older saves, whose delvings simply seed on first generation
+      delves: world.serializeDelves(),
+      // additive: Living Stead resident records (dead/warmth/hurt), keyed per
+      // stead — absent in older saves, whose steads seed fresh residents on
+      // first generation
+      steads: world.serializeSteads(),
       saplings: extra.saplings || [],
+      // additive: growing meal-root crops [[x,y,z,stage,remain]...] — the
+      // stage blocks themselves live in the edit overlay; this is the timers
+      crops: extra.crops || [],
+      // additive: [phase, secondsLeftInPhase, intensity] — absent in older
+      // saves, which simply boot clear with a fresh timer
+      weather: extra.weather || undefined,
+      // additive: deployed Reed Skiffs [[x, y, z, yaw]...] — absent in older
+      // saves, which simply have no boats afloat
+      boats: extra.boats || [],
+      // additive: deployed Trundles [[x, y, z, yaw]...] — absent in older
+      // saves, which simply have no carts on the waybars (velocity is not
+      // saved; a reloaded trundle wakes parked)
+      carts: extra.carts || [],
+      // additive: the bonded companions [[species, x, y, z, hp, sitting,
+      // scarfSeed]...] — absent in older saves, which simply have no
+      // bondlings (wild mobs are never persisted)
+      bondlings: extra.bondlings || [],
+      // additive: the Field Chart's inked leaf {ax, az, png} — absent in
+      // older saves (and worlds that never unrolled one): a fresh chart
+      chart: extra.chart || undefined,
+      // additive: the Murmur's settings [on, volume] — absent in older
+      // saves, which simply get the defaults (on, modest volume)
+      music: extra.music || undefined,
+      // additive: Gleam [jars, progress] — absent in older saves (a fresh jar)
+      gleam: extra.gleam || undefined,
+      // additive: the Whims in progress [[id, secondsLeft], ...] — absent in
+      // older saves (no moods borrowed)
+      effects: extra.effects || undefined,
+      // additive: tamed Tuftlings [[x, y, z, hp, stay], ...] — absent in
+      // older saves, which simply have no little shadows at heel
+      pets: extra.pets || undefined,
       player: {
         x: player.pos.x, y: player.pos.y, z: player.pos.z,
         yaw: player.yaw, pitch: player.pitch, flying: player.flying,
@@ -35,9 +86,25 @@ export function writeSave(world, player, sky, hud, inventory, extra = {}) {
       sensitivity: player.sensitivity,
       gameMode: player.mode,
       health: player.health,
+      hunger: player.hunger,
       air: player.air,
+      // additive: the Moss Cot respawn anchor (absent/null = world spawn)
+      spawnPoint: player.spawnPoint || undefined,
       inventory: inventory ? inventory.serialize() : [],
-      hotbar: hud.slots,
+      // additive: the 4 wear slots (crown/jerkin/leggings/treads), same
+      // entry shape as inventory ([id, count, dur?] or 0) — absent in older
+      // saves, which simply load in bare
+      wear: extra.wear || undefined,
+      // additive: the stack held on the drag cursor mid-window — it lives in
+      // no slot, so without this field a save written mid-drag deletes it
+      // ([id, count, dur?, mod?] like every other stack entry)
+      cursor: hud.slotUI && hud.slotUI.cursor
+        ? stackToSave(hud.slotUI.cursor)
+        : undefined,
+      // additive: stacks awaiting satchel room (v1 migration overflow) —
+      // persisted until drained so a reload can never destroy them
+      overflowStacks: extra.overflowStacks || [],
+      selected: hud.selected,
       edits: world.serializeEdits(),
     }));
   } catch (e) {

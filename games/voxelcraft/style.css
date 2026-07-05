@@ -48,21 +48,114 @@ body {
   font-size: 10px; color: rgba(255, 255, 255, 0.55);
 }
 
+/* ---- Gleam: the jar meter above the status rows ---- */
+
+#gleam {
+  position: absolute; left: 50%; bottom: 86px;
+  transform: translateX(-50%);
+  width: 452px;
+  display: flex; align-items: center; gap: 6px;
+}
+#gleam-bar {
+  flex: 1; height: 5px;
+  background: rgba(8, 14, 8, 0.7);
+  border: 1px solid rgba(150, 190, 110, 0.45);
+  border-radius: 3px; overflow: hidden;
+}
+#gleam-fill {
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, #8fce5e, #e2f7a6);
+  transition: width 0.15s ease-out;
+}
+#gleam-jars {
+  min-width: 16px; text-align: center;
+  font: bold 12px monospace; color: #d9f2a8;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+
+/* ---- the boss bar, top-center ---- */
+
+#boss-bar {
+  position: absolute; top: 16px; left: 50%;
+  transform: translateX(-50%);
+  width: 380px; text-align: center;
+}
+#boss-name {
+  font: bold 13px monospace; color: #d8d2ea; letter-spacing: 2px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95); margin-bottom: 4px;
+}
+#boss-track {
+  height: 8px; border: 1px solid rgba(150, 140, 190, 0.55);
+  border-radius: 4px; background: rgba(10, 8, 18, 0.75); overflow: hidden;
+}
+#boss-fill {
+  height: 100%; width: 100%;
+  background: linear-gradient(90deg, #4a3f6e, #8a7ab8);
+  transition: width 0.2s ease-out;
+}
+
+/* ---- the Whims: effect badges, top-right ---- */
+
+#effects {
+  position: absolute; top: 12px; right: 12px;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
+}
+.effect-badge {
+  display: flex; align-items: center; gap: 5px;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 3px 6px; border-radius: 4px;
+}
+.effect-icon {
+  width: 21px; height: 18px;
+  background-size: contain; background-repeat: no-repeat;
+  image-rendering: pixelated;
+}
+.effect-time {
+  min-width: 20px; text-align: right;
+  font: bold 11px monospace; color: #e8e8e0;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+
 /* ---- survival status (hearts + air) ---- */
 
 #status {
   position: absolute; left: 50%; bottom: 66px;
   transform: translateX(-50%);
   width: 452px;
-  display: flex; justify-content: space-between; align-items: center;
+  display: flex; justify-content: space-between; align-items: flex-end;
 }
-#hearts, #bubbles { display: flex; gap: 2px; }
+#hearts, #bubbles, #hunger, #shields { display: flex; gap: 2px; }
+/* hunger sits on the hotbar row; bubbles stack one row up when visible */
+#status-right { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+/* the armor pips ride a slim row above the hearts, only while armor is worn */
+#status-left { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+/* mirrored: hunger depletes from the left, toward the screen center */
+#hunger { flex-direction: row-reverse; }
 #bubbles { transition: opacity 0.4s; }
 #status .icon {
   width: 18px; height: 16px;
   background-size: contain;
   background-repeat: no-repeat;
   image-rendering: pixelated;
+}
+
+/* ---- the wayfinding kit ---- */
+
+/* the Homeward Needle + Sky Dial widgets, top right in the dark UI idiom */
+#wayfinding {
+  position: absolute; top: 10px; right: 10px;
+  display: flex; gap: 8px;
+}
+#wayfinding canvas { width: 56px; height: 56px; }
+
+/* the Field Chart: a parchment leaf unrolled in the lower right */
+#chart-widget {
+  position: absolute; right: 12px; bottom: 12px;
+  width: 256px; height: 256px;
+  image-rendering: pixelated;
+  border: 3px solid #6b5636; border-radius: 4px;
+  background: #cfb27c;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
 }
 
 .slot .count {
@@ -80,6 +173,15 @@ body {
   transition: opacity 0.25s;
 }
 #damage-flash.active { opacity: 1; }
+
+/* Moss Cot sleep: the world tucks itself in and lets you out at dawn */
+#sleep-fade {
+  position: absolute; inset: 0; z-index: 15;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 1s ease;
+}
 
 /* ---- death screen ---- */
 
@@ -129,24 +231,146 @@ body {
   background: #16191f; border: 1px solid #2a2f38; border-radius: 8px;
   padding: 20px; min-width: 520px; max-height: 70vh; overflow-y: auto;
 }
-#chest-panel h2 { color: #e8eaed; font-size: 16px; margin-bottom: 14px; }
-#chest-panel .hint { color: #7c8592; font-size: 12px; font-weight: normal; }
-#chest-panel h3 { color: #9aa3af; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
-.chest-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-.mini-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; min-height: 52px; align-content: start; }
-.mini-cell {
-  position: relative;
-  border: 1px solid #2a2f38; border-radius: 4px;
-  padding: 4px; cursor: pointer;
-  display: flex; justify-content: center;
+#chest-panel h2, #bench-panel h2, #kiln-panel h2 { color: #e8eaed; font-size: 16px; margin-bottom: 14px; }
+#chest-panel .hint, #bench-panel .hint, #kiln-panel .hint { color: #7c8592; font-size: 12px; font-weight: normal; }
+#chest-panel h3, #bench-panel h3, #kiln-panel h3 {
+  color: #9aa3af; font-size: 12px; text-transform: uppercase;
+  letter-spacing: 1px; margin-bottom: 8px;
 }
-.mini-cell:hover { border-color: #7ee787; }
-.mini-cell canvas { width: 36px; height: 36px; image-rendering: pixelated; }
-.mini-cell .n {
-  position: absolute; right: 3px; bottom: 1px;
-  font-size: 11px; color: #fff; text-shadow: 1px 1px 0 rgba(0,0,0,0.9);
+
+#bench-ui {
+  position: fixed; inset: 0; z-index: 12;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(8, 10, 14, 0.72);
 }
-.mini-empty { color: #5a6270; font-size: 12px; grid-column: 1 / -1; text-align: center; padding: 14px 0; }
+#bench-panel {
+  background: #16191f; border: 1px solid #2a2f38; border-radius: 8px;
+  padding: 20px; max-height: 84vh; overflow-y: auto;
+}
+#bench-cols { display: grid; grid-template-columns: 280px auto; gap: 24px; }
+#bench-book { max-height: 60vh; overflow-y: auto; }
+
+/* ---- kiln UI ---- */
+
+#kiln-ui {
+  position: fixed; inset: 0; z-index: 12;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(8, 10, 14, 0.72);
+}
+#kiln-panel {
+  background: #16191f; border: 1px solid #2a2f38; border-radius: 8px;
+  padding: 20px; min-width: 520px; max-height: 84vh; overflow-y: auto;
+}
+#kiln-machine {
+  display: flex; align-items: center; gap: 20px;
+  margin-bottom: 18px; padding: 8px 4px;
+}
+#kiln-stack { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.slot-grid.one { grid-template-columns: 46px; margin-bottom: 0; }
+/* the fire between the input and fuel slots: cold slate, lit ember */
+#kiln-ember {
+  width: 14px; height: 14px;
+  border-radius: 50% 50% 3px 3px;
+  background: #3a3a44;
+  transition: background 0.3s, box-shadow 0.3s;
+}
+#kiln-ember.lit {
+  background: radial-gradient(circle at 50% 70%, #ffd27a 0%, #ff9a3c 55%, #c5501f 100%);
+  box-shadow: 0 0 12px 2px rgba(255, 150, 60, 0.55);
+}
+/* smelt-progress arrow: fills left-to-right over the 10s smelt */
+#kiln-arrow {
+  width: 120px; height: 10px;
+  border: 1px solid #2a2f38; border-radius: 5px;
+  background: rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+#kiln-progress {
+  height: 100%; width: 0;
+  background: linear-gradient(90deg, #c56a2b, #ffb45c);
+  transition: width 0.15s linear;
+}
+
+/* ---- the Peddler's trade window ---- */
+
+#trade-ui {
+  position: fixed; inset: 0; z-index: 12;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(8, 10, 14, 0.72);
+}
+#trade-panel {
+  background: #16191f; border: 1px solid #2a2f38; border-radius: 8px;
+  padding: 20px; min-width: 520px; max-height: 84vh; overflow-y: auto;
+}
+#trade-panel h2 { color: #e8eaed; font-size: 16px; margin-bottom: 14px; }
+#trade-panel .hint { color: #7c8592; font-size: 12px; font-weight: normal; }
+#trade-panel h3 {
+  color: #9aa3af; font-size: 12px; text-transform: uppercase;
+  letter-spacing: 1px; margin-bottom: 8px;
+}
+#trade-list { margin-bottom: 18px; }
+/* the peddler's rows barter in mustard, not craft-green */
+#trade-list .craft-row:hover { background: rgba(214, 176, 74, 0.08); }
+#trade-list .craft-row.uncraftable:hover { background: none; }
+
+/* ---- the Loomstone window (trade-window idiom, nacre accents) ---- */
+
+#loom-ui {
+  position: fixed; inset: 0; z-index: 11;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(8, 10, 14, 0.72);
+}
+#loom-panel {
+  background: #16191f; border: 1px solid #2a2f38; border-radius: 8px;
+  padding: 20px; min-width: 520px; max-height: 84vh; overflow-y: auto;
+}
+#loom-panel h2 { color: #e8eaed; font-size: 16px; margin-bottom: 14px; }
+#loom-panel .hint { color: #7c8592; font-size: 12px; font-weight: normal; }
+#loom-panel h3 {
+  color: #9aa3af; font-size: 12px; text-transform: uppercase;
+  letter-spacing: 1px; margin-bottom: 8px;
+}
+#loom-list { margin-bottom: 18px; }
+#loom-list .craft-row:hover { background: rgba(178, 168, 224, 0.1); }
+#loom-list .craft-row.uncraftable:hover { background: none; }
+#loom-list .thread-cost { color: #8f88b8; }
+
+/* ---- Notice Post write window ---- */
+
+#sign-ui {
+  position: fixed; inset: 0; z-index: 12;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(8, 10, 14, 0.72);
+}
+#sign-panel {
+  background: #16191f; border: 1px solid #2a2f38; border-radius: 8px;
+  padding: 20px; text-align: center;
+}
+#sign-panel h2 { color: #e8eaed; font-size: 16px; margin-bottom: 14px; }
+#sign-panel .hint { color: #7c8592; font-size: 12px; font-weight: normal; }
+/* the textarea reads as the board itself: planed pale wood, walnut ink */
+#sign-text {
+  display: block; margin: 0 auto;
+  width: 19ch; resize: none;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 18px; line-height: 1.5; letter-spacing: 1px;
+  padding: 12px 14px;
+  color: #3a2c1a; caret-color: #3a2c1a;
+  background: #d0b480;
+  border: 3px solid #b98f3e; border-radius: 4px;
+  outline: none;
+  text-align: center;
+  box-shadow: inset 0 2px 6px rgba(60, 40, 10, 0.35);
+}
+#sign-buttons { margin-top: 16px; display: flex; gap: 12px; justify-content: center; }
+#sign-done {
+  font: inherit; font-size: 13px;
+  padding: 7px 22px;
+  background: #3d8b40; color: #fff;
+  border: 1px solid #57bd5b; border-radius: 4px;
+  cursor: pointer;
+}
+#sign-done:hover { background: #4ca050; }
 
 #block-name {
   position: absolute; left: 50%; bottom: 76px;
@@ -167,6 +391,7 @@ body {
   position: absolute; inset: 0;
   background: rgba(24, 70, 145, 0.28);
 }
+#water-tint.lava { background: rgba(214, 78, 8, 0.42); }
 
 /* ---- overlays ---- */
 
@@ -212,12 +437,13 @@ body {
 #tp-status { margin-top: 10px; color: #9aa3af; font-size: 12px; min-height: 16px; }
 
 .row { margin-top: 26px; display: flex; gap: 16px; justify-content: center; align-items: center; }
-#sens-setting {
+#sens-setting, #music-setting {
   display: flex; align-items: center; gap: 8px;
   color: #b7c0cc; font-size: 12px;
 }
-#sens-setting input[type="range"] { width: 110px; accent-color: #7ee787; }
-#sens-val { min-width: 34px; color: #e8eaed; }
+#sens-setting input[type="range"],
+#music-setting input[type="range"] { width: 110px; accent-color: #7ee787; }
+#sens-val, #music-val { min-width: 34px; color: #e8eaed; }
 .secondary {
   font: inherit; font-size: 12px;
   padding: 7px 14px;
@@ -254,25 +480,45 @@ body {
   letter-spacing: 2px; margin-bottom: 10px;
 }
 
-#inv-ribbon { display: flex; gap: 4px; }
-.ribbon-slot {
+/* slot grids + the cursor stack (shared by every container window) */
+.slot-grid {
+  display: grid; grid-template-columns: repeat(9, 46px); gap: 4px;
+  align-content: start; margin-bottom: 12px;
+}
+.slot-grid.belt { margin-top: 2px; }
+.inv-slot {
   position: relative;
-  width: 44px; height: 44px;
-  border: 2px solid #2a2f38; border-radius: 4px;
-  cursor: pointer;
+  width: 46px; height: 46px;
+  border: 1px solid #2a2f38; border-radius: 4px;
   background: rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
 }
-.ribbon-slot canvas { width: 100%; height: 100%; image-rendering: pixelated; }
-.ribbon-slot .n {
-  position: absolute; right: 2px; bottom: 0;
-  font-size: 10px; color: #fff; text-shadow: 1px 1px 0 rgba(0,0,0,0.9);
+.inv-slot:hover { border-color: #7ee787; background: rgba(126, 231, 135, 0.08); }
+.inv-slot canvas { width: 40px; height: 40px; image-rendering: pixelated; pointer-events: none; }
+.inv-slot .n {
+  position: absolute; right: 3px; bottom: 1px;
+  font-size: 11px; color: #fff; text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.9);
+  pointer-events: none;
 }
-.ribbon-slot.armed { border-color: #7ee787; box-shadow: 0 0 8px rgba(126, 231, 135, 0.5); }
+#cursor-stack {
+  position: fixed; z-index: 40; pointer-events: none;
+  width: 40px; height: 40px;
+}
+#cursor-stack canvas { width: 40px; height: 40px; image-rendering: pixelated; }
+#cursor-stack .n {
+  position: absolute; right: 0; bottom: -2px;
+  font-size: 11px; color: #fff; text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.9);
+}
+#field-recipes:not(:empty) { border-top: 1px solid #2a2f38; padding-top: 10px; }
 
-#inv-cols { display: grid; grid-template-columns: 240px 1fr 260px; gap: 20px; }
+#inv-cols { display: grid; grid-template-columns: 240px 1fr; gap: 20px; }
 #inv-you { display: flex; flex-direction: column; }
+/* the viewer and the wear column share the "You" panel side by side */
+#you-row { display: flex; gap: 8px; align-items: flex-start; }
+.slot-grid.wear { grid-template-columns: 46px; margin-bottom: 0; }
 #player-view {
-  width: 220px; height: 300px;
+  width: 166px; height: 300px;
   border: 1px solid #2a2f38; border-radius: 6px;
   background: radial-gradient(ellipse at 50% 30%, #1e2530 0%, #12151b 75%);
   cursor: grab; touch-action: none;

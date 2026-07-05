@@ -15,6 +15,14 @@ export class PlayerViewer {
     this.spinVel = 0;
     this._dragging = false;
     this._lastX = 0;
+    this._armor = null; // remembered until the lazy model exists
+  }
+
+  // dress the viewer model (same state shape as PlayerModel.setArmor); the
+  // model is created lazily on first open, so remember the state until then
+  setArmor(state) {
+    this._armor = state;
+    if (this.model) this.model.setArmor(state || {});
   }
 
   _init() {
@@ -34,6 +42,7 @@ export class PlayerViewer {
     // deliberately fully lit — this is a UI element, not part of the world
     this.model = new PlayerModel(this.seed, { unlit: true });
     this.model.setPose("display");
+    if (this._armor) this.model.setArmor(this._armor);
     this.scene.add(this.model.group);
 
     this.canvas.addEventListener("pointerdown", (e) => {

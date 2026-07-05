@@ -3,25 +3,62 @@
 
 import * as THREE from "three";
 import { buildAtlas, buildWaterTexture, buildCrackTextures } from "./textures.js";
-import { BLOCKS, AIR } from "./blocks.js";
+import { BLOCKS, AIR, WEAR_KINDS, armorProtection } from "./blocks.js";
 import { World, CHUNK, HEIGHT } from "./world.js";
-import { Inventory } from "./inventory.js";
+import { Inventory, makeStack, stackToSave } from "./inventory.js";
 import { ItemDrops } from "./entities.js";
+import { PrimedKegs } from "./explosives.js";
+import { Projectiles } from "./projectiles.js";
+import { Fireworks } from "./fireworks.js";
 import { Mobs } from "./mobs.js";
+import { MeteorShowers } from "./meteors.js";
+import { Prowl } from "./prowl.js";
+import { Boats } from "./boats.js";
+import { Carts } from "./carts.js";
+import { reshapeRails, railShape } from "./rails.js";
+import { Fishing } from "./fishing.js";
+import { SignBoards } from "./signs.js";
 import { craft } from "./craft.js";
-import { PlayerModel, buildHeldFoot, setHeldSkinLight } from "./player-model.js";
+import { dailyOffers, executeTrade } from "./trade.js";
+import { makeKiln, tickKilns } from "./kiln.js";
+import { Gleam } from "./gleam.js";
+import {
+  THREADS, threadsFor, weaveBlocker, weave, threadName, wearSkips,
+  WEAVES, weaveItem, weaveItemBlocker,
+} from "./loom.js";
+import {
+  PlayerModel, buildHeldFoot, buildHeldTool, buildHeldCompass, buildHeldClock,
+  setHeldSkinLight,
+} from "./player-model.js";
+import { Wayfinder, bearingYaw, normAngle } from "./wayfinding.js";
 import { PlayerViewer } from "./player-viewer.js";
-import { SAPLING, LOG, LEAVES, LEAVES_COLD, WATER as WATER_ID, dropFor } from "./blocks.js";
+import {
+  SAPLING, LOG, LEAVES, LEAVES_COLD, BED, WATER as WATER_ID, LAVA as LAVA_ID,
+  dropFor, cropStagesFor, isCrop, SEED_TO_SPROUT, SLING_STONE, BOAT,
+  FISHING_POLE, isSign, COMPASS, CLOCK, SNOW_LAYER, CART, BERRIES,
+  KILN as KILN_ID, WORKBENCH as WORKBENCH_ID,
+  IRON_INGOT as IRON_INGOT_ID, GLOAM_INGOT as GLOAM_INGOT_ID,
+  STARGLASS as STARGLASS_ID, QUILL as QUILL_ID,
+  MURK_LANTERN as MURK_LANTERN_ID, LOOMSTONE as LOOMSTONE_ID,
+} from "./blocks.js";
 import { makeGenerator, findSpawn, findBiomeLocation } from "./terrain.js";
+import { findNearestRuin, ruinForChunk } from "./ruins.js";
+import { findNearestDelve, delveForChunk } from "./delvings.js";
+import {
+  Steads, findNearestStead, steadForChunk, steadOffers, isWarmed, recordTrade,
+} from "./steads.js";
 import {
   buildMaterials, meshChunk, disposeChunkMeshes, setDayLight, buildBlockGeometry,
+  sampleBlockLight,
 } from "./mesher.js";
 import { raycast } from "./interact.js";
 import { Player } from "./player.js";
 import { Interaction } from "./interact.js";
 import { Hud } from "./hud.js";
 import { Sky } from "./sky.js";
+import { Rain } from "./rain.js";
 import { Sfx } from "./audio.js";
+import { Music } from "./music.js";
 import { loadSave, writeSave, clearSave, startAutosave } from "./save.js";
 
 const MESH_RADIUS = 5;
@@ -89,20 +126,162 @@ if (save && Number.isFinite(save.health)) {
 if (save && Number.isFinite(save.air)) {
   player.air = Math.min(player.maxAir, Math.max(0, save.air));
 }
+// hunger is an additive v2 field: saves from before it default to well-fed
+if (save && Number.isFinite(save.hunger)) {
+  player.hunger = Math.min(20, Math.max(0, save.hunger));
+}
+// the Moss Cot respawn anchor (additive field): validated like the player pos;
+// whether the cot still stands is checked at respawn time, not here
+if (save && validPos(save.spawnPoint)) {
+  player.spawnPoint = {
+    x: save.spawnPoint.x, y: save.spawnPoint.y, z: save.spawnPoint.z,
+  };
+}
 
 const inventory = new Inventory();
-if (save && save.inventory) inventory.load(save.inventory);
+// stacks that couldn't fit in the satchel (v1 migration overflow, a restored
+// cursor stack with no room). Persisted in every save and drained back into
+// the inventory as room appears — never spilled as unsaved ground drops.
+let pendingOverflow = [];
+const validSaveStack = (e) => Array.isArray(e) &&
+  Number.isInteger(e[0]) && e[0] !== AIR && !!BLOCKS[e[0]] &&
+  Number.isInteger(e[1]) && e[1] > 0;
+if (save) {
+  if (save.v === 2) {
+    inventory.load(save.inventory);
+    // additive field: pending overflow stacks from an earlier session
+    if (Array.isArray(save.overflowStacks)) {
+      for (const e of save.overflowStacks) {
+        // e[2]/e[3]: additive tool wear + thread (validated entering a slot)
+        if (validSaveStack(e)) {
+          pendingOverflow.push({ id: e[0], count: e[1], dur: e[2], mod: e[3] });
+        }
+      }
+    }
+    // additive field: the stack that was held on the drag cursor when the
+    // save was written — return it to the satchel, or queue it if full
+    if (validSaveStack(save.cursor)) {
+      const count = Math.min(64, save.cursor[1]);
+      const left = inventory.add(save.cursor[0], count, save.cursor[2], save.cursor[3]);
+      if (left > 0) {
+        pendingOverflow.push({
+          id: save.cursor[0], count: left, dur: save.cursor[2], mod: save.cursor[3],
+        });
+      }
+    }
+  } else {
+    // v1 save: pool counts + a 9-id hotbar -> 64-stacks in slots, layout kept
+    const migrated = Inventory.migrateV1(
+      save.inventory, save.hotbar,
+      save.gameMode === "survival" ? "survival" : "creative");
+    inventory.slots = migrated.inv.slots;
+    pendingOverflow = migrated.overflow;
+  }
+}
+// the 4 wear slots (crown/jerkin/leggings/treads — WEAR_KINDS order): stacks
+// or null, shared by reference with the Satchel window (hud) and the player
+// (protection + wear). Additive save field; older saves load in bare. Death
+// does NOT clear them — armor keeps protecting after a respawn.
+const wearSlots = [null, null, null, null];
+if (save && Array.isArray(save.wear)) {
+  for (let i = 0; i < WEAR_KINDS.length; i++) {
+    const e = save.wear[i];
+    if (!validSaveStack(e)) continue;
+    const a = BLOCKS[e[0]].armor;
+    if (!a || a.kind !== WEAR_KINDS[i]) continue; // only the matching kind
+    wearSlots[i] = makeStack(e[0], 1, e[2], e[3]);
+  }
+}
+player.wear = wearSlots;
+
 const drops = new ItemDrops(scene, materials);
+
+// Gleam: the light that clings to work (gleam.js). Earned by mining ores,
+// felling beasts, the kiln's heat, and finishing gear at the bench; spent
+// (eventually) at the Loomstone. Additive save field; death keeps it.
+const gleam = new Gleam();
+if (save && save.gleam) gleam.load(save.gleam);
+
+// the Whims in progress (additive field): validated per entry — the ids
+// must be known and the clocks sane. onEffectStart isn't wired yet, so a
+// loaded whim resumes quietly (no re-announce), which reads right.
+if (save && Array.isArray(save.effects) && player.mode === "survival") {
+  for (const e of save.effects) {
+    if (!Array.isArray(e)) continue;
+    const [id, t] = e;
+    if (typeof id === "string" && Number.isFinite(t) && t > 0) {
+      player.addEffect(id, Math.min(600, t));
+    }
+  }
+}
+function awardGleam(n) {
+  if (player.mode !== "survival" || n <= 0) return;
+  gleam.add(n);
+  sfx.gleam();
+}
+
+// retry pendingOverflow against the satchel; called on a slow timer from the
+// game loop, so freed slots gradually recover everything that once overflowed
+function drainOverflow() {
+  if (pendingOverflow.length === 0) return;
+  let changed = false;
+  pendingOverflow = pendingOverflow.filter((stack) => {
+    const left = inventory.add(stack.id, stack.count, stack.dur, stack.mod);
+    if (left !== stack.count) changed = true;
+    stack.count = left;
+    return left > 0;
+  });
+  if (changed) {
+    hud.refreshHotbarRow();
+    if (hud.anyWindowOpen()) hud.slotUI.renderAll();
+  }
+}
 const mobs = new Mobs(scene);
+// the Reed Skiffs afloat (and beached) in this world — created before the
+// Interaction so its boarding/launch routing can hold the instance directly
+const boats = new Boats(scene, {
+  onDrop: (x, y, z, id) => drops.spawn(x, y, z, id),
+  onHit: () => sfx.block("hit", BOAT),
+  onBreak: () => sfx.block("break", BOAT),
+});
+// the Trundles rolling (and parked) on this world's waybars — same lifecycle
+// as the skiffs
+const carts = new Carts(scene, {
+  onDrop: (x, y, z, id) => drops.spawn(x, y, z, id),
+  onHit: () => sfx.block("hit", CART),
+  onBreak: () => sfx.block("break", CART),
+});
 if (save && save.chests) world.loadChests(save.chests);
+if (save && save.kilns) world.loadKilns(save.kilns); // additive v2 field
+if (save && Array.isArray(save.boats)) boats.load(save.boats); // additive v2 field
+if (save && Array.isArray(save.carts)) carts.load(save.carts); // additive v2 field
+// additive v2 field: the bonded companions (bondlings) — species, pos, hp,
+// sitting, scarf seed. Older saves simply have no scarves tied anywhere.
+if (save && Array.isArray(save.bondlings)) mobs.loadBondlings(save.bondlings);
+// additive field: tamed Tuftlings — the other creatures that persist
+if (save && Array.isArray(save.pets)) mobs.loadPets(save.pets);
+if (save && save.signs) world.loadSigns(save.signs); // additive v2 field
+// additive v2 field: ruin chunks whose loot was already dealt — must load
+// before any chunk generates, or a looted stead would re-seed its chest
+if (save && save.ruins) world.loadRuins(save.ruins);
+// same contract for the Delvings-Under's stores
+if (save && save.delves) world.loadDelves(save.delves);
+// Living Stead resident records (dead/warmth/hurt) — like the ruin markers,
+// must load before any chunk generates so a stead never re-seeds its residents
+if (save && save.steads) world.loadSteads(save.steads);
+// the Notice Posts' text boards — synced against world.signs every frame
+const signBoards = new SignBoards(scene, world);
 
 // --- saplings: planted ones grow into real (edit-persisted) trees ----------
 
 let worldSeconds = 0;
-const saplings = new Map(); // "x,y,z" -> worldSeconds when it grows
+// the saplings' own clock: it runs alongside worldSeconds but up to 2x while
+// raining (a watered sapling halves its remaining wait, LORE-appropriately)
+let growthSeconds = 0;
+const saplings = new Map(); // "x,y,z" -> growthSeconds when it grows
 
 function registerSapling(x, y, z, delay = 30 + Math.random() * 30) {
-  saplings.set(`${x},${y},${z}`, worldSeconds + delay);
+  saplings.set(`${x},${y},${z}`, growthSeconds + delay);
 }
 
 function growTree(x, y, z) {
@@ -144,33 +323,65 @@ function growTree(x, y, z) {
     }
     for (const c of world.setBlock(x, y + dy, z, LOG)) affected.add(c);
   }
+  // no anchor: the edit spans the whole canopy (trunk 4-6 + crown), so a
+  // single base cell under-measures emitter distance — a torch lit from a
+  // ledge near the NEW leaves but 17+ blocks from the trunk base would skip
+  // the wide remesh and strand stale light in the neighbor chunk. Trees
+  // grow rarely; take the conservative wide check.
   lightAwareRemesh([...affected], lightTouched);
 }
 
+// does any emitter in the 3x3 ring around this chunk sit within block-light
+// reach of the edited cell? Without a location, any emitter counts (the old,
+// conservative answer). The distance check matters now that the Emberwash
+// seeds emitters through half the map's deep chunks — a surface edit forty
+// blocks above a pool must NOT pay the 9-chunk wide remesh.
+const LIGHT_REACH2 = 16 * 16; // BFS range 14, plus a block of margin
+function emitterNearEdit(cx, cz, at) {
+  for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+    const c = world.getChunk(cx + dx, cz + dz);
+    if (!c || c.emitters.size === 0) continue;
+    if (!at) return true;
+    for (const [idx] of c.emitters) {
+      // y first: a surface edit high above the Emberwash rejects every pool
+      // cell on one compare instead of full 3D distance math
+      const ly = (idx / 256) | 0;
+      const dy2 = (ly - at.y) * (ly - at.y);
+      if (dy2 >= LIGHT_REACH2) continue;
+      const lx = idx % 16, lz = ((idx / 16) | 0) % 16;
+      const ex = c.cx * 16 + lx, ez = c.cz * 16 + lz;
+      const d2 = (ex - at.x) ** 2 + dy2 + (ez - at.z) ** 2;
+      if (d2 < LIGHT_REACH2) return true;
+    }
+  }
+  return false;
+}
+
 // remesh after a world edit: widen to the full 3x3 ring when the edit adds/
-// removes an emitter or happens near one (occluders change the light BFS)
-function lightAwareRemesh(chunks, lightTouched) {
+// removes an emitter or happens near one (occluders change the light BFS).
+// Handles multi-chunk edit lists (explosions) with each chunk meshed once.
+// `at` ({x, y, z} of the edited cell) narrows the near-emitter test.
+function lightAwareRemesh(chunks, lightTouched, at = null) {
   if (chunks.length === 0) return;
-  const { cx, cz } = chunks[0];
-  if (!lightTouched) {
-    outer: for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
-      const c = world.getChunk(cx + dx, cz + dz);
-      if (c && c.emitters.size > 0) { lightTouched = true; break outer; }
+  const toMesh = new Set();
+  for (const chunk of chunks) {
+    const { cx, cz } = chunk;
+    const wide = lightTouched || emitterNearEdit(cx, cz, at);
+    if (wide) {
+      for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+        const c = world.getChunk(cx + dx, cz + dz);
+        if (c) toMesh.add(c);
+      }
+    } else {
+      toMesh.add(chunk);
     }
   }
-  if (lightTouched) {
-    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
-      const c = world.getChunk(cx + dx, cz + dz);
-      if (c) remeshNow(c);
-    }
-  } else {
-    for (const c of chunks) remeshNow(c);
-  }
+  for (const c of toMesh) remeshNow(c);
 }
 
 function updateSaplings() {
   for (const [key, due] of saplings) {
-    if (worldSeconds < due) continue;
+    if (growthSeconds < due) continue;
     const [x, y, z] = key.split(",").map(Number);
     // the canopy spans 2 blocks into neighbor chunks: growing while any of
     // them is ungenerated would silently drop those leaves forever (setBlock
@@ -189,18 +400,154 @@ if (save && Array.isArray(save.saplings)) {
     }
   }
 }
+
+// --- meal-root crops: planted pips grow sprout -> greens -> ripe -------------
+// Same clock as the saplings (growthSeconds), so rain halves the wait for a
+// growing meal root too. The map holds only the stages still growing — a ripe
+// root just stands there, patiently, until harvested.
+
+const crops = new Map(); // "x,y,z" -> growthSeconds when the next stage lands
+// the sprout ids, precomputed: onEdit asks on every block edit
+const SPROUT_IDS = new Set(Object.values(SEED_TO_SPROUT));
+
+function registerCrop(x, y, z, delay = 45 + Math.random() * 30) {
+  crops.set(`${x},${y},${z}`, growthSeconds + delay);
+}
+
+function updateCrops() {
+  for (const [key, due] of crops) {
+    if (growthSeconds < due) continue;
+    const [x, y, z] = key.split(",").map(Number);
+    // a crop in an ungenerated chunk waits (setBlock refuses those cells)
+    if (!world.isGenerated(x >> 4, z >> 4)) continue;
+    crops.delete(key);
+    // the world block is the truth about the stage — a stale entry (the crop
+    // was broken/overwritten while the timer ran) simply falls out here.
+    // cropStagesFor picks the right ladder (meal root, bogbean, whatever
+    // grows next), so one clock serves every crop.
+    const id = world.getBlock(x, y, z);
+    const stages = cropStagesFor(id);
+    if (!stages) continue;
+    const stage = stages.indexOf(id);
+    if (stage === stages.length - 1) continue;
+    const next = stages[stage + 1];
+    lightAwareRemesh(world.setBlock(x, y, z, next), false, { x, y, z });
+    if (stage + 2 < stages.length) registerCrop(x, y, z);
+  }
+}
+// additive v2 field: [[x,y,z,stage,remain]...] — stage is written for
+// forward-compat/validation, but the persisted world edit is what proves it
+if (save && Array.isArray(save.crops)) {
+  for (const c of save.crops) {
+    if (!Array.isArray(c) || c.length !== 5) continue;
+    const [x, y, z, stage, remain] = c;
+    if ([x, y, z, stage].every(Number.isInteger) && Number.isFinite(remain)) {
+      registerCrop(x, y, z, Math.max(1, Math.min(90, remain)));
+    }
+  }
+}
 if (save && save.edits) world.loadEdits(save.edits);
+
+// --- the Rimelands' snowfall: drifts settle while it snows -------------------
+// When the weather machine rains over the cold biome, the shower falls as
+// snow (rainFx mode) and fresh Snowdrifts settle nearby: bounded (at most one
+// per interval, a handful of probes), sky-lit full-block tops in the snow
+// biome only, and never on a player-edited cell. Placed through setBlock, so
+// settled snow persists in the edit overlay like anything player-made.
+const SNOW_SETTLE_INTERVAL = 1.5;
+let nextSnowSettle = 0;
+
+function settleSnow() {
+  for (let tries = 0; tries < 6; tries++) {
+    const a = Math.random() * Math.PI * 2;
+    const r = 3 + Math.random() * 9;
+    const bx = Math.floor(player.pos.x + Math.cos(a) * r);
+    const bz = Math.floor(player.pos.z + Math.sin(a) * r);
+    if (!world.isGenerated(bx >> 4, bz >> 4)) continue;
+    if (terrain.biomeAt(bx, bz, terrain.heightAt(bx, bz)) !== "snow") continue;
+    // the column's sky-lit top: the first non-air cell under the world
+    // ceiling — inside a structure this finds the ROOF, and the drift lands
+    // on top of it, never in the room below
+    let y = HEIGHT - 2;
+    while (y > 0 && world.getBlock(bx, y, bz) === AIR) y--;
+    if (y <= 0 || y + 1 >= HEIGHT) continue;
+    const support = BLOCKS[world.getBlock(bx, y, bz)];
+    // flat full-block tops only (turf, stone, canopy, river glass) — never
+    // slabs/fences/signs, never a drift on a drift, never open water
+    if (!support.solid || support.shape || support.colHeight !== 1) continue;
+    // never rework a player-edited cell (or bury something player-placed)
+    if (world.hasEdit(bx, y, bz) || world.hasEdit(bx, y + 1, bz)) continue;
+    lightAwareRemesh(world.setBlock(bx, y + 1, bz, SNOW_LAYER), false,
+      { x: bx, y: y + 1, z: bz });
+    return;
+  }
+}
 
 const sky = new Sky(scene, seed);
 if (save && Number.isFinite(save.time)) sky.time = ((save.time % 1) + 1) % 1;
+// additive v2 field: whole days lived (the Peddler's offer rotation) — older
+// saves restart the calendar, which only re-deals the offer board
+if (save && Number.isInteger(save.day) && save.day >= 0) sky.day = save.day;
+// additive v2 field: [phase, secondsLeftInPhase, intensity] — validated, so a
+// hand-edited save can't wedge the weather machine
+if (save && Array.isArray(save.weather)) {
+  const [phase, timer, rain] = save.weather;
+  if ((phase === "clear" || phase === "rainy") && Number.isFinite(timer)) {
+    sky.weatherPhase = phase;
+    sky.weatherTimer = Math.max(1, Math.min(900, timer));
+    if (Number.isFinite(rain)) sky.rain = Math.max(0, Math.min(1, rain));
+  }
+}
+const rainFx = new Rain(scene, world);
 
 const sfx = new Sfx();
 player.onStep = (blockId) => { if (blockId !== AIR) sfx.step(blockId); };
 
+// the Murmur: generative ambient music on the Sfx's AudioContext (shared so
+// one gesture unlocks both). start() is only reached from requestLock — a
+// user-gesture path — per the browser autoplay policy.
+const music = new Music(seed, {
+  getContext: () => (sfx._ensure() ? sfx.ctx : null),
+});
+// additive v2 field: [on, volume] — absent in older saves, which simply get
+// the defaults (on, modest volume)
+if (save && Array.isArray(save.music)) {
+  const [on, vol] = save.music;
+  music.enabled = on !== 0 && on !== false;
+  if (Number.isFinite(vol)) music.volume = Math.max(0, Math.min(1, vol));
+}
+
 function teleportTo(kind) {
-  const dest = kind === "spawn"
-    ? spawnPoint
-    : findBiomeLocation(terrain, kind, player.pos.x, player.pos.z);
+  let dest;
+  if (kind === "spawn") {
+    dest = spawnPoint;
+  } else if (kind === "ruin") {
+    // predicted from the placement hash (no generation needed); land just
+    // south of the stead, facing its doorway side
+    const ruin = findNearestRuin(terrain, player.pos.x, player.pos.z);
+    if (!ruin) return { ok: false, message: "No stead found within 1000 blocks of here." };
+    dest = {
+      x: ruin.x + 0.5,
+      y: terrain.heightAt(ruin.x, ruin.z + 5) + 2.5,
+      z: ruin.z + 5.5,
+    };
+  } else if (kind === "delve") {
+    // land beside the head-frame; the rungs take it from there
+    const delve = findNearestDelve(terrain, player.pos.x, player.pos.z);
+    if (!delve) return { ok: false, message: "No delving found within 1000 blocks of here." };
+    dest = {
+      x: delve.x + 0.5,
+      y: terrain.heightAt(delve.x, delve.z + 2) + 2.5,
+      z: delve.z + 2.5,
+    };
+  } else if (kind === "stead") {
+    // land in the courtyard by the well, facing the homestead
+    const stead = findNearestStead(terrain, player.pos.x, player.pos.z);
+    if (!stead) return { ok: false, message: "No stead found within 1000 blocks of here." };
+    dest = { x: stead.x + 0.5, y: stead.h + 2.5, z: stead.z + 4.5 };
+  } else {
+    dest = findBiomeLocation(terrain, kind, player.pos.x, player.pos.z);
+  }
   if (!dest) return { ok: false, message: `No ${kind} found within 3000 blocks of here.` };
   Object.assign(player.pos, dest);
   player.vel.x = player.vel.y = player.vel.z = 0;
@@ -208,16 +555,33 @@ function teleportTo(kind) {
   return { ok: true, message: `→ ${kind} at ${Math.round(dest.x)}, ${Math.round(dest.z)} — click to play.` };
 }
 
+// where death sends you back: the slept-in Moss Cot while it still stands,
+// otherwise the world spawn. The cot may sit in an unloaded chunk, so
+// ensureChunk first — generation re-applies the edit overlay, letting
+// getBlock actually see (or miss) the bed.
+function resolveRespawn() {
+  const sp = player.spawnPoint;
+  if (sp) {
+    const bx = Math.floor(sp.x), by = Math.round(sp.y) - 1, bz = Math.floor(sp.z);
+    world.ensureChunk(bx >> 4, bz >> 4);
+    if (world.getBlock(bx, by, bz) === BED) return sp;
+    player.spawnPoint = null; // the cot is gone — the Upturn forgets the nap
+  }
+  return spawnPoint;
+}
+
 // respawn/void landings must respect player edits: if the spawn column was
-// built over (or dug out), climb to the first clear spot above it
+// built over (or dug out), climb to the first clear spot above it — and
+// "clear" excludes the Emberwash: nobody lands IN the melt
 function adjustToClearGround(pos) {
   const bx = Math.floor(pos.x), bz = Math.floor(pos.z);
   if (!world.isGenerated(bx >> 4, bz >> 4)) return;
+  const blocked = (y) => {
+    const id = world.getBlock(bx, y, bz);
+    return BLOCKS[id].solid || id === LAVA_ID;
+  };
   let y = Math.max(1, Math.floor(pos.y));
-  while (y < HEIGHT - 2 &&
-    (BLOCKS[world.getBlock(bx, y, bz)].solid || BLOCKS[world.getBlock(bx, y + 1, bz)].solid)) {
-    y++;
-  }
+  while (y < HEIGHT - 2 && (blocked(y) || blocked(y + 1))) y++;
   pos.y = Math.max(pos.y, y + 0.05);
 }
 
@@ -230,39 +594,181 @@ const hud = new Hud(atlas.canvas, {
     return player.moveMode;
   },
   onSensitivity: (v) => { player.sensitivity = v; },
+  onMusicVolume: (v) => music.setVolume(v),
+  onMusicToggle: () => { music.setEnabled(!music.enabled); return music.enabled; },
   onToggleMode: () => {
+    hud.closeAllWindows(); // defensively spill/close before switching rules
     player.mode = player.mode === "survival" ? "creative" : "survival";
+    player.clearEffects(); // the Whims are survival's; a mode switch shrugs them off
     if (player.mode === "survival") {
       player.flying = false;
       player.resetFall(); // creative altitude must not become a survival fall
     }
+    hud.refreshHotbarRow();
     return player.mode;
   },
   onRespawn: () => {
-    player.respawn(spawnPoint);
+    player.respawn(resolveRespawn());
     adjustToClearGround(player.pos);
     player.resetFall();
     hud.hideDeath();
     requestLock();
   },
-  onCraft: (recipe) => { if (craft(recipe, inventory)) sfx.craft(); },
+  onCraft: (recipe, max = false) => {
+    let crafted = false;
+    do {
+      const leftover = craft(recipe, inventory); // -1 = missing inputs
+      if (leftover < 0) break;
+      crafted = true;
+      if (leftover > 0) spillStack({ id: recipe.out[0], count: leftover });
+    } while (max);
+    if (crafted) {
+      sfx.craft();
+      // gleam clings to finished GEAR (tools, armor, stations) — never to
+      // brick-spam, so bulk crafting can't farm it
+      const outDef = BLOCKS[recipe.out[0]];
+      if (outDef.tool || outDef.armor ||
+          recipe.out[0] === KILN_ID || recipe.out[0] === WORKBENCH_ID ||
+          recipe.out[0] === LOOMSTONE_ID) {
+        awardGleam(1);
+      }
+    }
+  },
+  onSpillCursor: (stack) => spillStack(stack),
+  onSlotsChanged: () => {
+    sfx.click(); drainOverflow(); refreshArmor();
+    if (hud.loomOpen) hud._renderLoomList();
+  },
   inventory,
+  wearSlots,
   playerViewer: new PlayerViewer(document.getElementById("player-view"), 1337),
 });
 hud.setMovementLabel(player.moveMode);
 hud.setSensitivity(player.sensitivity);
+hud.setMusic(music.volume, music.enabled);
 hud.setMode(player.mode);
+if (save && Number.isInteger(save.selected) && save.selected >= 0 && save.selected < 9) {
+  hud.select(save.selected);
+}
+
+// the wayfinding kit's HUD half: the Homeward Needle + Sky Dial widgets and
+// the Field Chart window. The needle leans toward the slept-in Moss Cot when
+// one is anchored, else the world spawn.
+const wayfinder = new Wayfinder(atlas.avgColor, () => player.spawnPoint || spawnPoint);
+if (save && save.chart) wayfinder.loadChart(save.chart); // additive v2 field
+
+// toss a stack out in front of the player (cursor spills, craft overflow)
+function spillStack(stack) {
+  const dir = player.lookDir();
+  drops.spawn(
+    player.pos.x + dir.x * 0.6, player.eyeY - 0.2, player.pos.z + dir.z * 0.6,
+    stack.id, stack.count,
+    { vel: { x: dir.x * 4, y: 2, z: dir.z * 4 }, pickupDelay: 1.2,
+      dur: stack.dur, mod: stack.mod });
+}
 
 player.onDamage = () => { hud.flashDamage(); sfx.hurt(); };
+// a whim newly taking hold gets a one-line field note
+const EFFECT_NOTES = {
+  fleetfoot: "The Sunwisp lightness takes to your feet.",
+  emberglow: "A warm ember settles behind your ribs.",
+  mirerot: "The mire-rot takes hold.",
+  kelpguard: "Cool kelp-salve steadies your skin.",
+  dimmed: "The dark leans on you.",
+};
+player.onEffectStart = (id) => {
+  if (EFFECT_NOTES[id]) hud.announce(EFFECT_NOTES[id], 2600);
+};
+// the Whims are survival's — a mode switch shrugs them off
+// (wired into onToggleMode below via hud opts)
 player.onDeath = (cause) => {
   hud.showDeath(cause);
   if (document.pointerLockElement) document.exitPointerLock();
 };
-const validSlot = (id) => Number.isInteger(id) && id !== AIR && !!BLOCKS[id];
-if (save && Array.isArray(save.hotbar) && save.hotbar.length === 9 && save.hotbar.every(validSlot)) {
-  hud.slots = save.hotbar;
-  hud.select(0);
-  hud.refreshCounts(); // badges must track the LOADED slots, not the defaults
+// worn armor: every absorbed hit ticks dur down across the set (player.js);
+// keep the pips, dur bars, and model overlays honest, and let a shattered
+// piece announce itself the way a spent tool does
+player.onArmorWear = () => {
+  refreshArmor();
+  if (hud.pickerOpen) hud.slotUI.renderAll();
+};
+player.onArmorBreak = (id) => {
+  sfx.stoneCrack();
+  hud.announce(`The ${BLOCKS[id].name} falls to pieces.`, 2200);
+};
+// the Wanderwing's dur is spent by glide seconds (player.js): keep the dur bar
+// honest as it ticks, and announce + fold when it frays out of the sky
+player.onGlideWear = () => {
+  refreshArmor();
+  if (hud.pickerOpen) hud.slotUI.renderAll();
+};
+player.onGlideFray = (id) => {
+  sfx.stoneCrack();
+  hud.announce(`The ${BLOCKS[id].name} frays — the wind lets you go.`, 2600);
+  refreshArmor();
+  if (hud.pickerOpen) hud.slotUI.renderAll();
+};
+
+// --- the Moss Cot: sleep through the night, wake anchored to the bed --------
+
+const NIGHT_LIGHT = 0.35; // below this, the cot accepts guests
+const DAWN_TIME = 0.02;   // sky.time just after the light starts rising
+let sleeping = false;
+const sleepFadeEl = document.getElementById("sleep-fade");
+
+function sleepInCot(x, y, z) {
+  if (sleeping || player.dead) return;
+  if (sky.lightLevel >= NIGHT_LIGHT) {
+    hud.announce("The cot disapproves of daytime napping.", 2600);
+    return;
+  }
+  sleeping = true;
+  // the cot remembers you from the first tuck-in, even if you die mid-fade
+  player.spawnPoint = { x: x + 0.5, y: y + 1, z: z + 0.5 };
+  sleepFadeEl.style.opacity = "1";
+  setTimeout(() => {
+    sky.time = DAWN_TIME; // no healing — just the morning
+    sky.day++; // the nap always jumps the calendar past midnight
+    sleepFadeEl.style.opacity = "0";
+    hud.announce("You wake, well-tucked.", 2600);
+    setTimeout(() => { sleeping = false; }, 1000); // let the fade-in finish
+  }, 1050);
+}
+
+// the Dib-Pole's dib-float: one at a time, never persisted (see fishing.js
+// for the documented no-save contract — reeling in is free, so a reload
+// simply forgets an in-flight cast)
+const fishing = new Fishing(scene, {
+  onSpawnDrop: (x, y, z, id, qty, vel) =>
+    drops.spawn(x, y, z, id, qty, { vel, pickupDelay: 0 }),
+  onSound: (kind) => {
+    if (kind === "cast") sfx.whip();
+    else if (kind === "plip") sfx.plip();
+    else sfx.splash();
+  },
+  onCue: (text) => hud.announce(text, 1500),
+  poleSelected: () => hud.selectedId() === FISHING_POLE,
+});
+
+// a steadfolk's trade window: the day's three offers from its JOB table,
+// discounting the third once the resident has warmed to two trades today.
+// Re-deals the board live the moment warmth flips on, so the discount shows.
+function openSteadTrade(m) {
+  const day = sky.day;
+  const rec = m.record;
+  const open = () => {
+    const warmed = isWarmed(rec, day);
+    const offers = steadOffers(m.steadSeed, m.resIdx, m.job, day, warmed);
+    hud.openTrade(offers, (offer) => {
+      const leftover = executeTrade(offer, inventory); // -1 = can't pay
+      if (leftover < 0) return false;
+      if (leftover > 0) spillStack({ id: offer.get[0], count: leftover });
+      sfx.peddlerHm();
+      if (rec && recordTrade(rec, day)) open(); // warmth just flipped: re-deal
+      return true;
+    });
+  };
+  open();
 }
 
 const interaction = new Interaction(world, player, scene, hud, {
@@ -270,51 +776,493 @@ const interaction = new Interaction(world, player, scene, hud, {
     if (chunks.length === 0) return;
     const lightTouched = !!(info && info.ids &&
       info.ids.some((id) => id != null && BLOCKS[id].lightEmit > 0));
-    lightAwareRemesh(chunks, lightTouched);
+    // the waybar web reshapes around ANY edit (a placed canonical rail takes
+    // its true shape; neighbors follow a laid, broken, or popped rail) —
+    // cheap when no rails are near, and the extra chunks remesh in one pass
+    let all = chunks;
+    if (info) {
+      const railChunks = reshapeRails(world, info.x, info.y, info.z);
+      if (railChunks.length > 0) all = [...new Set([...chunks, ...railChunks])];
+    }
+    lightAwareRemesh(all, lightTouched, info);
     // sapling lifecycle
     if (info) {
       if (info.placed === SAPLING) registerSapling(info.x, info.y, info.z);
       if (info.broken === SAPLING) saplings.delete(`${info.x},${info.y},${info.z}`);
       if (info.popped === SAPLING) saplings.delete(`${info.x},${info.y + 1},${info.z}`);
+      // crop lifecycle: planting a seed writes its sprout; breaking or
+      // popping (soil dug out underneath) any growing stage cancels its timer
+      if (SPROUT_IDS.has(info.placed)) registerCrop(info.x, info.y, info.z);
+      if (isCrop(info.broken)) crops.delete(`${info.x},${info.y},${info.z}`);
+      if (isCrop(info.popped)) crops.delete(`${info.x},${info.y + 1},${info.z}`);
+      // breaking a Notice Post takes its writing with it (the board mesh
+      // follows on the next signBoards.sync)
+      if (isSign(info.broken)) world.signs.delete(`${info.x},${info.y},${info.z}`);
+      // breaking the slept-in Moss Cot unhooks the respawn anchor
+      const sp = player.spawnPoint;
+      if (info.broken === BED && sp &&
+          info.x === Math.floor(sp.x) && info.y === Math.round(sp.y) - 1 &&
+          info.z === Math.floor(sp.z)) {
+        player.spawnPoint = null;
+      }
     }
   },
   onSound: (kind, id) => sfx.block(kind, id),
-  onPick: (id) => hud.setSlot(id),
+  onHint: (text) => hud.announce(text, 2600),
+  onGleam: (n) => awardGleam(n),
+  onEat: (kind) => sfx.eat(kind),
+  onDoor: (opened) => sfx.door(opened),
+  onPick: (id) => hud.pickBlock(id),
   onSwing: () => { swingT = 0; playerModel.swing(); },
+  // placement consumes from the SELECTED HOTBAR SLOT only
   canConsume: (id) => {
-    const ok = inventory.take(id);
-    if (ok) hud.refreshCounts();
+    const s = inventory.get(hud.selected);
+    if (!s || s.id !== id) return false;
+    const ok = inventory.takeFromSlot(hud.selected, 1);
+    if (ok) hud.refreshHotbarRow();
     return ok;
   },
   onSpawnDrop: (x, y, z, id) => drops.spawn(x, y, z, id),
+  // one use off the held tool (a broken block, a landed hit). At 0 the tool
+  // shatters: crack sound, a chip burst at the hands, and the slot empties.
+  onToolUse: () => {
+    if (player.mode !== "survival") return;
+    const s = inventory.get(hud.selected);
+    const def = s && BLOCKS[s.id];
+    if (!def || !def.tool) return;
+    // a Knotwood Thread woven through the haft: wear lands half as often
+    if (wearSkips(s)) return;
+    const left = (Number.isInteger(s.dur) ? s.dur : def.tool.maxDur) - 1;
+    if (left <= 0) {
+      inventory.set(hud.selected, null);
+      sfx.stoneCrack();
+      const dir = player.lookDir();
+      interaction.particles.burst(
+        player.pos.x + dir.x * 0.8 - 0.5, player.eyeY - 0.9, player.pos.z + dir.z * 0.8 - 0.5,
+        atlas.avgColor[def.tiles.side] || [0.6, 0.6, 0.6], 18);
+      hud.announce(`The ${def.name} gives out.`, 2200);
+    } else {
+      s.dur = left;
+    }
+    hud.refreshHotbarRow();
+  },
   onOpenChest: (x, y, z) => {
     const key = `${x},${y},${z}`;
     let store = world.chests.get(key);
-    if (!store) { store = new Map(); world.chests.set(key, store); }
-    hud.openChest(store, () => sfx.click());
+    if (!store) { store = new Array(27).fill(null); world.chests.set(key, store); }
+    hud.openChest(store, () => {});
+  },
+  onOpenBench: () => hud.openBench(),
+  onSleep: (x, y, z) => sleepInCot(x, y, z),
+  // right-click a Notice Post: the write window, primed with what's already
+  // on the board. Commit stores the clamped text (empty = a wiped board);
+  // signBoards.sync repaints on the next frame.
+  onOpenSign: (x, y, z) => {
+    const key = `${x},${y},${z}`;
+    hud.openSign(world.signs.get(key) || "", (text) => {
+      if (text) world.signs.set(key, text);
+      else world.signs.delete(key);
+    });
+  },
+  // a sling stone leaves the eye along the look ray (`stones` is a later
+  // const, like `kegs` — these callbacks only fire at runtime)
+  canThrow: () => stones.canThrow(),
+  onThrow: () => {
+    const dir = player.lookDir();
+    stones.throw(
+      player.pos.x + dir.x * 0.2, player.eyeY + dir.y * 0.2, player.pos.z + dir.z * 0.2,
+      dir);
+    sfx.whip();
+  },
+  // the Springstave's loose: charge scales speed and bite (a full second's
+  // draw lands 6 — between a stone's 3 and a gloam blade's melee)
+  onShoot: (charge) => {
+    const dir = player.lookDir();
+    stones.throw(
+      player.pos.x + dir.x * 0.2, player.eyeY + dir.y * 0.2, player.pos.z + dir.z * 0.2,
+      dir, {
+        itemId: QUILL_ID,
+        speed: 14 + 18 * charge,
+        gravity: 18,
+        damage: Math.ceil(2 + 4 * charge),
+        surviveChance: 0.4,
+        scale: 0.3,
+      });
+    sfx.twang(charge);
+  },
+  // a Festival Rocket launches straight up from just over the Wanderling's
+  // head — a spark of fuse, then a burst of the agent's colour (`fireworks`
+  // is a later const, like `stones`; the callback only fires at runtime)
+  canLaunchRocket: () => fireworks.canLaunch(),
+  onLaunchRocket: (id) => {
+    const r = BLOCKS[id].rocket;
+    fireworks.launch(player.pos.x, player.eyeY + 0.4, player.pos.z, r.color, r.shape);
+    sfx.rocketLaunch();
+  },
+  // a rocket spent mid-glide thrust the Wanderwing (player.glideBoost did the
+  // physics + wing wear already); this is just the whoosh cue
+  onGlideBoost: () => sfx.rocketBoost(),
+  // quills are consumed from ANYWHERE in the satchel (the stave holds the
+  // selected slot), so the seed-slot canConsume doesn't fit here
+  hasAmmo: (id) => inventory.count(id) > 0,
+  consumeAmmo: (id) => {
+    const ok = inventory.removeCount(id, 1);
+    if (ok) hud.refreshHotbarRow();
+    return ok;
+  },
+  // priming swaps the keg BLOCK for a primed keg ENTITY (see explosives.js);
+  // `kegs` is a later const, but this callback only fires at runtime
+  onPrimeKeg: (x, y, z) => {
+    if (!kegs.canPrime()) return; // sixteen already hissing — the keg declines
+    const affected = world.setBlock(x, y, z, AIR);
+    if (affected.length === 0) return;
+    lightAwareRemesh(affected, false, { x, y, z });
+    kegs.prime(x, y, z);
+    sfx.kegTick();
+  },
+  onOpenKiln: (x, y, z) => {
+    const key = `${x},${y},${z}`;
+    let kiln = world.kilns.get(key);
+    if (!kiln) { kiln = makeKiln(); world.kilns.set(key, kiln); }
+    hud.openKiln(kiln);
+  },
+  // the Murk Lantern: at night, on ground with headroom, it raises The
+  // Unshaken — every refusal path (day, boss already up, no room) happens
+  // BEFORE the lantern is consumed, so a declined summons costs nothing
+  onSummon: (t) => {
+    if (sky.lightLevel >= 0.45) {
+      hud.announce("The lantern needs a proper dark.", 2600);
+      return;
+    }
+    // the night's ledger holds one event: a prowling night refuses the
+    // lantern outright (the Prowl already never shares a night with the
+    // Pearlfall — this is the third leg of that exclusion). `prowl` is a
+    // later const, but this callback only fires at runtime.
+    if (prowl.active || prowl.prowlsTonight()) {
+      hud.announce("The dark is already spoken for tonight.", 2600);
+      return;
+    }
+    if (mobs.mobs.some((m) => m.spec.boss)) {
+      hud.announce("The dark is already up and walking.", 2600);
+      return;
+    }
+    const boss = mobs.summonBoss(world, t.x + 0.5, t.y, t.z + 0.5);
+    if (!boss) {
+      hud.announce("The dark wants more room than this.", 2600);
+      return;
+    }
+    // consume LAST: the routing guarantees the lantern is the selected
+    // stack, so this cannot fail between the click and here
+    if (player.mode === "survival") interaction.canConsume(MURK_LANTERN_ID);
+    hud.announce("The dark gathers itself…", 3200);
+  },
+  // right-click a Loomstone: the weaving window. The target is always the
+  // SELECTED hotbar stack — the basin follows the belt.
+  onOpenLoom: () => {
+    hud.openLoom({
+      describeTarget: () => {
+        const s = inventory.get(hud.selected);
+        if (!s) return "Nothing selected";
+        const t = threadName(s);
+        return `${BLOCKS[s.id].name}${t ? ` — ${t}` : ""}  ·  ${gleam.level} jar${gleam.level === 1 ? "" : "s"} of gleam`;
+      },
+      rows: () => {
+        const out = [];
+        // item weaves (the Wanderwing): offered always — they don't ride the
+        // selection the way threads do
+        for (const key of Object.keys(WEAVES)) {
+          const w = WEAVES[key];
+          const why = weaveItemBlocker(key, gleam, inventory);
+          const cost = [`${w.levels} jars`,
+            ...w.mats.map(([id, n]) => `${n}× ${BLOCKS[id].name}`)].join(" + ");
+          out.push({ key, name: w.name, blurb: w.blurb, cost, ok: why === "", why });
+        }
+        // thread weaves for the SELECTED tool/worn piece
+        const s = inventory.get(hud.selected);
+        if (s && BLOCKS[s.id] && (BLOCKS[s.id].tool || BLOCKS[s.id].armor)) {
+          for (const key of threadsFor(BLOCKS[s.id])) {
+            const t = THREADS[key];
+            const why = weaveBlocker(key, s, gleam, inventory);
+            const cost = [`${t.levels} jars`,
+              ...t.mats.map(([id, n]) => `${n}× ${BLOCKS[id].name}`)].join(" + ");
+            out.push({ key, name: t.name, blurb: t.blurb, cost, ok: why === "", why });
+          }
+        }
+        return out;
+      },
+      weave: (key) => {
+        // an item weave (Wanderwing) hands a new piece to the satchel…
+        if (WEAVES[key]) {
+          if (!weaveItem(key, gleam, inventory)) return false;
+          sfx.craft();
+          hud.announce(`The ${WEAVES[key].name} takes shape.`, 2600);
+          hud.refreshHotbarRow();
+          return true;
+        }
+        // …a thread weave rides the selected stack
+        const s = inventory.get(hud.selected);
+        if (!s || !weave(key, s, gleam, inventory)) return false;
+        sfx.craft();
+        hud.announce(`The ${THREADS[key].name} takes.`, 2600);
+        return true;
+      },
+    });
+  },
+  onKilnBreak: (x, y, z) => {
+    const key = `${x},${y},${z}`;
+    const kiln = world.kilns.get(key);
+    if (kiln) {
+      for (const s of kiln.slots) {
+        if (s) drops.spawn(x + 0.5, y + 0.6, z + 0.5, s.id, s.count, { dur: s.dur, mod: s.mod });
+      }
+      world.kilns.delete(key);
+    }
+    if (hud.kilnOpen) { hud.closeKiln(); requestLock(); }
   },
   onChestBreak: (x, y, z) => {
     const key = `${x},${y},${z}`;
     const store = world.chests.get(key);
     if (store) {
-      for (const [id, n] of store) drops.spawn(x + 0.5, y + 0.6, z + 0.5, id, n);
+      for (const s of store) {
+        if (s) drops.spawn(x + 0.5, y + 0.6, z + 0.5, s.id, s.count, { dur: s.dur, mod: s.mod });
+      }
       world.chests.delete(key);
     }
     if (hud.chestOpen) { hud.closeChest(); requestLock(); }
   },
   mobs,
+  boats,
+  carts,
+  fishing,
+  // right-click a trader — the Peddler, or a Living Stead's steadfolk. Both
+  // open the same trade window (hud.openTrade) with the day's three offers,
+  // and both nurse a 60-second grudge from a kick. The steadfolk pull their
+  // offers from their JOB table and warm to a repeat customer.
+  onTradeMob: (m) => {
+    if (m.grudgeT > 0) {
+      hud.announce(m.stead
+        ? "This steadfolk turns away, still smarting."
+        : "The Peddler pointedly rearranges his pack.", 2600);
+      return;
+    }
+    if (m.stead) { openSteadTrade(m); return; }
+    hud.openTrade(dailyOffers(world.seed, sky.day), (offer) => {
+      const leftover = executeTrade(offer, inventory); // -1 = can't pay
+      if (leftover < 0) return false;
+      if (leftover > 0) spillStack({ id: offer.get[0], count: leftover });
+      sfx.peddlerHm(); // satisfied
+      return true;
+    });
+  },
+  // right-click a Snuffet: berries feed it — one consumed, a heart-puff and a
+  // happy chirp, and (until the cap) the seeded chance the bond takes. A hurt
+  // bondling heals 2 instead. Anything-but-berries on a bondling toggles
+  // sit/stand. Returns false untouched so block routing can continue.
+  onMobCompanion: (m) => {
+    if (m.species !== "snuffet") return false;
+    if (hud.selectedId() === BERRIES) {
+      // consume-first is safe here: a feed never refuses (worst case it's a
+      // full-health bondling enjoying a free berry)
+      if (player.mode === "survival") {
+        const s = inventory.get(hud.selected);
+        if (!s || s.id !== BERRIES || !inventory.takeFromSlot(hud.selected, 1)) return false;
+        hud.refreshHotbarRow();
+      }
+      const res = mobs.feed(m);
+      sfx.creature("chirp");
+      // the heart-puff: a soft rosy burst over the snout
+      interaction.particles.burst(
+        m.x - 0.5, m.y + m.spec.height * 0.55 - 0.3, m.z - 0.5, [0.95, 0.5, 0.62], 12);
+      if (res.bonded) {
+        hud.announce("The Snuffet ties on your colors. A bondling, then.", 3200);
+      } else if (res.healed) {
+        hud.announce("Your bondling munches, mending.", 1800);
+      }
+      return true;
+    }
+    if (m.bonded) {
+      const sitting = mobs.toggleSit(m);
+      hud.announce(sitting ? "Your bondling plants down to wait." : "Your bondling falls in behind you.", 1800);
+      return true;
+    }
+    return false;
+  },
+  // seat the Wanderling: player physics suspends itself while riding (see
+  // player.update) and boats.update carries the seat from here on
+  onBoardBoat: (b) => {
+    player.riding = b;
+    player.vel.x = player.vel.y = player.vel.z = 0;
+    player.resetFall();
+    player.sprinting = false;
+  },
+  // interact.js has already found the water column, checked headroom and the
+  // cap, and consumed the item — just splash the hull down on the surface
+  onDeployBoat: (x, topWaterY, z) => {
+    // bow pointing away from the launcher; buoyancy settles the exact line
+    boats.deploy(x + 0.5, topWaterY + 1 - 0.3, z + 0.5, player.yaw + Math.PI);
+  },
+  // seat the Wanderling in a Trundle — the same suspended-physics idiom as
+  // the skiff (carts.update carries the seat from here on)
+  onBoardCart: (c) => {
+    player.riding = c;
+    player.vel.x = player.vel.y = player.vel.z = 0;
+    player.resetFall();
+    player.sprinting = false;
+  },
+  // interact.js has already confirmed the rail target, the cap, and the
+  // empty cell, and consumed the item — set the tub down nose-along-track
+  // (its first update snaps the exact track height, slopes included)
+  onDeployCart: (x, y, z, railDef) => {
+    const yaw = railDef.rail && railDef.rail.axis === "x" ? Math.PI / 2 : 0;
+    carts.deploy(x + 0.5, y + 0.06, z + 0.5, yaw);
+  },
+  // the Pail scoop/pour swaps the selected slot's item in place (empty <->
+  // full); the tub itself is never spent, so this works the same in both modes
+  swapHeld: (newId) => {
+    const s = inventory.get(hud.selected);
+    if (!s) return false;
+    inventory.set(hud.selected, { id: newId, count: 1 });
+    hud.refreshHotbarRow();
+    return true;
+  },
+  onSplash: () => sfx.splash(),
+  onSizzle: () => sfx.sizzle(),
   crackTextures: buildCrackTextures(1337),
   avgColor: atlas.avgColor,
 });
-mobs.onMobHurt = () => sfx.mobHurt();
+const kegs = new PrimedKegs(scene, materials, {
+  mobs,
+  onRemesh: lightAwareRemesh, // the torch-aware path — a blast may eat one
+  onSpawnDrop: (x, y, z, id, qty) => drops.spawn(x, y, z, id, qty),
+  onTick: () => sfx.kegTick(),
+  onBoom: (x, y, z) => {
+    sfx.kegBoom();
+    // a big two-tone burst: flying embers under a gray dust plume
+    interaction.particles.burst(x - 0.5, y - 0.5, z - 0.5, [1.0, 0.62, 0.22], 70);
+    interaction.particles.burst(x - 0.5, y - 0.5, z - 0.5, [0.34, 0.32, 0.3], 70);
+  },
+});
+
+// the Pearlfall: meteor showers on clear nights, with the occasional landing
+// that delivers a starstone (see meteors.js / LORE.md). The landing never
+// hurts the player — the sky is done hurting people — so no player hook here.
+const meteors = new MeteorShowers(scene, seed, {
+  world,
+  player,
+  onLand: (chunks) => lightAwareRemesh(chunks, true), // starstone glows
+  onBoom: (x, y, z) => {
+    sfx.starfall();
+    // a pale nacre burst under a cooler dust plume
+    interaction.particles.burst(x - 0.5, y - 0.5, z - 0.5, [0.95, 0.96, 1.0], 50);
+    interaction.particles.burst(x - 0.5, y - 0.5, z - 0.5, [0.6, 0.62, 0.82], 40);
+  },
+  onSpawnDrop: (x, y, z, id) => drops.spawn(x, y, z, id),
+  onAnnounce: (text) => hud.announce(text, 3200),
+});
+
+// the Prowl: the seeded night-siege event (prowl.js / LORE.md). Nothing of
+// it is saved — whether a night prowls re-derives from (seed, night), so a
+// mid-Prowl save simply resumes the siege on reload.
+const prowl = new Prowl(seed, {
+  mobs, world, player, terrain,
+  onAnnounce: (text, ms) => hud.announce(text, ms || 3200),
+  onHorn: () => sfx.prowlHorn(),
+  onDawn: () => sfx.prowlDawn(),
+});
+
+const stones = new Projectiles(scene, materials, {
+  mobs,
+  onSpawnDrop: (x, y, z, id) => drops.spawn(x, y, z, id),
+  onImpact: (x, y, z, shattered) => {
+    if (!shattered) return; // survivors just drop; only shatters crack + dust
+    sfx.stoneCrack();
+    interaction.particles.burst(x - 0.5, y - 0.5, z - 0.5,
+      atlas.avgColor[BLOCKS[SLING_STONE].tiles.side] || [0.5, 0.5, 0.5], 6);
+  },
+});
+
+// Festival Rockets: the ascent + burst visuals. A burst booms and spooks the
+// nearby passive grazers (hostiles are unmoved); it never touches a block.
+const fireworks = new Fireworks(scene, {
+  onBurst: (x, y, z) => {
+    sfx.rocketBurst();
+    mobs.spook(x, y, z, 8);
+  },
+});
+
+// a falling crit lands with a sharper crack than the ordinary thud
+mobs.onMobHurt = (crit) => (crit ? sfx.critHit() : sfx.mobHurt());
+// sprint suppresses while chewing: the player asks interact for its state
+player.isEating = () => interaction.eating;
 mobs.onSound = (kind) => sfx.creature(kind);
 mobs.onDrop = (x, y, z, id, n) => drops.spawn(x, y, z, id, n);
+// a fallen bondling: no drops — a soft mourning chime and a quiet line
+mobs.onBondlingDeath = () => {
+  sfx.mourn();
+  hud.announce("The scarf lies still. Your bondling is gone.", 3600);
+};
+mobs.onKill = (m) => {
+  awardGleam(m.spec.gleam || 0);
+  if (m.spec.deathLine) hud.announce(m.spec.deathLine, 4200);
+};
+mobs.onBossSplit = (spec) => hud.announce(spec.splitLine, 2600);
+mobs.onBossGone = (spec) => hud.announce(spec.goneLine, 3200);
+// a new Snufflet: a mote of gleam and a field note (life clings to work too)
+mobs.onBreed = () => {
+  awardGleam(1);
+  hud.announce("A Snufflet! A loaf in training.", 2600);
+};
+// a fallen steadfolk: mark its record dead (it stays gone) and mourn it
+mobs.onSteadfolkDeath = (m) => {
+  if (m.record) m.record.dead = true;
+  sfx.mourn();
+  hud.announce("A steadfolk falls. The stead is quieter now.", 3600);
+};
+// the door-chime: a soft knock as a resident passes its own doorway
+mobs.onSteadKnock = () => sfx.creature("knock");
+
+// the Living Stead's resident manager: instantiates a stead's Steadfolk as
+// live mobs when the player is near and their chunk is loaded, folds them
+// back into their saved records when the player leaves, and drives the thin
+// roof-smoke life touch. (The Murmur gains no hearth mood: adding one would
+// mean a whole new music bus + scale, which the mood machinery does not make
+// trivial — so that touch is skipped cleanly, per the brief.)
+const steads = new Steads(terrain, mobs, interaction.particles);
+let steadDay = sky.day; // last day a stead warmth-reset ran for
 
 const stopAutosave = startAutosave(() => writeSave(world, player, sky, hud, inventory, {
   saplings: [...saplings].map(([key, due]) => {
     const [x, y, z] = key.split(",").map(Number);
-    return [x, y, z, Math.max(1, due - worldSeconds)];
+    return [x, y, z, Math.max(1, due - growthSeconds)];
   }),
+  crops: [...crops].map(([key, due]) => {
+    const [x, y, z] = key.split(",").map(Number);
+    const id = world.getBlock(x, y, z);
+    const stages = cropStagesFor(id);
+    const stage = stages ? Math.max(0, stages.indexOf(id)) : 0;
+    return [x, y, z, stage, Math.max(1, due - growthSeconds)];
+  }),
+  overflowStacks: pendingOverflow.map(stackToSave),
+  // additive: the 4 wear slots incl. dur + thread ([id, count, dur?, mod?] or 0)
+  wear: wearSlots.map(stackToSave),
+  boats: boats.serialize(), // additive: deployed skiffs [[x,y,z,yaw]...]
+  carts: carts.serialize(), // additive: deployed trundles [[x,y,z,yaw]...]
+  // additive: the bondlings [[species,x,y,z,hp,sitting,scarfSeed]...]
+  bondlings: mobs.serializeBondlings(),
+  weather: [
+    sky.weatherPhase,
+    Math.round(sky.weatherTimer * 10) / 10,
+    Math.round(sky.rain * 100) / 100,
+  ],
+  chart: wayfinder.serializeChart(), // additive: the Field Chart's inked leaf
+  // additive: the Murmur's settings [on, volume] — defaults on absence
+  music: [music.enabled ? 1 : 0, Math.round(music.volume * 100) / 100],
+  // additive: Gleam [jars, progress] — absent in older saves (a fresh jar)
+  gleam: gleam.serialize(),
+  // additive: the Whims in progress [[id, secondsLeft], ...]
+  effects: [...player.effects].map(([id, t]) => [id, Math.round(t * 10) / 10]),
+  // additive: tamed Tuftlings [[x, y, z, hp, stay], ...]
+  pets: mobs.serializePets(),
 }));
 
 // --- held item (first-person hand) — its own scene + depth-cleared pass ------
@@ -351,22 +1299,80 @@ function toggleThirdPerson() {
   playerModel.group.visible = thirdPerson;
 }
 
+// keep every armor consumer in step with the wear slots: the third-person
+// model's overlays, the Satchel viewer's, and the HUD shield pips. Cheap
+// enough to run on any slot change (hud.onSlotsChanged) and every wear tick.
+function refreshArmor() {
+  const state = {};
+  for (let i = 0; i < WEAR_KINDS.length; i++) {
+    const s = wearSlots[i];
+    const a = s && BLOCKS[s.id] ? BLOCKS[s.id].armor : null;
+    state[WEAR_KINDS[i]] = a ? a.tier : null;
+    // the Wanderwing rides the jerkin slot but shows wings, not plate
+    if (a && a.glide) state.wing = true;
+  }
+  playerModel.setArmor(state);
+  hud.playerViewer.setArmor(state);
+  hud.setArmor(armorProtection(wearSlots));
+}
+refreshArmor(); // dress the model from the loaded save
+
 let heldKey = null;
 let swingT = 1; // 0..1 swing animation progress (1 = at rest)
 
+// box-built held tool models, one per tool id (12 at most), built on demand
+const heldToolCache = new Map();
+let heldToolGroup = null;
+// the wayfinding instruments in hand: cached {group, needle|hand} pairs whose
+// live part the tick loop turns every frame
+const heldWayCache = new Map();
+let heldWay = null;
+
 function refreshHeldMesh() {
-  // emptiness can change without the id changing (placed the last block,
-  // picked one up) — recompute every frame, it's a Map lookup
-  const id = hud.selectedId();
-  const empty = player.mode === "survival" && inventory.count(id) === 0;
-  const key = empty ? "foot" : id;
+  // slots are the truth: empty selected slot = bare foot, in both modes
+  const st = inventory.get(hud.selected);
+  const key = st ? st.id : "foot";
   if (key === heldKey) return;
   heldKey = key;
+  const empty = key === "foot";
+  const toolDef = empty ? null : BLOCKS[st.id].tool;
+  const wayId = !empty && (st.id === COMPASS || st.id === CLOCK) ? st.id : null;
+  if (heldToolGroup) { heldGroup.remove(heldToolGroup); heldToolGroup = null; }
+  if (heldWay) { heldGroup.remove(heldWay.group); heldWay = null; }
   heldFoot.visible = empty;
-  heldBlock.visible = !empty;
-  if (!empty) {
+  heldBlock.visible = !empty && !toolDef && !wayId;
+  if (wayId) {
+    // an instrument in hand: a cased disc held face-up, its live part turned
+    // by the tick loop (the Needle leans home, the Dial's wheel rides time)
+    let w = heldWayCache.get(wayId);
+    if (!w) {
+      w = wayId === COMPASS ? buildHeldCompass(1337) : buildHeldClock(1337);
+      w.group.scale.setScalar(0.9);
+      w.group.rotation.set(0.5, 0.1, 0.05); // face tipped up toward the eye
+      w.group.position.set(-0.04, 0.02, 0);
+      w.group.traverse((o) => { o.frustumCulled = false; });
+      heldWayCache.set(wayId, w);
+    }
+    heldWay = w;
+    heldGroup.add(w.group);
+  } else if (toolDef) {
+    // a tool in hand: its haft-and-head box model instead of the flat sprite
+    let g = heldToolCache.get(st.id);
+    if (!g) {
+      g = buildHeldTool(toolDef.kind, toolDef.tier, 1337);
+      g.scale.setScalar(0.85);
+      // haft raked up-left with the head high, arms angled across the view
+      g.rotation.order = "XZY";
+      g.rotation.set(0.35, 1.2, 0.85);
+      g.position.set(-0.02, 0.02, 0);
+      g.traverse((o) => { o.frustumCulled = false; });
+      heldToolCache.set(st.id, g);
+    }
+    heldToolGroup = g;
+    heldGroup.add(g);
+  } else if (!empty) {
     if (heldBlock.geometry) heldBlock.geometry.dispose();
-    const geo = buildBlockGeometry(id);
+    const geo = buildBlockGeometry(st.id);
     geo.translate(-0.5, -0.5, -0.5); // rotate around the block center
     heldBlock.geometry = geo;
   }
@@ -455,7 +1461,8 @@ const canvas = renderer.domElement;
 let started = false;
 
 function requestLock() {
-  hud.closePicker();
+  music.start(); // every path here is a user gesture — safe to arm audio
+  hud.closeAllWindows(); // spills any held cursor stack
   if (NO_LOCK) { hud.hidePause(); started = true; return; }
   // the promise rejects during the browser's post-Escape cooldown — swallow
   // it (the pause overlay is still up; the next click retries)
@@ -472,7 +1479,7 @@ canvas.addEventListener("click", () => {
 // in nolock mode the pointer-lock state can't encode "playing", so follow the
 // overlay state machine instead — otherwise UI clicks would break blocks
 const inputActive = () => NO_LOCK
-  ? !hud.paused && !hud.pickerOpen && !hud.chestOpen
+  ? !hud.paused && !hud.anyWindowOpen()
   : document.pointerLockElement === canvas;
 
 document.addEventListener("pointerlockchange", () => {
@@ -483,7 +1490,7 @@ document.addEventListener("pointerlockchange", () => {
   } else if (!NO_LOCK) {
     player.clearInput();
     interaction.clearInput();
-    if (!hud.pickerOpen && !hud.deathOpen && !hud.chestOpen) hud.showPause(!started);
+    if (!hud.anyWindowOpen() && !hud.deathOpen) hud.showPause(!started);
   }
 });
 
@@ -492,7 +1499,7 @@ document.addEventListener("mousemove", (e) => {
 });
 
 document.addEventListener("mousedown", (e) => {
-  if (!inputActive() || hud.pickerOpen) return;
+  if (!inputActive() || hud.anyWindowOpen()) return;
   if (e.button === 1) e.preventDefault();
   interaction.onMouseDown(e.button);
 });
@@ -500,28 +1507,35 @@ document.addEventListener("mouseup", (e) => interaction.onMouseUp(e.button));
 document.addEventListener("contextmenu", (e) => e.preventDefault());
 
 let debugVisible = false;
+let bootLavaChecked = false; // the one-time load-into-lava rescue (tick loop)
 
 document.addEventListener("keydown", (e) => {
   if (e.repeat) return;
   if (e.code === "F3") { e.preventDefault(); debugVisible = !debugVisible; return; }
   if (e.code === "F5") { e.preventDefault(); toggleThirdPerson(); return; }
   if (e.code === "KeyE") {
-    if (hud.chestOpen) { hud.closeChest(); requestLock(); }
-    else if (hud.pickerOpen) { hud.closePicker(); requestLock(); }
+    if (hud.signOpen) return; // the letter e belongs to the writing
+    if (hud.anyWindowOpen()) { hud.closeAllWindows(); requestLock(); }
     else if (inputActive()) hud.openPicker();
     return;
   }
-  if (e.code === "Escape" && hud.chestOpen) {
-    hud.closeChest();
+  if (e.code === "Escape" && hud.anyWindowOpen()) {
+    hud.closeAllWindows();
     hud.showPause();
     return;
   }
-  if (e.code === "Escape" && hud.pickerOpen) {
-    hud.closePicker();
-    hud.showPause();
+  // Q tosses one item from the selected slot
+  if (e.code === "KeyQ" && inputActive() && !hud.anyWindowOpen()) {
+    const s = inventory.get(hud.selected);
+    const dur = s ? s.dur : undefined;
+    const mod = s ? s.mod : undefined;
+    if (s && inventory.takeFromSlot(hud.selected, 1)) {
+      spillStack({ id: s.id, count: 1, dur, mod });
+      hud.refreshHotbarRow();
+    }
     return;
   }
-  if (inputActive() && !hud.pickerOpen) {
+  if (inputActive() && !hud.anyWindowOpen()) {
     if (e.code.startsWith("Digit")) {
       const n = Number(e.code.slice(5));
       if (n >= 1 && n <= 9) { hud.select(n - 1); sfx.click(); return; }
@@ -532,7 +1546,7 @@ document.addEventListener("keydown", (e) => {
 document.addEventListener("keyup", (e) => player.onKeyUp(e.code));
 
 document.addEventListener("wheel", (e) => {
-  if (e.deltaY !== 0 && inputActive() && !hud.pickerOpen) { hud.scroll(e.deltaY); sfx.click(); }
+  if (e.deltaY !== 0 && inputActive() && !hud.anyWindowOpen()) { hud.scroll(e.deltaY); sfx.click(); }
 }, { passive: true });
 
 addEventListener("resize", () => {
@@ -552,6 +1566,11 @@ let frames = 0;
 let bobPhase = 0;
 let bobAmp = 0;
 let nextSaplingCheck = 0;
+// the player's biome, sampled on a slow timer (biomeAt runs fbm noise — no
+// need to pay that every frame). Drives the snow-vs-rain precip variant, the
+// muffled snow wash, the Murmur's cold sparkle, and drift settling.
+let playerBiome = "plains";
+let biomeTimer = 0;
 
 const CARDINALS = ["north (-z)", "east (+x)", "south (+z)", "west (-x)"];
 
@@ -568,17 +1587,41 @@ function clock() {
 
 function tick(now) {
   requestAnimationFrame(tick);
-  const frameDt = Math.min(0.1, (now - last) / 1000);
+  // clamped at 0: the first rAF timestamp can PRECEDE the boot-time clock
+  // read that seeded `last`, and a negative dt must never run time backwards
+  const frameDt = Math.max(0, Math.min(0.1, (now - last) / 1000));
   last = now;
   fps = fps * 0.95 + (1 / Math.max(frameDt, 1e-4)) * 0.05;
   frames++;
 
   streamChunks(frames < 90);
 
+  biomeTimer -= frameDt;
+  if (biomeTimer <= 0) {
+    biomeTimer = 0.5;
+    const bx = Math.floor(player.pos.x), bz = Math.floor(player.pos.z);
+    playerBiome = terrain.biomeAt(bx, bz, terrain.heightAt(bx, bz));
+  }
+  const inColdBiome = playerBiome === "snow";
+
   // physics only once the ground around the whole AABB exists — the player's
   // own chunk AND its neighbors (collision near a border reads into them)
   const pcx = Math.floor(player.pos.x / CHUNK), pcz = Math.floor(player.pos.z / CHUNK);
   const playerChunkReady = world.isGenerated(pcx, pcz) && neighborsGenerated(pcx, pcz);
+
+  // one-time boot safety: a pre-Emberwash save's deep caves regenerate
+  // flooded, so a player who saved standing in one would load INTO the melt
+  // and start burning before they can orient. Climb them to clear ground.
+  if (playerChunkReady && !bootLavaChecked) {
+    bootLavaChecked = true;
+    const bx = Math.floor(player.pos.x), bz = Math.floor(player.pos.z);
+    const feet = world.getBlock(bx, Math.floor(player.pos.y + 0.2), bz);
+    const head = world.getBlock(bx, Math.floor(player.eyeY), bz);
+    if (feet === LAVA_ID || head === LAVA_ID) {
+      adjustToClearGround(player.pos);
+      player.resetFall();
+    }
+  }
 
   if (playerChunkReady && inputActive()) {
     accumulator = Math.min(accumulator + frameDt, 0.25);
@@ -586,24 +1629,75 @@ function tick(now) {
       player.update(FIXED_DT);
       accumulator -= FIXED_DT;
     }
-    drops.update(frameDt, world, player, (id, qty) => {
-      inventory.add(id, qty);
-      sfx.pickup();
-      hud.refreshCounts();
+    drops.update(frameDt, world, player, (id, qty, dur, mod) => {
+      const leftover = inventory.add(id, qty, dur, mod);
+      const accepted = qty - leftover;
+      if (accepted > 0) {
+        sfx.pickup();
+        hud.refreshHotbarRow();
+        if (hud.anyWindowOpen()) hud.slotUI.renderAll();
+      }
+      return accepted; // a full inventory keeps the rest on the ground
     });
-    mobs.update(frameDt, { world, player, terrain, night: sky.lightLevel < 0.45 });
+    mobs.update(frameDt, { world, player, terrain, night: sky.lightLevel < 0.45, tod: sky.time });
+    // the Living Stead's residents: spawn/despawn near the player, roof smoke.
+    // A crossed dawn re-deals cold trade boards across every seeded stead.
+    if (sky.day !== steadDay) { steadDay = sky.day; steads.resetWarmth(world); }
+    steads.update(frameDt, world, player);
+    prowl.update(frameDt, sky); // reads the same night gate the mobs got
+    boats.update(frameDt, world, player);
+    carts.update(frameDt, world, player);
+    kegs.update(frameDt, world, player);
+    stones.update(frameDt, world);
+    fireworks.update(frameDt, world);
+    fishing.update(frameDt, world, player);
+    meteors.update(frameDt, sky, camera);
     worldSeconds += frameDt;
+    growthSeconds += frameDt * (1 + sky.rain); // rain doubles sapling growth
     if (worldSeconds >= nextSaplingCheck) {
       nextSaplingCheck = worldSeconds + 1;
       updateSaplings();
+      updateCrops();
+      drainOverflow();
+    }
+    // snowfall accumulation: a proper shower (past the fade-in) over the
+    // cold biome settles the occasional fresh drift nearby
+    if (inColdBiome && sky.rain > 0.6 && worldSeconds >= nextSnowSettle) {
+      nextSnowSettle = worldSeconds + SNOW_SETTLE_INTERVAL;
+      settleSnow();
     }
   }
   mobs.setLight(sky.lightLevel, sky.lightTint);
+  boats.setLight(sky.lightLevel, sky.lightTint);
+  carts.setLight(sky.lightLevel, sky.lightTint);
+  fishing.setLight(sky.lightLevel, sky.lightTint);
+  signBoards.setLight(sky.lightLevel, sky.lightTint);
+  signBoards.sync(); // boards follow chunk load/unload and sign edits
+
+  // kilns burn whenever the game is up — including while a window is open
+  // (the whole point: watch the smelt arrow fill). Paused = time stops.
+  if (!hud.paused) {
+    // metals and starglass shed more gleam than a baked root does
+    const changed = tickKilns(world.kilns, frameDt, (outId) =>
+      awardGleam(outId === IRON_INGOT_ID || outId === GLOAM_INGOT_ID ||
+        outId === STARGLASS_ID ? 2 : 1));
+    if (changed && hud.kilnOpen) hud.slotUI.renderAll();
+    hud.updateKilnView();
+  }
 
   if (player.mode === "survival") {
     hud.setHealth(player.health);
+    hud.setHunger(player.hunger);
     hud.setAir(player.air, player.maxAir, player.eyeInWater);
+    hud.setGleam(gleam.level, gleam.frac());
+    hud.setEffects([...player.effects]);
+  } else {
+    hud.setEffects([]);
   }
+  // the boss bar tracks a stalking boss within hailing distance
+  const boss = mobs.mobs.find((m) => m.spec.boss &&
+    Math.hypot(m.x - player.pos.x, m.z - player.pos.z) < 48);
+  hud.setBossBar(boss ? boss.spec.name : null, boss ? boss.hp / boss.spec.hp : 0);
 
   // void safety net (creative only — in survival the void deals damage and
   // the death screen handles it)
@@ -641,12 +1735,20 @@ function tick(now) {
     const boom = hit ? Math.min(4, Math.max(0.05, hit.dist - 0.15)) : 4;
     camera.position.set(eye.x + back.x * boom, eye.y + back.y * boom, eye.z + back.z * boom);
   }
-  playerModel.group.position.set(player.pos.x, player.pos.y, player.pos.z);
+  // riding: a simple crouch offset sinks the model to the bench, and the
+  // seated pose kicks the legs forward (chosen over a real sit rig — cheap)
+  const seated = !!player.riding;
+  playerModel.group.position.set(
+    player.pos.x, player.pos.y - (seated ? 0.5 : 0), player.pos.z);
   playerModel.group.rotation.y = player.yaw + Math.PI;
   playerModel.update(frameDt, {
     speed: horizSpeed,
-    swimming: player.inWater,
+    swimming: player.inWater && !seated,
+    seated,
   });
+  // the Wanderwing spreads while gliding, furls when folded (harmless when the
+  // model is hidden in first person — the eased pose is ready for the next peek)
+  playerModel.updateWing(player.gliding, frameDt);
 
   // moving water: visible surface drift + a gentle vertex swell
   materials.water.uniforms.uUvOffset.value.set((now * 0.0003) % 1, (now * 0.00019) % 1);
@@ -654,24 +1756,78 @@ function tick(now) {
 
   animateHeld(frameDt, bobY);
 
-  // sprint FOV kick (applies to sprint-flight too, like MC)
-  const targetFov = player.sprintActive ? 77 : 70;
+  // the instruments stay honest in hand: the Needle leans toward the anchor
+  // (+0.3 cancels the held group's resting yaw), the Dial's wheel rides time
+  if (heldWay) {
+    if (heldKey === COMPASS) {
+      const t = player.spawnPoint || spawnPoint;
+      heldWay.needle.rotation.y =
+        normAngle(bearingYaw(player.pos.x, player.pos.z, t.x, t.z) - player.yaw) + 0.3;
+    } else {
+      heldWay.hand.rotation.y = -sky.time * Math.PI * 2;
+    }
+  }
+  // widgets show on hotbar presence; the chart reveals only while play runs
+  wayfinder.update(frameDt, {
+    inventory, hud, player, sky, world,
+    playing: playerChunkReady && inputActive(),
+  });
+
+  // sprint FOV kick (+8°, applies to sprint-flight too): eased both ways
+  // with a ~0.15s time constant, so it swells in and settles out. A glide
+  // opens it wider still (+14°) — the wind-in-the-teeth rush.
+  const targetFov = player.gliding ? 84 : player.sprintActive ? 78 : 70;
   if (Math.abs(camera.fov - targetFov) > 0.1) {
-    camera.fov += (targetFov - camera.fov) * Math.min(1, frameDt * 10);
+    camera.fov += (targetFov - camera.fov) * Math.min(1, frameDt * 6.7);
     camera.updateProjectionMatrix();
   }
+  // the wind-rush layer follows the glide, swelling with the accrued speed
+  sfx.setWind(player.gliding ? Math.min(1, 0.35 + player._glideSpeed / 16) : 0);
 
   interaction.update(frameDt);
+  // the crosshair pinches as the Springstave draws (0 = at rest)
+  hud.setDraw(interaction.drawing ? interaction.drawT : 0);
+  // the fishing line hangs from a camera-space rod-tip anchor — rewrite it
+  // after the camera has settled for this frame (bob, third-person boom)
+  fishing.updateLine(camera);
   // underwater fog/tint follow the RENDERING viewpoint: the boomed camera in
-  // third person, the player's eye otherwise
-  const viewInWater = thirdPerson
+  // third person, the player's eye otherwise. The Emberwash gets the same
+  // treatment with an amber screen tint (no fog change — the pool is small
+  // and the burn timer is the real message).
+  // first person reuses the player's own eye sample (one sampling rule,
+  // owned by player.js — the tint can never disagree with the burn/drown)
+  const camBlock = thirdPerson
     ? world.getBlock(Math.floor(camera.position.x), Math.floor(camera.position.y),
-        Math.floor(camera.position.z)) === WATER_ID
-    : player.eyeInWater;
+        Math.floor(camera.position.z))
+    : AIR;
+  const viewInWater = thirdPerson ? camBlock === WATER_ID : player.eyeInWater;
+  const viewInLava = thirdPerson ? camBlock === LAVA_ID : player.eyeInLava;
   sky.update(frameDt, camera, viewInWater);
+  // over the Rimelands the same shower falls as snow (the precip layer
+  // switches sprite/speed/color)
+  rainFx.update(frameDt, camera, sky.rain, inColdBiome ? "snow" : "rain");
+  // the rain bed is silent under cover, underground, and underwater — gated
+  // on the same open-column test the streaks use, at the player's eye.
+  // Snow hushes the wash: flakes land softer than rain.
+  const skyOpen = rainFx.isOpen(player.pos.x, player.eyeY, player.pos.z);
+  const rainAudible =
+    sky.rain > 0.001 && !player.eyeInWater && skyOpen ? sky.rain : 0;
+  const washLevel = rainAudible * (inColdBiome ? 0.35 : 1);
+  sfx.setRain(washLevel);
+  // the Murmur reads the same world state each frame: night by the sky's
+  // light, the delve by depth or a roofed-over head (the column test stands
+  // in for "no sky light here"), the cold by the biome underfoot, rain via
+  // the shared (snow-muffled) audibility gate
+  music.update({
+    night: sky.lightLevel < 0.45,
+    delve: player.pos.y < 24 || !skyOpen,
+    cold: inColdBiome,
+    rain: washLevel,
+    pulse: prowl.active, // the Prowl's low pulse under the night mood
+  });
   setDayLight(materials, sky.lightLevel, sky.lightTint);
   setHeldSkinLight(sky.lightLevel, sky.lightTint);
-  hud.setUnderwater(viewInWater);
+  hud.setUnderwater(viewInWater, viewInLava);
 
   if (debugVisible) {
     const p = player.pos;
@@ -683,7 +1839,7 @@ function tick(now) {
       `xyz: ${p.x.toFixed(2)} / ${p.y.toFixed(2)} / ${p.z.toFixed(2)}`,
       `chunk: ${Math.floor(p.x / CHUNK)} ${Math.floor(p.z / CHUNK)}  loaded: ${world.chunks.size}`,
       `biome: ${terrain.biomeAt(bx, bz, h)}  facing: ${facing()}  move: ${player.moveMode}`,
-      `time: ${clock()}  ${player.flying ? "[flying]" : player.onGround ? "[ground]" : "[air]"}${player.inWater ? " [water]" : ""}  mode: ${player.mode}${player.mode === "survival" ? ` hp:${player.health.toFixed(0)}` : ""}`,
+      `time: ${clock()}${sky.rain > 0.01 ? ` [rain ${sky.rain.toFixed(2)}]` : ""}  ${player.flying ? "[flying]" : player.onGround ? "[ground]" : "[air]"}${player.inWater ? " [water]" : ""}  mode: ${player.mode}${player.mode === "survival" ? ` hp:${player.health.toFixed(0)} food:${player.hunger.toFixed(1)}` : ""}`,
       `target: ${interaction.target ? BLOCKS[interaction.target.id].name : "none"}`,
     ], true);
   } else {
@@ -704,7 +1860,41 @@ requestAnimationFrame(tick);
 // automated-test handle (only in ?nolock mode, which headless tests use)
 if (NO_LOCK) {
   window.voxelcraft = {
-    player, world, hud, sky, terrain, interaction, mobs, drops, saplings,
+    player, world, hud, sky, terrain, interaction, mobs, drops, saplings, crops,
+    inventory, kegs, stones, fireworks, boats, carts, fishing, signBoards, wayfinder, meteors,
+    // the Prowl: prowl.active / prowl.nightPlan(n) / prowl.quietT etc., plus
+    // the armer — forceProwl() marks the coming night regardless of the hash
+    prowl,
+    forceProwl: () => prowl.forceProwl(),
+    // the waybar auto-shaper's oracle — lets tests assert what a cell wants
+    railShape: (x, y, z) => railShape(world, x, y, z),
+    wear: wearSlots, playerModel, gleam,
+    rain: rainFx, sfx, music, camera,
+    // torch-light probe (the same BFS the mesher bakes) — lets tests assert
+    // that a landed starstone's glow actually propagates to its neighbors
+    sampleBlockLight: (x, y, z) => sampleBlockLight(world, x, y, z),
+    spawnTarget: () => player.spawnPoint || spawnPoint,
     growAllSaplings: () => { for (const k of saplings.keys()) saplings.set(k, 0); },
+    growAllCrops: () => { for (const k of crops.keys()) crops.set(k, 0); },
+    getGrowthSeconds: () => growthSeconds,
+    getPlayerBiome: () => playerBiome, // the slow-sampled biome underfoot
+    dailyOffers, // (seed, day) — lets tests diff the Peddler's rotation
+    // the Steads-Before: placement prediction, for ruin tests
+    findNearestRuin: (x, z) => findNearestRuin(terrain, x, z),
+    ruinForChunk: (cx, cz) => ruinForChunk(terrain, cx, cz),
+    // the Delvings-Under: same prediction pair
+    findNearestDelve: (x, z) => findNearestDelve(terrain, x, z),
+    delveForChunk: (cx, cz) => delveForChunk(terrain, cx, cz),
+    // the Living Stead: placement prediction + the manager + the trade routing,
+    // so tests can find a stead, assert its residents, and drive a barter
+    steads,
+    findNearestStead: (x, z) => findNearestStead(terrain, x, z),
+    steadForChunk: (cx, cz) => steadForChunk(terrain, cx, cz),
+    steadOffers: (m, warmed) => steadOffers(m.steadSeed, m.resIdx, m.job, sky.day, warmed),
+    tradeWithMob: (m) => interaction.onTradeMob(m),
+    // wear/model refresh + third-person toggle, so tests can equip the
+    // Wanderwing straight into a wear slot and see the model dress + spread
+    refreshArmor: () => refreshArmor(),
+    setThirdPerson: (on) => { if (!!on !== thirdPerson) toggleThirdPerson(); },
   };
 }

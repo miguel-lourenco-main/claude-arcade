@@ -2,16 +2,30 @@
 // with hold-repeat, pick-block, and break particles.
 
 import * as THREE from "three";
-import { AIR, BEDROCK, CHEST, BLOCKS, isSolid, dropFor } from "./blocks.js";
+import {
+  AIR, BEDROCK, CHEST, WORKBENCH, KILN, BED, LADDER, DOOR, DOOR_TOP, BLAST_KEG,
+  GATE, GATE_OPEN, SEED_TO_SPROUT, DIRT, GRASS, MUD, FARMLAND, LOOMSTONE,
+  SLING_STONE, BOAT, WATER, LAVA, FISHING_POLE, SNOW_LAYER, QUILL, ROOT_SEED,
+  SILVERFIN, MURK_LANTERN, GLEAM_MOSS, RAIL, CART,
+  PAIL, WATER_PAIL, EMBER_PAIL, CINDERGLASS,
+  BLOCKS, isSolid, isPlant, isFluid, isDoor, isDoorLower, isGate, isSign, isRail, isRocket,
+  DOOR_TOGGLE, dropFor, yawToFacing,
+} from "./blocks.js";
 import { HEIGHT } from "./world.js";
-import { EYE_HEIGHT } from "./player.js";
+import { EYE_HEIGHT, MAX_HUNGER } from "./player.js";
 
 const REACH_CREATIVE = 5;
 const REACH_SURVIVAL = 4.5;
 const ACTION_REPEAT_MS = 240;
+const EAT_SECONDS = 1.2;      // hold right-click this long to finish a bite
+const CHEW_INTERVAL = 0.28;   // chewing sound cadence while eating
+const THROW_COOLDOWN_MS = 350; // between sling-stone throws
+const ROCKET_COOLDOWN_MS = 400; // between rocket launches/boosts (hold-repeat)
 
-// Amanatides & Woo voxel traversal.
-export function raycast(world, origin, dir, maxDist = REACH_CREATIVE) {
+// Amanatides & Woo voxel traversal. `skip(id)` marks extra block ids the ray
+// passes through — the entity-clamp rays skip rails, because a trundle LIVES
+// inside a rail's cell and the cell entry would always out-shadow the cart.
+export function raycast(world, origin, dir, maxDist = REACH_CREATIVE, skip = null) {
   let x = Math.floor(origin.x), y = Math.floor(origin.y), z = Math.floor(origin.z);
   const stepX = dir.x > 0 ? 1 : -1, stepY = dir.y > 0 ? 1 : -1, stepZ = dir.z > 0 ? 1 : -1;
   const tDeltaX = dir.x !== 0 ? Math.abs(1 / dir.x) : Infinity;
@@ -25,7 +39,10 @@ export function raycast(world, origin, dir, maxDist = REACH_CREATIVE) {
 
   while (t <= maxDist) {
     const id = world.getBlock(x, y, z);
-    if (id !== AIR && BLOCKS[id].bucket !== "water") {
+    // fluids are untargetable: the ray swims through water AND the Emberwash
+    // (you cap a pool by placing against its floor or banks, like water) —
+    // and `skip` lets the entity-clamp rays pass through rails too
+    if (id !== AIR && !isFluid(id) && !(skip && skip(id))) {
       return { x, y, z, id, normal, dist: t };
     }
     if (tMaxX < tMaxY && tMaxX < tMaxZ) {
@@ -39,6 +56,62 @@ export function raycast(world, origin, dir, maxDist = REACH_CREATIVE) {
   return null;
 }
 
+// The skiff-launching ray: the same DDA, but it STOPS at the first water
+// cell (the regular raycast swims straight through water). Any other
+// non-air block blocks the launch — you can't slide a hull through a wall.
+function raycastWater(world, origin, dir, maxDist) {
+  let x = Math.floor(origin.x), y = Math.floor(origin.y), z = Math.floor(origin.z);
+  const stepX = dir.x > 0 ? 1 : -1, stepY = dir.y > 0 ? 1 : -1, stepZ = dir.z > 0 ? 1 : -1;
+  const tDeltaX = dir.x !== 0 ? Math.abs(1 / dir.x) : Infinity;
+  const tDeltaY = dir.y !== 0 ? Math.abs(1 / dir.y) : Infinity;
+  const tDeltaZ = dir.z !== 0 ? Math.abs(1 / dir.z) : Infinity;
+  let tMaxX = dir.x !== 0 ? (dir.x > 0 ? (x + 1 - origin.x) : (origin.x - x)) * tDeltaX : Infinity;
+  let tMaxY = dir.y !== 0 ? (dir.y > 0 ? (y + 1 - origin.y) : (origin.y - y)) * tDeltaY : Infinity;
+  let tMaxZ = dir.z !== 0 ? (dir.z > 0 ? (z + 1 - origin.z) : (origin.z - z)) * tDeltaZ : Infinity;
+  let t = 0;
+  while (t <= maxDist) {
+    const id = world.getBlock(x, y, z);
+    if (id === WATER) return { x, y, z };
+    if (id !== AIR) return null;
+    if (tMaxX < tMaxY && tMaxX < tMaxZ) {
+      t = tMaxX; tMaxX += tDeltaX; x += stepX;
+    } else if (tMaxY < tMaxZ) {
+      t = tMaxY; tMaxY += tDeltaY; y += stepY;
+    } else {
+      t = tMaxZ; tMaxZ += tDeltaZ; z += stepZ;
+    }
+  }
+  return null;
+}
+
+// The pail-scooping ray: like raycastWater, but STOPS at the first fluid cell
+// of EITHER kind (Water or the Emberwash) and reports which. Any other non-air
+// block blocks the scoop — you can't dip a pail through a wall.
+function raycastFluid(world, origin, dir, maxDist) {
+  let x = Math.floor(origin.x), y = Math.floor(origin.y), z = Math.floor(origin.z);
+  const stepX = dir.x > 0 ? 1 : -1, stepY = dir.y > 0 ? 1 : -1, stepZ = dir.z > 0 ? 1 : -1;
+  const tDeltaX = dir.x !== 0 ? Math.abs(1 / dir.x) : Infinity;
+  const tDeltaY = dir.y !== 0 ? Math.abs(1 / dir.y) : Infinity;
+  const tDeltaZ = dir.z !== 0 ? Math.abs(1 / dir.z) : Infinity;
+  let tMaxX = dir.x !== 0 ? (dir.x > 0 ? (x + 1 - origin.x) : (origin.x - x)) * tDeltaX : Infinity;
+  let tMaxY = dir.y !== 0 ? (dir.y > 0 ? (y + 1 - origin.y) : (origin.y - y)) * tDeltaY : Infinity;
+  let tMaxZ = dir.z !== 0 ? (dir.z > 0 ? (z + 1 - origin.z) : (origin.z - z)) * tDeltaZ : Infinity;
+  let t = 0;
+  while (t <= maxDist) {
+    const id = world.getBlock(x, y, z);
+    if (id === WATER || id === LAVA) return { x, y, z, id };
+    if (id !== AIR) return null;
+    if (tMaxX < tMaxY && tMaxX < tMaxZ) {
+      t = tMaxX; tMaxX += tDeltaX; x += stepX;
+    } else if (tMaxY < tMaxZ) {
+      t = tMaxY; tMaxY += tDeltaY; y += stepY;
+    } else {
+      t = tMaxZ; tMaxZ += tDeltaZ; z += stepZ;
+    }
+  }
+  return null;
+}
+
 export class Interaction {
   constructor(world, player, scene, hotbar, opts) {
     this.world = world;
@@ -47,13 +120,46 @@ export class Interaction {
     this.hotbar = hotbar; // {selectedId()}
     this.onEdit = opts.onEdit;       // (affectedChunks, {ids}) => remesh now
     this.onSound = opts.onSound;     // (kind, blockId) => audio
+    this.onHint = opts.onHint;       // (text) => a gentle HUD nudge
     this.onPick = opts.onPick;       // (blockId) => set hotbar slot
     this.onSwing = opts.onSwing;     // () => held-item swing animation
     this.canConsume = opts.canConsume; // (id) => bool, takes from inventory (survival)
     this.onSpawnDrop = opts.onSpawnDrop; // (x, y, z, id) => item drop entity
     this.onOpenChest = opts.onOpenChest;   // (x, y, z) => open chest UI (survival)
+    this.onOpenBench = opts.onOpenBench;   // () => open workbench UI (survival)
+    this.onOpenKiln = opts.onOpenKiln;     // (x, y, z) => open kiln UI (survival)
+    this.onOpenLoom = opts.onOpenLoom;     // () => open Loomstone UI (survival)
+    this.onSummon = opts.onSummon;         // (target) => the Murk Lantern's use
+    this.onSleep = opts.onSleep;           // (x, y, z) => Moss Cot rest (survival)
+    this.onOpenSign = opts.onOpenSign;     // (x, y, z) => Notice Post write window
+    this.onPrimeKeg = opts.onPrimeKeg;     // (x, y, z) => light a Blast Keg
     this.onChestBreak = opts.onChestBreak; // (x, y, z) => spill contents
+    this.onKilnBreak = opts.onKilnBreak;   // (x, y, z) => spill kiln slots
+    this.onEat = opts.onEat;               // (kind) => chew/swallow sfx
+    this.onToolUse = opts.onToolUse;       // (use: 'mine'|'hit') => tool wear
+    this.onGleam = opts.onGleam;           // (n) => motes of Gleam earned
+    this.onDoor = opts.onDoor;             // (opened) => hinge-creak sfx
+    this.onThrow = opts.onThrow;           // () => launch a sling stone
+    this.canThrowStone = opts.canThrow;    // () => bool (projectile cap)
+    this.onShoot = opts.onShoot;           // (charge 0..1) => loose a quill
+    this.onLaunchRocket = opts.onLaunchRocket; // (rocketId) => send one skyward
+    this.canLaunchRocket = opts.canLaunchRocket; // () => bool (launch cap)
+    this.onGlideBoost = opts.onGlideBoost; // () => a rocket-thrust cue (sfx)
+    this.hasAmmo = opts.hasAmmo;           // (id) => any in the WHOLE satchel
+    this.consumeAmmo = opts.consumeAmmo;   // (id) => take one from anywhere
     this.mobs = opts.mobs;           // Mobs instance (punching)
+    this.onTradeMob = opts.onTradeMob; // (mob) => open the Peddler's trade window
+    this.onMobCompanion = opts.onMobCompanion; // (mob) => bool: fed/sat a Snuffet
+    this.boats = opts.boats;         // Boats instance (board/deploy/kick)
+    this.carts = opts.carts;         // Carts instance (board/deploy/kick)
+    this.fishing = opts.fishing;     // Fishing instance (cast/reel)
+    this.onBoardBoat = opts.onBoardBoat;   // (boat) => seat the player
+    this.onDeployBoat = opts.onDeployBoat; // (x, topWaterY, z) => launch one
+    this.onBoardCart = opts.onBoardCart;   // (cart) => seat the player
+    this.onDeployCart = opts.onDeployCart; // (x, y, z, railDef) => set one down
+    this.swapHeld = opts.swapHeld;   // (newId) => swap the selected slot's item
+    this.onSplash = opts.onSplash;   // () => a pail scoop/pour water sound
+    this.onSizzle = opts.onSizzle;   // () => the quench (water meets Emberwash)
     this.avgColor = opts.avgColor;   // tile -> [r,g,b]
 
     this.target = null;
@@ -65,6 +171,24 @@ export class Interaction {
     this._mineKey = null;
     this._mineProgress = 0;
     this._hitSoundTimer = 0;
+
+    // eating state (hold right-click on a food item)
+    this.eating = false;
+    this._eatProgress = 0;
+    this._chewTimer = 0;
+
+    // throwing state (right-click with a sling stone selected)
+    this._nextThrow = 0;
+    this._nextRocket = 0;
+    // drawing state (hold right-click with a Springstave selected): drawT
+    // climbs to 1 over a second; onMouseUp looses. Exposed for the HUD's
+    // crosshair pinch and the hand animation.
+    this.drawing = false;
+    this.drawT = 0;
+    // fishing state: cast/reel fire once per PHYSICAL press (armed on
+    // mousedown, spent by _fish) — the hold-repeat must never toggle the
+    // line, and two quick real clicks must both land (cast, then reel)
+    this._fishArmed = false;
     this.crack = new THREE.Mesh(
       new THREE.BoxGeometry(1.004, 1.004, 1.004),
       new THREE.MeshBasicMaterial({
@@ -90,14 +214,25 @@ export class Interaction {
 
   onMouseDown(button) {
     this.buttons.add(button);
+    if (button === 2) this._fishArmed = true;
     this._act(button);
     this._nextAction = performance.now() + ACTION_REPEAT_MS + 60;
   }
   onMouseUp(button) {
     this.buttons.delete(button);
     if (button === 0) this._lastBreakKey = null;
+    if (button === 2) {
+      this._fishArmed = false;
+      if (this.drawing) this._loose();
+    }
   }
-  clearInput() { this.buttons.clear(); this._lastBreakKey = null; }
+  clearInput() {
+    this.buttons.clear();
+    this._lastBreakKey = null;
+    this._fishArmed = false;
+    this.drawing = false;
+    this.drawT = 0;
+  }
 
   update(dt) {
     if (this.player.dead) {
@@ -121,15 +256,20 @@ export class Interaction {
     }
 
     const now = performance.now();
+    this._updateDrawing(dt);
     if (survival) {
       this._updateMining(dt);
-      // place repeat still applies in survival
-      if (this.buttons.has(2) && now >= this._nextAction) {
+      this._updateEating(dt);
+      // place repeat still applies in survival (eating and drawing own the
+      // button while they run)
+      if (!this.eating && !this.drawing && this.buttons.has(2) && now >= this._nextAction) {
         this._place();
         this._nextAction = now + ACTION_REPEAT_MS;
       }
     } else {
       this.crack.visible = false;
+      this.eating = false;
+      this._eatProgress = 0;
       // creative: hold-to-repeat + sweep-breaking
       if (this.buttons.size > 0 && now >= this._nextAction) {
         for (const b of this.buttons) this._act(b);
@@ -146,6 +286,139 @@ export class Interaction {
     this.particles.update(dt);
   }
 
+  // the selected hotbar stack, or null — the one place the defensive
+  // selectedStack ternary lives
+  _heldStack() {
+    return this.hotbar.selectedStack ? this.hotbar.selectedStack() : null;
+  }
+
+  // the tool def on the selected hotbar stack, or null (bare feet, blocks,
+  // food, and every other non-tool item mine at the bare-hand rate)
+  _heldTool() {
+    const s = this._heldStack();
+    const def = s && BLOCKS[s.id];
+    return def && def.tool ? def.tool : null;
+  }
+
+  // the wall clamp for entity rays (punching, boarding, trading): a fresh
+  // raycast that SKIPS rails — a trundle stands inside its rail's cell, and
+  // the cell entry would otherwise always shadow the cart itself
+  _entityClamp(eye, dir) {
+    const reach = this.player.mode === "survival" ? REACH_SURVIVAL : REACH_CREATIVE;
+    const block = raycast(this.world, eye, dir, reach, isRail);
+    return block ? block.dist : reach;
+  }
+
+  // right-click routes to the targeted block (chest/workbench/kiln/cot/keg/
+  // door/gate) no matter what's in hand — unless the player sneaks to
+  // override. Shared by the eating and throwing owners of the button.
+  _interactiveTarget() {
+    const t = this.target;
+    return !!t &&
+      (t.id === CHEST || t.id === WORKBENCH || t.id === KILN || t.id === BED ||
+       t.id === LOOMSTONE || t.id === BLAST_KEG ||
+       isDoor(t.id) || isGate(t.id) || isSign(t.id)) &&
+      !this.player._sneaking;
+  }
+
+  // survival: hold RMB with a food item selected to eat it — a real per-frame
+  // progress timer, not the coarse place-repeat cadence
+  _updateEating(dt) {
+    const id = this.hotbar.selectedId();
+    const def = BLOCKS[id];
+    // right-click on a chest/workbench/kiln/cot still routes, food in hand
+    // or not. An effect-bearing broth drinks at a FULL satchel too — the
+    // whim is the meal, the token restore just rides along.
+    const wants = this.buttons.has(2) && def && def.food && !this._interactiveTarget() &&
+      (this.player.hunger < MAX_HUNGER - 1e-9 || !!def.food.effect);
+    if (!wants) {
+      this.eating = false;
+      this._eatProgress = 0;
+      return;
+    }
+    if (!this.eating) {
+      this.eating = true;
+      this._eatProgress = 0;
+      this._chewTimer = 0;
+    }
+    this._eatProgress += dt;
+    this._chewTimer -= dt;
+    if (this._chewTimer <= 0) {
+      this._chewTimer = CHEW_INTERVAL;
+      if (this.onEat) this.onEat("chew");
+      if (this.onSwing) this.onSwing();
+    }
+    if (this._eatProgress >= EAT_SECONDS) {
+      this._eatProgress = 0;
+      // consume LAST: a failed take (stale slot) must not feed the player
+      if (this.canConsume(id)) {
+        const ate = this.player.eat(def.food.restore);
+        if (def.food.effect) {
+          this.player.addEffect(def.food.effect[0], def.food.effect[1]);
+        }
+        // a broth counts as swallowed even at a full satchel (eat() said no
+        // to the restore, but the whim took) — plain food at full is a bug
+        // the wants-gate already prevents
+        if (ate || def.food.effect) {
+          if (this.onEat) this.onEat("swallow");
+        } else {
+          this.eating = false;
+        }
+      } else {
+        this.eating = false;
+      }
+    }
+  }
+
+  // hold RMB with a Springstave selected to draw it; onMouseUp looses. Works
+  // in both modes (creative just doesn't pay quills). The draw cancels
+  // cleanly when the stave leaves the hand or an interactive block is
+  // targeted mid-pull.
+  _updateDrawing(dt) {
+    const s = this._heldStack();
+    const def = s && BLOCKS[s.id];
+    const isStave = !!(def && def.tool && def.tool.kind === "stave");
+    // the ammo scan (a full-satchel count) sits LAST in the chain so it only
+    // runs while a stave is actually held with the button down
+    const wants = isStave && this.buttons.has(2) && !this.player.dead &&
+      !this._interactiveTarget() &&
+      (this.player.mode !== "survival" || (this.hasAmmo && this.hasAmmo(QUILL)));
+    if (!wants) {
+      // a release is handled by onMouseUp (_loose) before this ever runs;
+      // reaching here un-wanted is a cancel (item switched, target changed)
+      this.drawing = false;
+      this.drawT = 0;
+      return;
+    }
+    if (!this.drawing) {
+      this.drawing = true;
+      this.drawT = 0;
+    }
+    this.drawT = Math.min(1, this.drawT + dt);
+  }
+
+  // release the draw: a real pull looses a quill along the look ray
+  _loose() {
+    const charge = this.drawT;
+    this.drawing = false;
+    this.drawT = 0;
+    if (charge < 0.15) return; // a fumble, not a shot
+    // the stave must STILL be the selected stack: a hotbar scroll between
+    // the last update and this mouseup would otherwise loose the shot and
+    // charge the wear to whatever tool is now in hand
+    const s = this._heldStack();
+    const def = s && BLOCKS[s.id];
+    if (!def || !def.tool || def.tool.kind !== "stave") return;
+    if (!this.onShoot) return;
+    if (this.canThrowStone && !this.canThrowStone()) return; // flight cap
+    if (this.player.mode === "survival" &&
+        !(this.consumeAmmo && this.consumeAmmo(QUILL))) return;
+    this.onShoot(charge);
+    // the stave wears per loosed quill (main.js owns the dur)
+    if (this.onToolUse) this.onToolUse("hit");
+    if (this.onSwing) this.onSwing();
+  }
+
   // survival: hold LMB on a block until its hardness timer completes
   _updateMining(dt) {
     const t = this.target;
@@ -155,11 +428,15 @@ export class Interaction {
       this.crack.visible = false;
       return;
     }
-    // a mob standing in front of the block absorbs the mining, MC-style —
-    // otherwise the crack renders through the pig and the wall breaks
-    if (this.mobs) {
+    // a mob (or a skiff, or a trundle) standing in front of the block absorbs
+    // the mining, MC-style — otherwise the crack renders through it and the
+    // wall breaks
+    if (this.mobs || this.boats || this.carts) {
       const eye = { x: this.player.pos.x, y: this.player.eyeY, z: this.player.pos.z };
-      if (this.mobs.rayHit(eye, this.player.lookDir(), t.dist)) {
+      const dir = this.player.lookDir();
+      if ((this.mobs && this.mobs.rayHit(eye, dir, t.dist)) ||
+          (this.boats && this.boats.rayHit(eye, dir, t.dist)) ||
+          (this.carts && this.carts.rayHit(eye, dir, t.dist))) {
         this._mineKey = null;
         this._mineProgress = 0;
         this.crack.visible = false;
@@ -173,7 +450,18 @@ export class Interaction {
       this._hitSoundTimer = 0;
     }
     const hardness = BLOCKS[t.id].hardness;
-    this._mineProgress += dt;
+    // the right tool for the block multiplies dig speed by its tier rate
+    // (plank 2x, stone 4x, iron 6x); wrong or no tool digs at the bare-hand
+    // rate — hardness itself is unchanged, so pre-tool progression holds.
+    // A Flint Thread quickens a MATCHED tool by half again.
+    const tool = this._heldTool();
+    let rate = 1;
+    if (tool && tool.kind === BLOCKS[t.id].toolKind) {
+      rate = tool.speed;
+      const s = this.hotbar.selectedStack ? this.hotbar.selectedStack() : null;
+      if (s && s.mod === "flint") rate *= 1.5;
+    }
+    this._mineProgress += dt * rate;
 
     this._hitSoundTimer -= dt;
     if (this._hitSoundTimer <= 0) {
@@ -196,13 +484,31 @@ export class Interaction {
     this.crack.visible = true;
   }
 
+  // everything a broken block hands over in survival: its base drop, the
+  // randomDrop roll, and any extraDrops (a ripe meal root's bonus haul)
+  _spawnBlockDrops(id, x, y, z) {
+    const drop = dropFor(id);
+    if (drop !== null) this.onSpawnDrop(x, y, z, drop);
+    const rand = BLOCKS[id].randomDrop;
+    if (rand && Math.random() < rand.chance) this.onSpawnDrop(x, y, z, rand.id);
+    const extra = BLOCKS[id].extraDrops;
+    if (extra) for (const e of extra()) this.onSpawnDrop(x, y, z, e);
+  }
+
   // survival break: remove the block, spawn its drop (and the popped plant's)
   _completeBreak(t) {
+    if (isDoor(t.id)) { this._breakDoor(t); return; }
     if (t.id === CHEST && this.onChestBreak) this.onChestBreak(t.x, t.y, t.z);
+    if (t.id === KILN && this.onKilnBreak) this.onKilnBreak(t.x, t.y, t.z);
+    // sampled BEFORE the break writes this cell into the overlay: an edited
+    // cell means the block was player-placed, and placed ore sheds no gleam
+    const wasPlaced = this.world.hasEdit(t.x, t.y, t.z);
     const affected = this.world.setBlock(t.x, t.y, t.z, AIR);
     const above = this.world.getBlock(t.x, t.y + 1, t.z);
     let popped = null;
-    if (above !== AIR && BLOCKS[above].kind === "cross") {
+    // a plant (or a Snowdrift — which keeps nothing — or a Waybar, which
+    // hands back the one rail item) pops off its support
+    if (isPlant(above) || above === SNOW_LAYER || isRail(above)) {
       popped = above;
       this.world.setBlock(t.x, t.y + 1, t.z, AIR);
     }
@@ -210,33 +516,89 @@ export class Interaction {
     this.onSound("break", t.id);
     this.particles.burst(t.x, t.y, t.z, this.avgColor[BLOCKS[t.id].tiles.side] || [0.5, 0.5, 0.5]);
 
-    const drop = dropFor(t.id);
-    if (drop !== null) this.onSpawnDrop(t.x + 0.5, t.y + 0.4, t.z + 0.5, drop);
-    const rand = BLOCKS[t.id].randomDrop;
-    if (rand && Math.random() < rand.chance) {
-      this.onSpawnDrop(t.x + 0.5, t.y + 0.4, t.z + 0.5, rand.id);
+    // pick gating: stone-family blocks and ores hand over NOTHING unless
+    // broken with a pick of sufficient tier (iron ore wants stone-tier+).
+    // The block still breaks — the Upturn just keeps the pieces.
+    const tool = this._heldTool();
+    const need = BLOCKS[t.id].needsPick;
+    const gated = need > 0 && !(tool && tool.kind === "pick" && tool.tier >= need);
+    if (!gated) {
+      this._spawnBlockDrops(t.id, t.x + 0.5, t.y + 0.4, t.z + 0.5);
+      // gleam clings to a mine that actually pays out (never a gated break)
+      // — and only to the WORLD's own ore: a cell in the edit overlay was
+      // placed (or re-placed) by hand, and mining your own handiwork in a
+      // loop must not fill jars for free. wasPlaced is sampled before the
+      // break wrote this cell into the overlay (see above).
+      if (BLOCKS[t.id].gleam > 0 && !wasPlaced && this.onGleam) {
+        this.onGleam(BLOCKS[t.id].gleam);
+      }
     }
     if (popped !== null) {
-      const plantDrop = dropFor(popped);
-      if (plantDrop !== null) this.onSpawnDrop(t.x + 0.5, t.y + 1.3, t.z + 0.5, plantDrop);
+      this._spawnBlockDrops(popped, t.x + 0.5, t.y + 1.3, t.z + 0.5);
     }
+    // every broken block costs the held tool one use (main.js owns the wear)
+    if (tool && this.onToolUse) this.onToolUse("mine");
   }
 
   _act(button) {
     if ((this.target || button === 0) && this.onSwing) this.onSwing();
-    // punching a mob takes priority over the block behind it. Recompute the
-    // block clamp with a FRESH raycast — this.target is from last frame's
-    // camera direction and a flick+click could punch through a wall
-    if (button === 0 && this.mobs) {
+    // punching a mob, a skiff, or a trundle takes priority over the block
+    // behind it. Recompute the block clamp with a FRESH raycast — this.target
+    // is from last frame's camera direction and a flick+click could punch a wall
+    if (button === 0 && (this.mobs || this.boats || this.carts)) {
       const eye = { x: this.player.pos.x, y: this.player.eyeY, z: this.player.pos.z };
       const dir = this.player.lookDir();
-      const reach = this.player.mode === "survival" ? REACH_SURVIVAL : REACH_CREATIVE;
-      const block = raycast(this.world, eye, dir, reach);
-      if (this.mobs.punch(eye, dir, block ? block.dist : reach, this.player.pos)) return;
+      const lim = this._entityClamp(eye, dir);
+      // a shiv in hand raises the kick from 1 to its tier's damage; other
+      // tools swing like a bare foot. Any landed tool hit costs 1 use.
+      // A Keen Thread woven through the blade adds its bite on top.
+      const tool = this._heldTool();
+      let dmg = tool && tool.kind === "blade" ? tool.damage : 1;
+      let dim = false; // a Dusk Thread hangs the dark on whatever it cuts
+      if (tool && tool.kind === "blade") {
+        const s = this.hotbar.selectedStack ? this.hotbar.selectedStack() : null;
+        if (s && s.mod === "keen") dmg += 2;
+        else if (s && s.mod === "dusk") { dmg += 3; dim = true; }
+      }
+      // falling crit: airborne AND dropping — a hit that carries the whole
+      // Wanderling behind it lands half again as hard (fists and blades
+      // alike; ladders, water, and wings don't count as falling)
+      const p = this.player;
+      const crit = !p.onGround && p.vel.y < 0 && !p.onLadder && !p.inWater &&
+        !p.flying && !p.riding;
+      if (crit) dmg = Math.ceil(dmg * 1.5);
+      // a sprint hit transfers the momentum: the shove lands ~1.8x harder
+      const knock = p.sprintActive ? 1.8 : 1;
+      if (this.boats) {
+        const b = this.boats.rayHit(eye, dir, lim);
+        if (b) { // two kicks break it
+          this.boats.punch(b, this.player);
+          if (tool && this.onToolUse) this.onToolUse("hit");
+          return;
+        }
+      }
+      if (this.carts) {
+        const cart = this.carts.rayHit(eye, dir, lim);
+        if (cart) { // two kicks fold it back into the item, like the skiff
+          this.carts.punch(cart, this.player);
+          if (tool && this.onToolUse) this.onToolUse("hit");
+          return;
+        }
+      }
+      if (this.mobs && this.mobs.punch(eye, dir, lim, this.player.pos, dmg, { crit, knock, dim })) {
+        if (tool && this.onToolUse) this.onToolUse("hit");
+        return;
+      }
     }
     // survival LMB is handled by the mining loop, not instant breaking
     if (button === 0 && this.player.mode !== "survival") this._break();
-    else if (button === 1 && this.target) this.onPick(this.target.id);
+    else if (button === 2 && this.drawing) { /* the draw owns the button */ }
+    else if (button === 1 && this.target) {
+      // any door half picks as the one user-visible door item; stair facing
+      // variants pick as their canonical (north) id
+      const tid = this.target.id;
+      this.onPick(isDoor(tid) ? DOOR : (BLOCKS[tid].base ?? tid));
+    }
     else if (button === 2) this._place();
   }
 
@@ -244,14 +606,16 @@ export class Interaction {
     const t = this.target;
     if (!t) return;
     if (t.id === BEDROCK) return; // the world floor is indestructible
-    if (t.id === CHEST && this.onChestBreak) this.onChestBreak(t.x, t.y, t.z);
     this._lastBreakKey = `${t.x},${t.y},${t.z}`;
+    if (isDoor(t.id)) { this._breakDoor(t); return; }
+    if (t.id === CHEST && this.onChestBreak) this.onChestBreak(t.x, t.y, t.z);
+    if (t.id === KILN && this.onKilnBreak) this.onKilnBreak(t.x, t.y, t.z);
     const def = BLOCKS[t.id];
     const affected = this.world.setBlock(t.x, t.y, t.z, AIR);
-    // breaking the support under a plant pops the plant too
+    // breaking the support under a plant (or a Snowdrift, or a Waybar) pops it too
     const above = this.world.getBlock(t.x, t.y + 1, t.z);
     let popped = null;
-    if (above !== AIR && BLOCKS[above].kind === "cross") {
+    if (isPlant(above) || above === SNOW_LAYER || isRail(above)) {
       popped = above;
       this.world.setBlock(t.x, t.y + 1, t.z, AIR);
     }
@@ -260,31 +624,510 @@ export class Interaction {
     this.particles.burst(t.x, t.y, t.z, this.avgColor[def.tiles.side] || [0.5, 0.5, 0.5]);
   }
 
-  _place() {
+  // breaking either door half removes both; survival drops ONE door item.
+  // A plant standing on the (solid, closed) top half pops with it.
+  _breakDoor(t) {
+    const lowerY = isDoorLower(t.id) ? t.y : t.y - 1;
+    const affected = new Set();
+    const lower = this.world.getBlock(t.x, lowerY, t.z);
+    const upper = this.world.getBlock(t.x, lowerY + 1, t.z);
+    if (isDoor(lower)) for (const c of this.world.setBlock(t.x, lowerY, t.z, AIR)) affected.add(c);
+    if (isDoor(upper)) for (const c of this.world.setBlock(t.x, lowerY + 1, t.z, AIR)) affected.add(c);
+    if (affected.size === 0) return;
+    const above = this.world.getBlock(t.x, lowerY + 2, t.z);
+    let popped = null;
+    if (isPlant(above)) {
+      popped = above;
+      for (const c of this.world.setBlock(t.x, lowerY + 2, t.z, AIR)) affected.add(c);
+    }
+    // popped is reported at the UPPER half's cell so main.js's sapling
+    // bookkeeping (info.y + 1) stays true when the top half was the target
+    this.onEdit([...affected], {
+      ids: [t.id, popped], x: t.x, y: lowerY + 1, z: t.z, broken: t.id, popped,
+    });
+    this.onSound("break", t.id);
+    this.particles.burst(t.x, t.y, t.z, this.avgColor[BLOCKS[t.id].tiles.side] || [0.5, 0.5, 0.5]);
+    if (this.player.mode === "survival") {
+      this.onSpawnDrop(t.x + 0.5, lowerY + 0.4, t.z + 0.5, DOOR);
+      if (popped !== null) {
+        this._spawnBlockDrops(popped, t.x + 0.5, lowerY + 2.3, t.z + 0.5);
+      }
+      // a door is a broken block like any other: one use off the held tool
+      const tool = this._heldTool();
+      if (tool && this.onToolUse) this.onToolUse("mine");
+    }
+  }
+
+  // right-click on any door half: swap BOTH halves between open and closed.
+  // Closing checks the player isn't standing in the doorway first.
+  _toggleDoor(t) {
+    const lowerY = isDoorLower(t.id) ? t.y : t.y - 1;
+    const lower = this.world.getBlock(t.x, lowerY, t.z);
+    const upper = this.world.getBlock(t.x, lowerY + 1, t.z);
+    if (!isDoorLower(lower)) return; // orphaned half — nothing sane to toggle
+    const opening = lower === DOOR; // closed now -> about to swing open
+    if (!opening &&
+        (this._overlapsPlayer(t.x, lowerY, t.z) || this._overlapsPlayer(t.x, lowerY + 1, t.z))) {
+      return; // never slam the door shut on the Wanderling inside it
+    }
+    const affected = new Set();
+    for (const c of this.world.setBlock(t.x, lowerY, t.z, DOOR_TOGGLE[lower])) affected.add(c);
+    if (isDoor(upper) && !isDoorLower(upper)) {
+      for (const c of this.world.setBlock(t.x, lowerY + 1, t.z, DOOR_TOGGLE[upper])) affected.add(c);
+    }
+    if (affected.size === 0) return;
+    this.onEdit([...affected], {
+      ids: [DOOR_TOGGLE[lower]], x: t.x, y: lowerY, z: t.z,
+    });
+    if (this.onDoor) this.onDoor(opening);
+  }
+
+  // right-click a Wattle Gate: swing the leaf. Closing checks nobody's
+  // standing in the gateway — the closed gate is a solid 1.5-block column.
+  _toggleGate(t) {
+    const opening = t.id === GATE;
+    if (!opening) {
+      const a = this.player.aabb();
+      const h = BLOCKS[GATE].colHeight;
+      if (t.x + 1 > a.minX && t.x < a.maxX &&
+          t.y + h > a.minY && t.y < a.maxY &&
+          t.z + 1 > a.minZ && t.z < a.maxZ) {
+        return; // never swing the gate shut on the Wanderling inside it
+      }
+    }
+    const affected = this.world.setBlock(t.x, t.y, t.z, opening ? GATE_OPEN : GATE);
+    if (affected.length === 0) return;
+    this.onEdit(affected, { ids: [opening ? GATE_OPEN : GATE], x: t.x, y: t.y, z: t.z });
+    if (this.onDoor) this.onDoor(opening);
+  }
+
+  // a sling stone in hand owns right-click the way food does: throw it.
+  // Consume-last discipline: the cap and cooldown are ruled out BEFORE the
+  // inventory take, so a refused throw never eats a stone.
+  _throw() {
+    if (!this.onThrow) return;
+    const now = performance.now();
+    if (now < this._nextThrow) return;
+    if (this.canThrowStone && !this.canThrowStone()) return; // 24 already aloft
+    if (this.player.mode === "survival" && !this.canConsume(SLING_STONE)) return;
+    this._nextThrow = now + THROW_COOLDOWN_MS;
+    this.onThrow();
+    if (this.onSwing) this.onSwing();
+  }
+
+  // a Festival Rocket's right-click. Consume-last discipline throughout: the
+  // cooldown, the glide predicate, the launch cap, and the inventory take are
+  // all cleared BEFORE anything is spent, so a refused use never eats a rocket.
+  //   - mid-glide with a wing worn: the rocket thrusts the Wanderwing along the
+  //     look vector (player.glideBoost pays the wing a point of dur).
+  //   - otherwise: it launches straight up to burst.
+  _useRocket(id) {
+    const now = performance.now();
+    if (now < this._nextRocket) return;
+    // the glide-boost path — the long-distance flight loop
+    if (this.player.canGlideBoost && this.player.canGlideBoost()) {
+      if (this.player.mode === "survival" && !this.canConsume(id)) return;
+      this._nextRocket = now + ROCKET_COOLDOWN_MS;
+      this.player.glideBoost();
+      if (this.onGlideBoost) this.onGlideBoost();
+      return;
+    }
+    // the launch path
+    if (!this.onLaunchRocket) return;
+    if (this.canLaunchRocket && !this.canLaunchRocket()) return; // launch cap
+    if (this.player.mode === "survival" && !this.canConsume(id)) return;
+    this._nextRocket = now + ROCKET_COOLDOWN_MS;
+    this.onLaunchRocket(id);
+    if (this.onSwing) this.onSwing();
+  }
+
+  // a Dib-Pole in hand owns right-click: no float out -> cast one; a float
+  // out -> reel it in (which is the catch, if something is dibbing). Armed
+  // once per physical press: the hold-repeat can't cast-and-instantly-reel,
+  // and a quick cast-then-reel double-click has no dead window.
+  _fish() {
+    if (!this.fishing || !this._fishArmed) return;
+    this._fishArmed = false;
+    if (this.fishing.active) {
+      this.fishing.reel(this.player);
+    } else {
+      const dir = this.player.lookDir();
+      this.fishing.cast(
+        this.player.pos.x + dir.x * 0.4, this.player.eyeY + dir.y * 0.4,
+        this.player.pos.z + dir.z * 0.4, dir);
+    }
+    if (this.onSwing) this.onSwing();
+  }
+
+  // a Reed Skiff in hand owns right-click over water: launch it there.
+  // Consume-last discipline: the water target, headroom, and the boat cap
+  // are all ruled out BEFORE the inventory take.
+  _deployBoat() {
+    if (!this.onDeployBoat || !this.boats) return;
+    const eye = { x: this.player.pos.x, y: this.player.eyeY, z: this.player.pos.z };
+    const dir = this.player.lookDir();
+    const reach = this.player.mode === "survival" ? REACH_SURVIVAL : REACH_CREATIVE;
+    const w = raycastWater(this.world, eye, dir, reach);
+    if (!w) return;
+    // climb to the top of the water column — the hull floats on the surface
+    let ty = w.y;
+    while (ty + 1 < HEIGHT && this.world.getBlock(w.x, ty + 1, w.z) === WATER) ty++;
+    if (this.world.getBlock(w.x, ty + 1, w.z) !== AIR) return; // needs open sky
+    if (!this.boats.canDeploy()) return;
+    if (this.player.mode === "survival" && !this.canConsume(BOAT)) return;
+    this.onDeployBoat(w.x, ty, w.z);
+    this.onSound("place", BOAT);
+  }
+
+  // a Trundle in hand owns right-click over a Waybar: set the cart on the
+  // track there. Consume-last discipline: the rail target, the cart cap, and
+  // a cart already parked there are all ruled out BEFORE the inventory take.
+  _deployCart() {
+    if (!this.onDeployCart || !this.carts) return;
+    const t = this.target;
+    if (!t || !isRail(t.id)) return;
+    if (!this.carts.canDeploy()) return;
+    if (this.carts.cartAt(t.x, t.y, t.z)) return; // one trundle per cell
+    if (this.player.mode === "survival" && !this.canConsume(CART)) return;
+    this.onDeployCart(t.x, t.y, t.z, BLOCKS[t.id]);
+    this.onSound("place", CART);
+  }
+
+  // the Pail's right-click. An empty pail scoops the fluid the crosshair is
+  // over (the source cell goes to air and the slot becomes the matching full
+  // pail); a full pail pours its fluid against the targeted face and hands the
+  // empty pail back. No survival consume here — the pail is not spent, it just
+  // changes state, so swapHeld does the whole exchange in both modes.
+  _usePail(heldId) {
+    if (!this.swapHeld) return;
+    if (heldId === PAIL) this._scoopFluid();
+    else this._pourFluid(heldId);
+  }
+
+  _scoopFluid() {
+    const eye = { x: this.player.pos.x, y: this.player.eyeY, z: this.player.pos.z };
+    const dir = this.player.lookDir();
+    const reach = this.player.mode === "survival" ? REACH_SURVIVAL : REACH_CREATIVE;
+    const f = raycastFluid(this.world, eye, dir, reach);
+    if (!f) return;
+    // lift the source cell into the pail: the cell empties, the slot fills
+    const affected = this.world.setBlock(f.x, f.y, f.z, AIR);
+    if (affected.length === 0) return;
+    if (!this.swapHeld(f.id === WATER ? WATER_PAIL : EMBER_PAIL)) return;
+    this.onEdit(affected, { ids: [AIR, f.id], x: f.x, y: f.y, z: f.z, broken: f.id });
+    if (this.onSplash) this.onSplash();
+    if (this.onSwing) this.onSwing();
+  }
+
+  _pourFluid(heldId) {
     const t = this.target;
     if (!t) return;
-    // right-click on a chest opens it (sneak to place against it instead)
+    const fluidId = heldId === WATER_PAIL ? WATER : LAVA;
+    // pour against the hit face (into a plant/Snowdrift's cell in place)
+    let px = t.x, py = t.y, pz = t.z;
+    if (!isPlant(t.id) && t.id !== SNOW_LAYER) {
+      px += t.normal[0]; py += t.normal[1]; pz += t.normal[2];
+    }
+    const existing = this.world.getBlock(px, py, pz);
+    const canReplace = existing === AIR || isPlant(existing) || existing === SNOW_LAYER ||
+      isFluid(existing);
+    if (!canReplace) return;
+    if (py < 0 || py >= HEIGHT) return;
+    const targetChunk = this.world.getChunk(px >> 4, pz >> 4);
+    if (!targetChunk || !targetChunk.generated) return;
+    if (!this.swapHeld(PAIL)) return; // hand back the empty pail
+    this._popReplacedPlant(existing, px, py, pz);
+    const affected = this.world.setBlock(px, py, pz, fluidId);
+    this.onEdit(affected, { ids: [fluidId, existing], x: px, y: py, z: pz, placed: fluidId });
+    if (this.onSplash) this.onSplash();
+    if (this.onSwing) this.onSwing();
+    // slake on contact: the pour may have set water next to the Emberwash
+    // (or ember next to water) — harden the molten cell to Cinderglass
+    this._quenchCheck(px, py, pz, fluidId);
+  }
+
+  // Cinderglass forms where Water meets the Emberwash. Pouring/placing WATER
+  // hardens every adjacent Emberwash cell; pouring/placing the Emberwash next
+  // to Water hardens the cell that was just laid. Each conversion is its own
+  // edit so the light BFS drops the molten cell's glow (emit 13 -> opaque
+  // stone) correctly.
+  _quenchCheck(px, py, pz, fluidId) {
+    const N = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+    let quenched = false;
+    const harden = (x, y, z) => {
+      const affected = this.world.setBlock(x, y, z, CINDERGLASS);
+      if (affected.length === 0) return;
+      this.onEdit(affected, { ids: [CINDERGLASS, LAVA], x, y, z, placed: CINDERGLASS });
+      quenched = true;
+    };
+    if (fluidId === WATER) {
+      for (const [dx, dy, dz] of N) {
+        if (this.world.getBlock(px + dx, py + dy, pz + dz) === LAVA) {
+          harden(px + dx, py + dy, pz + dz);
+        }
+      }
+    } else if (fluidId === LAVA) {
+      for (const [dx, dy, dz] of N) {
+        if (this.world.getBlock(px + dx, py + dy, pz + dz) === WATER) {
+          harden(px, py, pz);
+          break;
+        }
+      }
+    }
+    if (quenched && this.onSizzle) this.onSizzle();
+  }
+
+  _place() {
+    const t = this.target;
+    // right-click a Reed Skiff to board it — checked before any block
+    // routing, exactly like mobs eat the punch ray (sneak to override)
+    if (this.boats && this.onBoardBoat && !this.player.riding && !this.player._sneaking) {
+      const eye = { x: this.player.pos.x, y: this.player.eyeY, z: this.player.pos.z };
+      const dir = this.player.lookDir();
+      const b = this.boats.rayHit(eye, dir, this._entityClamp(eye, dir));
+      if (b) { this.onBoardBoat(b); return; }
+    }
+    // right-click a Trundle to board it — the same idiom as the skiff (the
+    // rail-skipping clamp matters here: the cart stands inside a rail's cell)
+    if (this.carts && this.onBoardCart && !this.player.riding && !this.player._sneaking) {
+      const eye = { x: this.player.pos.x, y: this.player.eyeY, z: this.player.pos.z };
+      const dir = this.player.lookDir();
+      const cart = this.carts.rayHit(eye, dir, this._entityClamp(eye, dir));
+      if (cart) { this.onBoardCart(cart); return; }
+    }
+    // right-click a mob — one shared entity ray before any block routing,
+    // exactly like boarding a skiff (sneak to override). The Peddler trades
+    // (survival only: the trade window is a satchel window, and creative
+    // wants for nothing anyway); a Snuffet takes root pips (courting) or
+    // berries (the bonding path — main.js owns that routing); a Tuftling
+    // weighs a Silverfin. A mob in the ray eats the click, so nothing ever
+    // plants or places THROUGH a creature.
+    if (this.mobs && !this.player._sneaking) {
+      const eye = { x: this.player.pos.x, y: this.player.eyeY, z: this.player.pos.z };
+      const dir = this.player.lookDir();
+      const m = this.mobs.rayHit(eye, dir, this._entityClamp(eye, dir));
+      if (m) {
+        if (m.spec.trades && this.onTradeMob && this.player.mode === "survival") {
+          this.onTradeMob(m);
+          return;
+        }
+        if (this.player.mode === "survival") {
+          // feeding a snuffet its favorite pips (courting — see mobs.court):
+          // handled in the same pre-block mob-ray pass as trading, and
+          // consume-last discipline holds: an unfeedable snuffet (pup, or
+          // still on its courting cooldown) costs nothing.
+          if (m.species === "snuffet" &&
+              this.hotbar.selectedId() === ROOT_SEED) {
+            if (!m.baby && m.breedCd <= 0 && m.loveT <= 0 &&
+                this.canConsume(ROOT_SEED)) {
+              this.mobs.court(m);
+              if (this.onEat) this.onEat("chew");
+            }
+            return;
+          }
+          // the Tuftling: a Silverfin might buy its loyalty (1 in 3 — it
+          // keeps the fish either way); an empty hand toggles a tamed one
+          // between heel and stay
+          if (m.species === "tuftling") {
+            const held = this.hotbar.selectedId();
+            if (!m.tamed && held === SILVERFIN) {
+              if (this.canConsume(SILVERFIN)) {
+                const r = this.mobs.tame(m);
+                if (this.onHint) {
+                  this.onHint(r === "tamed"
+                    ? "The Tuftling decides you are its person."
+                    : "The Tuftling takes the fish and remains unconvinced.", 2600);
+                }
+              }
+              return;
+            }
+            if (m.tamed && held === AIR) {
+              const mode = this.mobs.togglePet(m);
+              if (this.onHint) {
+                this.onHint(mode === "stay"
+                  ? "The Tuftling settles in to wait."
+                  : "The Tuftling falls in behind you.", 2200);
+              }
+              return;
+            }
+          }
+        }
+        // bondlings: berries bond a snuffet, and a bonded one toggles
+        // sit/stand — main.js owns that routing (returns true if handled)
+        if (this.onMobCompanion && this.onMobCompanion(m)) return;
+      }
+    }
+    // a Murk Lantern in hand summons instead of placing — main.js owns the
+    // night check and the polite daytime refusal (nothing consumed)
+    if (this.hotbar.selectedId() === MURK_LANTERN && !this._interactiveTarget()) {
+      if (t && this.onSummon) this.onSummon(t);
+      return;
+    }
+    // a sling stone throws instead of placing — unless an interactive block
+    // is targeted (sneak-throw at a chest works, like sneak-place does)
+    if (this.hotbar.selectedId() === SLING_STONE && !this._interactiveTarget()) {
+      this._throw();
+      return;
+    }
+    // a skiff in hand launches onto water instead of placing
+    if (this.hotbar.selectedId() === BOAT && !this._interactiveTarget()) {
+      this._deployBoat();
+      return;
+    }
+    // a trundle in hand sets down on a targeted Waybar instead of placing
+    if (this.hotbar.selectedId() === CART && !this._interactiveTarget()) {
+      this._deployCart();
+      return;
+    }
+    // a Dib-Pole in hand casts/reels instead of placing — same sneak-to-
+    // override escape hatch as the stone and the skiff
+    if (this.hotbar.selectedId() === FISHING_POLE && !this._interactiveTarget()) {
+      this._fish();
+      return;
+    }
+    // a Festival Rocket in hand owns right-click: mid-glide it thrusts the
+    // Wanderwing, otherwise it launches skyward. Sneak to override (place-
+    // against escape hatch), like the stone and the skiff — though a rocket
+    // never places, so the sneak just eats the click harmlessly.
+    if (isRocket(this.hotbar.selectedId()) && !this._interactiveTarget()) {
+      this._useRocket(this.hotbar.selectedId());
+      return;
+    }
+    // a Pail in hand owns right-click: an empty one scoops the fluid the
+    // crosshair is over; a full one pours against the targeted face. Sneak to
+    // override (place-against escape hatch), like the skiff and the stone.
+    const pailHeld = this.hotbar.selectedId();
+    if ((pailHeld === PAIL || pailHeld === WATER_PAIL || pailHeld === EMBER_PAIL) &&
+        !this._interactiveTarget()) {
+      this._usePail(pailHeld);
+      return;
+    }
+    if (!t) return;
+    // right-click on a door toggles it — in BOTH modes (sneak to place against)
+    if (isDoor(t.id) && !this.player._sneaking) {
+      this._toggleDoor(t);
+      return;
+    }
+    // right-click on a Wattle Gate swings it — routed exactly like the door
+    if (isGate(t.id) && !this.player._sneaking) {
+      this._toggleGate(t);
+      return;
+    }
+    // right-click on a Notice Post opens the write window — in BOTH modes,
+    // routed exactly like the door (sneak to place against it instead)
+    if (isSign(t.id) && !this.player._sneaking && this.onOpenSign) {
+      this.onOpenSign(t.x, t.y, t.z);
+      return;
+    }
+    // right-click on a Blast Keg primes it — in BOTH modes, like the door
+    // (sneak to place against it instead)
+    if (t.id === BLAST_KEG && !this.player._sneaking && this.onPrimeKeg) {
+      this.onPrimeKeg(t.x, t.y, t.z);
+      return;
+    }
+    // right-click on a chest/workbench opens it (sneak to place against it)
     if (t.id === CHEST && this.player.mode === "survival" && !this.player._sneaking && this.onOpenChest) {
       this.onOpenChest(t.x, t.y, t.z);
+      return;
+    }
+    if (t.id === WORKBENCH && this.player.mode === "survival" && !this.player._sneaking && this.onOpenBench) {
+      this.onOpenBench();
+      return;
+    }
+    if (t.id === KILN && this.player.mode === "survival" && !this.player._sneaking && this.onOpenKiln) {
+      this.onOpenKiln(t.x, t.y, t.z);
+      return;
+    }
+    if (t.id === LOOMSTONE && this.player.mode === "survival" && !this.player._sneaking && this.onOpenLoom) {
+      this.onOpenLoom();
+      return;
+    }
+    if (t.id === BED && this.player.mode === "survival" && !this.player._sneaking && this.onSleep) {
+      this.onSleep(t.x, t.y, t.z);
+      return;
+    }
+    // the Furrower: right-click soil to turn it — dirt, turf, or Mire Sod
+    // with open air above becomes Turned Earth, and the tilling costs the
+    // tool one use (both modes; creative gardens too, it just doesn't pay)
+    const heldTool = this._heldTool();
+    if (heldTool && heldTool.kind === "hoe" &&
+        (t.id === DIRT || t.id === GRASS || t.id === MUD) &&
+        this.world.getBlock(t.x, t.y + 1, t.z) === AIR) {
+      const affected = this.world.setBlock(t.x, t.y, t.z, FARMLAND);
+      if (affected.length === 0) return;
+      this.onEdit(affected, { ids: [FARMLAND, t.id], x: t.x, y: t.y, z: t.z, placed: FARMLAND });
+      this.onSound("place", FARMLAND);
+      if (this.onToolUse) this.onToolUse("mine");
       return;
     }
     const id = this.hotbar.selectedId();
     if (id === AIR) return;
     const def = BLOCKS[id];
+    // items (food etc.) can never be placed — not even in creative
+    if (def.placeable === false) return;
 
     let px = t.x, py = t.y, pz = t.z;
-    const targetDef = BLOCKS[t.id];
-    // plants are replaceable in place; otherwise place against the hit face
-    if (targetDef.kind !== "cross") {
+    // plants and Snowdrifts are replaceable in place; otherwise place against
+    // the hit face (sturdy crosses — ladders, open door halves — are never
+    // built over)
+    if (!isPlant(t.id) && t.id !== SNOW_LAYER) {
       px += t.normal[0]; py += t.normal[1]; pz += t.normal[2];
     }
+    // a cell is buildable if it's air, a plant, a Snowdrift, or a fluid
+    const canReplace = (bid) => bid === AIR || isPlant(bid) || bid === SNOW_LAYER ||
+      isFluid(bid);
     const existing = this.world.getBlock(px, py, pz);
-    if (existing !== AIR && BLOCKS[existing].kind !== "cross" && BLOCKS[existing].bucket !== "water") return;
+    if (!canReplace(existing)) return;
+
+    // the door occupies TWO cells — hand it off to its own path
+    if (id === DOOR) { this._placeDoor(px, py, pz, existing); return; }
 
     // don't place a solid block overlapping the player
     if (def.solid && this._overlapsPlayer(px, py, pz)) return;
-    // plants need soil
-    if (def.kind === "cross" && !isSolid(this.world.getBlock(px, py - 1, pz))) return;
+    if (id === LADDER) {
+      // ladders mount on walls: at least one solid horizontal neighbor
+      if (!isSolid(this.world.getBlock(px + 1, py, pz)) &&
+          !isSolid(this.world.getBlock(px - 1, py, pz)) &&
+          !isSolid(this.world.getBlock(px, py, pz + 1)) &&
+          !isSolid(this.world.getBlock(px, py, pz - 1))) return;
+    } else if (SEED_TO_SPROUT[id] !== undefined) {
+      // seed items (root pips, bogbean pods) want TURNED EARTH — the
+      // Furrower made farming a craft. Pre-Furrower farms planted straight
+      // into dirt, so a failed plant on plain soil gets a nudge instead of
+      // a silent nothing (the old click used to work).
+      const below = this.world.getBlock(px, py - 1, pz);
+      if (below !== FARMLAND) {
+        if ((below === DIRT || below === GRASS || below === MUD) && this.onHint) {
+          this.onHint("The seeds want Turned Earth — a Furrower turns the soil.");
+        }
+        return;
+      }
+    } else if (def.shape === "sign") {
+      // a Notice Post stands on solid ground only — nobody trusts a notice
+      // nailed to thin air
+      if (!isSolid(this.world.getBlock(px, py - 1, pz))) return;
+    } else if (id === SNOW_LAYER) {
+      // a Snowdrift settles on flat full-block tops only (never mid-air,
+      // never on a slab's half rise or a fence's shoulders)
+      const below = BLOCKS[this.world.getBlock(px, py - 1, pz)];
+      if (!below.solid || below.shape || below.colHeight !== 1) return;
+    } else if (id === RAIL) {
+      // a Waybar is pegged to flat full-block tops only — same footing rule
+      // as the Snowdrift (never mid-air, never a slab or a fence shoulder)
+      const below = BLOCKS[this.world.getBlock(px, py - 1, pz)];
+      if (!below.solid || below.shape || below.colHeight !== 1) return;
+    } else if (id === GLEAM_MOSS) {
+      // gleam moss presses onto ANY solid face — floor, wall, or cave
+      // ceiling (unlike a torch, which only stands on top of a block)
+      if (!isSolid(this.world.getBlock(px, py - 1, pz)) &&
+          !isSolid(this.world.getBlock(px, py + 1, pz)) &&
+          !isSolid(this.world.getBlock(px + 1, py, pz)) &&
+          !isSolid(this.world.getBlock(px - 1, py, pz)) &&
+          !isSolid(this.world.getBlock(px, py, pz + 1)) &&
+          !isSolid(this.world.getBlock(px, py, pz - 1))) return;
+    } else if (def.kind === "cross" && !isSolid(this.world.getBlock(px, py - 1, pz))) {
+      return; // plants need soil
+    }
     // setBlock silently fails outside the world or in an ungenerated chunk —
     // rule those out BEFORE consuming inventory
     if (py < 0 || py >= HEIGHT) return;
@@ -295,16 +1138,61 @@ export class Interaction {
     if (this.player.mode === "survival" && !this.canConsume(id)) return;
     // overwriting a plant/torch in survival pops its drop instead of
     // silently destroying it
-    if (this.player.mode === "survival" && existing !== AIR && BLOCKS[existing].kind === "cross") {
-      const plantDrop = dropFor(existing);
-      if (plantDrop !== null) this.onSpawnDrop(px + 0.5, py + 0.3, pz + 0.5, plantDrop);
-    }
+    this._popReplacedPlant(existing, px, py, pz);
 
-    const affected = this.world.setBlock(px, py, pz, id);
+    // stairs bake their facing into the block id: the tall back goes in the
+    // player's look direction, so the steps face the placer
+    let placeId = id;
+    if (def.shape === "stairs" && def.facings) {
+      placeId = def.facings[yawToFacing(this.player.yaw)];
+    }
+    // a Notice Post bakes the OPPOSITE facing: the board turns its readable
+    // front back toward the placer, like handing someone a written page
+    if (def.shape === "sign" && def.facings) {
+      placeId = def.facings[(yawToFacing(this.player.yaw) + 2) % 4];
+    }
+    // planted seeds go into the ground as their sprout — the seed item
+    // never exists as a world block
+    if (SEED_TO_SPROUT[id] !== undefined) placeId = SEED_TO_SPROUT[id];
+    const affected = this.world.setBlock(px, py, pz, placeId);
     if (affected.length === 0) return;
     // include the replaced block: overwriting a torch must clear its light
-    this.onEdit(affected, { ids: [id, existing], x: px, y: py, z: pz, placed: id });
+    this.onEdit(affected, { ids: [placeId, existing], x: px, y: py, z: pz, placed: placeId });
     this.onSound("place", id);
+    // a fluid placed against the other fluid quenches on contact (creative
+    // painting reaches the same Cinderglass the pail does)
+    if (isFluid(placeId)) this._quenchCheck(px, py, pz, placeId);
+  }
+
+  _popReplacedPlant(existing, px, py, pz) {
+    if (this.player.mode !== "survival" || !isPlant(existing)) return;
+    this._spawnBlockDrops(existing, px + 0.5, py + 0.3, pz + 0.5);
+  }
+
+  // the Plank Door: needs its cell AND the one above free, plus a solid
+  // floor; consumes ONE item and writes both halves
+  _placeDoor(px, py, pz, existing) {
+    if (py < 1 || py + 1 >= HEIGHT) return;
+    const canReplace = (bid) => bid === AIR || isPlant(bid) || bid === SNOW_LAYER ||
+      isFluid(bid);
+    const upperEx = this.world.getBlock(px, py + 1, pz);
+    if (!canReplace(upperEx)) return;
+    if (!isSolid(this.world.getBlock(px, py - 1, pz))) return; // solid floor
+    if (this._overlapsPlayer(px, py, pz) || this._overlapsPlayer(px, py + 1, pz)) return;
+    const targetChunk = this.world.getChunk(px >> 4, pz >> 4);
+    if (!targetChunk || !targetChunk.generated) return;
+    if (this.player.mode === "survival" && !this.canConsume(DOOR)) return;
+    this._popReplacedPlant(existing, px, py, pz);
+    this._popReplacedPlant(upperEx, px, py + 1, pz);
+
+    const affected = new Set();
+    for (const c of this.world.setBlock(px, py, pz, DOOR)) affected.add(c);
+    for (const c of this.world.setBlock(px, py + 1, pz, DOOR_TOP)) affected.add(c);
+    if (affected.size === 0) return;
+    this.onEdit([...affected], {
+      ids: [DOOR, existing, upperEx], x: px, y: py, z: pz, placed: DOOR,
+    });
+    this.onSound("place", DOOR);
   }
 
   _overlapsPlayer(bx, by, bz) {

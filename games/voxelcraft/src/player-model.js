@@ -12,6 +12,10 @@ const SKIN = [126, 200, 178];
 const TUNIC = [188, 92, 48];
 const TRIM = [214, 176, 74];
 const TROUSER = [52, 56, 66];
+// armor overlay tints: boiled knotwood-bark plate, pale sky-iron, dusk-gold
+const ARMOR_BARK = [118, 90, 54];
+const ARMOR_IRON = [196, 204, 218];
+const ARMOR_GLOAM = [198, 156, 82];
 
 function paintTexture(seed, base, decorate) {
   const canvas = document.createElement("canvas");
@@ -163,15 +167,175 @@ export class PlayerModel {
       this.legs.push(pivot);
     }
 
+    // --- armor overlays: boxes a hair larger than the body parts they guard,
+    // tinted per material with procedural detail lines. Hidden until worn;
+    // setArmor toggles them (and despawns them when a piece shatters).
+    this._armorMats = {
+      bark: mat(paintTexture(seed ^ 8, ARMOR_BARK, (ctx, rand) => {
+        // bark striations: dark vertical grain runs
+        ctx.fillStyle = "rgba(58,42,24,0.75)";
+        for (const x of [2, 6, 11, 14]) {
+          const y0 = (rand() * 6) | 0;
+          ctx.fillRect(x, y0, 1, 8 + ((rand() * 6) | 0));
+        }
+        ctx.fillStyle = `rgb(${TRIM[0]},${TRIM[1]},${TRIM[2]})`;
+        ctx.fillRect(4, 8, 2, 1); ctx.fillRect(10, 3, 2, 1); // mustard lashings
+      }), reg),
+      iron: mat(paintTexture(seed ^ 9, ARMOR_IRON, (ctx, rand) => {
+        // hammered plate: a seam line and a scatter of rivet caps
+        ctx.fillStyle = "rgba(120,128,146,0.85)";
+        ctx.fillRect(0, 7, 16, 1);
+        ctx.fillStyle = "rgb(232,238,248)";
+        for (let i = 0; i < 5; i++) {
+          ctx.fillRect((rand() * 15) | 0, (rand() * 15) | 0, 1, 1);
+        }
+        ctx.fillStyle = `rgb(${TRIM[0]},${TRIM[1]},${TRIM[2]})`;
+        ctx.fillRect(7, 12, 2, 1); // mustard lashing
+      }), reg),
+      gloam: mat(paintTexture(seed ^ 10, ARMOR_GLOAM, (ctx, rand) => {
+        // dusk-gold plate: a violet-shadowed seam and bright cast gleams
+        ctx.fillStyle = "rgba(110,80,96,0.85)";
+        ctx.fillRect(0, 7, 16, 1);
+        ctx.fillStyle = "rgb(252,226,140)";
+        for (let i = 0; i < 5; i++) {
+          ctx.fillRect((rand() * 15) | 0, (rand() * 15) | 0, 1, 1);
+        }
+        ctx.fillStyle = `rgb(${TRIM[0]},${TRIM[1]},${TRIM[2]})`;
+        ctx.fillRect(7, 12, 2, 1); // mustard lashing
+      }), reg),
+    };
+    this._overlays = { crown: [], jerkin: [], leggings: [], treads: [] };
+    const overlay = (parent, w, h, d, x, y, z, kind) => {
+      const m = box(w, h, d, this._armorMats.bark);
+      m.position.set(x, y, z);
+      m.visible = false;
+      parent.add(m);
+      this._overlays[kind].push(m);
+    };
+    // crown: a cap over the head's upper half (head is 0.46³ centered at .25)
+    overlay(this.headPivot, 0.52, 0.26, 0.52, 0, 0.4, 0, "crown");
+    // jerkin: torso shell + upper-arm guards (they ride the arm pivots)
+    overlay(this.group, 0.56, 0.78, 0.32, 0, 1.02, 0, "jerkin");
+    for (const p of this.arms) overlay(p, 0.24, 0.4, 0.24, 0, -0.2, 0, "jerkin");
+    for (const p of this.legs) {
+      // leggings sheath each leg; treads wrap the hand-feet at the ends
+      overlay(p, 0.26, 0.52, 0.26, 0, -0.3, 0, "leggings");
+      overlay(p, 0.32, 0.16, 0.36, 0, -0.66, -0.04, "treads");
+    }
+
+    // --- the Wanderwing: a patchwork wing-cape (see LORE.md). Two membrane
+    // planes on quill ribs, rooted at the upper back (-z is the back — the
+    // face rides +z). Hidden until worn; furled flat down the back at rest and
+    // spread wide while gliding (updateWing eases between the two). Seed-tinted
+    // so every Wanderling's wing wears its own hue.
+    const wingRand = mulberry32(seed ^ 0x217e);
+    const WING_MEMBRANE = [
+      88 + ((wingRand() * 40) | 0), 120 + ((wingRand() * 34) | 0), 72 + ((wingRand() * 30) | 0),
+    ];
+    const WING_RIB = [198, 190, 160];
+    const wingMat = mat(paintTexture(seed ^ 0x2a, WING_MEMBRANE, (ctx, rand) => {
+      // patchwork seams + a couple of pale stitch lines across the membrane
+      ctx.fillStyle = "rgba(40,60,34,0.6)";
+      for (const x of [4, 9, 13]) ctx.fillRect(x, 0, 1, 16);
+      for (const y of [5, 11]) ctx.fillRect(0, y, 16, 1);
+      ctx.fillStyle = `rgb(${WING_RIB[0]},${WING_RIB[1]},${WING_RIB[2]})`;
+      for (let i = 0; i < 4; i++) ctx.fillRect((rand() * 15) | 0, (rand() * 15) | 0, 1, 1);
+    }), reg);
+    const ribMat = mat(paintTexture(seed ^ 0x2b, WING_RIB), reg);
+    this._wingRoot = new THREE.Group();
+    this._wingRoot.position.set(0, 1.28, -0.14); // upper back, just behind the torso
+    this._wingRoot.visible = false;
+    this.group.add(this._wingRoot);
+    this._wings = [];
+    for (const side of [-1, 1]) {
+      const pivot = new THREE.Group();
+      pivot.position.set(side * 0.1, 0, 0);
+      // the membrane spreads outward along +x for the right wing (span), with
+      // its inner edge at the pivot; a rib caps the leading (–z) edge
+      const membrane = box(0.5, 0.02, 0.6, wingMat);
+      membrane.position.set(side * 0.28, 0, -0.02);
+      pivot.add(membrane);
+      const rib = box(0.52, 0.04, 0.05, ribMat);
+      rib.position.set(side * 0.28, 0.01, -0.3);
+      pivot.add(rib);
+      this._wingRoot.add(pivot);
+      this._wings.push({ pivot, side });
+    }
+    this._wingSpread = 0; // 0 = furled cape, 1 = wings wide
+    this._setWingPose(0);
+
     this.phase = 0;
     this.swimLean = 0;
     this._swing = 1;
   }
 
+  // per-wing rotation at a given spread (0 furled → 1 wide): furled, the span
+  // rotates down the back into a narrow cape; spread, it lies out level with a
+  // little swept-back dihedral. Lerped so the deploy/fold reads as an unfurl.
+  _setWingPose(t) {
+    this._wingSpread = t;
+    for (const { pivot, side } of this._wings) {
+      // furled: span points down (-side*z-rotation swings +x toward -y) and
+      // wraps slightly around the back
+      const fz = -side * 1.3, fy = side * 0.25, fx = 0.1;
+      // spread: span level, swept back a touch, a hint of upward dihedral
+      const sz = -side * 0.12, sy = -side * 0.22, sx = -0.05;
+      pivot.rotation.z = fz + (sz - fz) * t;
+      pivot.rotation.y = fy + (sy - fy) * t;
+      pivot.rotation.x = fx + (sx - fx) * t;
+    }
+  }
+
+  // ease the wings toward furled (gliding=false) or wide (gliding=true), with
+  // a gentle beat once spread. Called every frame on the WORLD model; the UI
+  // viewer never calls it, so its wing stays furled on the back.
+  updateWing(gliding, dt) {
+    if (!this._wingRoot || !this._wingRoot.visible) return;
+    const target = gliding ? 1 : 0;
+    const next = this._wingSpread + (target - this._wingSpread) * Math.min(1, dt * 8);
+    this._setWingPose(next);
+    if (next > 0.6) { // a slow flap rides on top of the spread pose
+      const beat = Math.sin(this.phase * 1.4) * 0.05 * next;
+      for (const { pivot, side } of this._wings) pivot.rotation.x += beat * side;
+    }
+  }
+
+  // dress the model: state maps each wear kind to "bark" | "iron" | null
+  // (null despawns that kind's overlays — unequipped or shattered). state.wing
+  // toggles the Wanderwing on the back (its tier "wing" has no plate material,
+  // so the jerkin overlay stays hidden — the wings stand in for it).
+  setArmor(state = {}) {
+    for (const kind of Object.keys(this._overlays)) {
+      const tier = state[kind];
+      const material = tier && this._armorMats[tier];
+      for (const m of this._overlays[kind]) {
+        m.visible = !!material;
+        if (material) m.material = material;
+      }
+    }
+    if (this._wingRoot) this._wingRoot.visible = !!state.wing;
+  }
+
   // punch/mine: kick the right arm forward
   swing() { this._swing = 0; }
 
-  update(dt, { speed = 0, swimming = false } = {}) {
+  update(dt, { speed = 0, swimming = false, seated = false } = {}) {
+    // seated in a skiff: legs kicked forward over the bow, arms resting a
+    // touch ahead — a static pose that overrides the walk cycle entirely
+    // (main.js pairs it with a simple crouch offset on the whole model)
+    if (seated) {
+      this.legs[0].rotation.x = -1.35;
+      this.legs[1].rotation.x = -1.35;
+      this.arms[0].rotation.x = -0.35;
+      this.arms[0].rotation.z = 0.08;
+      this.arms[1].rotation.z = -0.08;
+      this._swing = Math.min(1, this._swing + dt / 0.25);
+      const sw = Math.sin(Math.PI * this._swing);
+      this.arms[1].rotation.x = sw > 0.01 ? -sw * 1.8 : -0.35;
+      this.swimLean = 0;
+      this.group.rotation.x = 0;
+      return;
+    }
     this.phase += Math.max(speed, 0.6) * dt * 3.2;
     const walk = Math.min(1, speed / 2);
     const a = Math.sin(this.phase) * 0.7 * walk;
@@ -223,5 +387,158 @@ export function buildHeldFoot(seed = 0x5eed) {
   const wrist = box(0.15, 0.22, 0.15, mat(tex.tunic));
   wrist.position.set(0, 0.13, 0.06);
   g.add(wrist);
+  return g;
+}
+
+// --- held tools -----------------------------------------------------------------
+// Box-built first-person tool models: a plank haft along +y with a head
+// silhouette per kind at the top; the tier only changes the head palette
+// (plank wood, knapped stone, pale sky-iron). Registered for the day/night
+// skin tint like the foot.
+
+const HELD_HAFT = [148, 112, 62];
+const HELD_TIER_HEAD = {
+  1: [186, 152, 96],  // plank
+  2: [138, 140, 148], // stone
+  3: [200, 208, 222], // sky-iron
+  4: [198, 156, 82],  // gloamgold (dusk-gold, matching the armor overlay)
+};
+
+// --- wayfinding instruments -------------------------------------------------
+// First-person models for the Homeward Needle and the Sky Dial: a flat cased
+// disc held face-up, with one live part — the needle group / the day wheel —
+// that main.js turns every frame. Registered for the day/night tint like the
+// foot and the tools.
+
+const CASE_IRON = [196, 204, 218];
+const FACE_SLATE = [46, 50, 60];
+const NEEDLE_RUST = [197, 106, 43];
+const PALE_IRON = [214, 220, 230];
+const PIN_MUSTARD = [214, 176, 74];
+
+function instrumentCase(seed) {
+  const g = new THREE.Group();
+  const rim = box(0.36, 0.05, 0.36, mat(paintTexture(seed, CASE_IRON)));
+  g.add(rim);
+  const face = box(0.29, 0.055, 0.29, mat(paintTexture(seed ^ 0x11, FACE_SLATE)));
+  g.add(face);
+  return g;
+}
+
+export function buildHeldCompass(seed = 0x5eed) {
+  const g = instrumentCase(seed ^ 0x920);
+  // the needle: rust end leaning home (-z at rotation 0), pale tail trailing
+  const needle = new THREE.Group();
+  const home = box(0.05, 0.02, 0.16, mat(paintTexture(seed ^ 0x921, NEEDLE_RUST)));
+  home.position.z = -0.085;
+  needle.add(home);
+  const tail = box(0.04, 0.02, 0.11, mat(paintTexture(seed ^ 0x922, PALE_IRON)));
+  tail.position.z = 0.065;
+  needle.add(tail);
+  needle.position.y = 0.04;
+  g.add(needle);
+  const pin = box(0.05, 0.025, 0.05, mat(paintTexture(seed ^ 0x923, PIN_MUSTARD)));
+  pin.position.y = 0.05;
+  g.add(pin);
+  return { group: g, needle };
+}
+
+export function buildHeldClock(seed = 0x5eed) {
+  const g = instrumentCase(seed ^ 0x930);
+  // the day wheel: a mustard sun pip and a pale moon pip riding opposite ends
+  const wheel = new THREE.Group();
+  const sun = box(0.07, 0.02, 0.07, mat(paintTexture(seed ^ 0x931, [255, 205, 110])));
+  sun.position.z = -0.09;
+  wheel.add(sun);
+  const moon = box(0.055, 0.02, 0.055, mat(paintTexture(seed ^ 0x932, PALE_IRON)));
+  moon.position.z = 0.09;
+  wheel.add(moon);
+  wheel.position.y = 0.04;
+  g.add(wheel);
+  const pin = box(0.04, 0.025, 0.04, mat(paintTexture(seed ^ 0x933, PIN_MUSTARD)));
+  pin.position.y = 0.05;
+  g.add(pin);
+  return { group: g, hand: wheel };
+}
+
+export function buildHeldTool(kind, tier, seed = 0x5eed) {
+  const haftMat = mat(paintTexture(seed ^ (0x700 + tier), HELD_HAFT));
+  const headMat = mat(paintTexture(seed ^ (0x770 + tier * 4), HELD_TIER_HEAD[tier] || HELD_TIER_HEAD[1]));
+  const g = new THREE.Group();
+
+  const haft = box(0.07, kind === "blade" ? 0.34 : 0.72, 0.07, haftMat);
+  haft.position.y = kind === "blade" ? -0.22 : 0;
+  g.add(haft);
+
+  if (kind === "pick") {
+    // the Cracker: a center boss with two arms curving down fore and aft
+    const bossY = 0.34;
+    const boss = box(0.09, 0.1, 0.16, headMat);
+    boss.position.y = bossY;
+    g.add(boss);
+    for (const side of [-1, 1]) {
+      const arm = box(0.07, 0.07, 0.26, headMat);
+      arm.position.set(0, bossY - 0.03, side * 0.19);
+      arm.rotation.x = side * 0.55; // horns dipping toward the work
+      g.add(arm);
+      const tip = box(0.055, 0.055, 0.12, headMat);
+      tip.position.set(0, bossY - 0.13, side * 0.32);
+      tip.rotation.x = side * 0.9;
+      g.add(tip);
+    }
+  } else if (kind === "axe") {
+    // the Hewer: a heavy bit hanging off one side of the haft top
+    const cheek = box(0.08, 0.2, 0.14, headMat);
+    cheek.position.set(0, 0.3, 0.09);
+    g.add(cheek);
+    const bit = box(0.06, 0.26, 0.12, headMat);
+    bit.position.set(0, 0.26, 0.21);
+    g.add(bit);
+  } else if (kind === "shovel") {
+    // the Scoop: a rounded pan capping the haft
+    const pan = box(0.14, 0.24, 0.06, headMat);
+    pan.position.set(0, 0.42, 0.02);
+    pan.rotation.x = 0.15;
+    g.add(pan);
+    const lip = box(0.1, 0.08, 0.05, headMat);
+    lip.position.set(0, 0.55, 0.04);
+    g.add(lip);
+  } else if (kind === "hoe") {
+    // the Furrower: a swan-neck folding forward off the tip, ending in a
+    // short down-turned tine — the row-asker, not a weapon
+    const neck = box(0.06, 0.06, 0.2, headMat);
+    neck.position.set(0, 0.38, 0.1);
+    g.add(neck);
+    const tine = box(0.055, 0.18, 0.055, headMat);
+    tine.position.set(0, 0.29, 0.19);
+    g.add(tine);
+  } else if (kind === "stave") {
+    // the Springstave: two bent limbs off the grip and a taut cord — the
+    // haft box is the grip; the limbs curve fore and aft
+    for (const side of [-1, 1]) {
+      const limb = box(0.05, 0.34, 0.05, headMat);
+      limb.position.set(0, side * 0.3, 0.05);
+      limb.rotation.x = side * -0.35;
+      g.add(limb);
+      const tip = box(0.04, 0.12, 0.04, headMat);
+      tip.position.set(0, side * 0.52, 0.12);
+      tip.rotation.x = side * -0.7;
+      g.add(tip);
+    }
+    const cord = box(0.015, 1.06, 0.015, haftMat);
+    cord.position.set(0, 0, 0.16);
+    g.add(cord);
+  } else {
+    // the Shiv: cross-guard over the grip, then a long tapering sliver
+    const guard = box(0.2, 0.045, 0.1, haftMat);
+    guard.position.y = -0.04;
+    g.add(guard);
+    const flat = box(0.045, 0.5, 0.1, headMat);
+    flat.position.y = 0.24;
+    g.add(flat);
+    const point = box(0.04, 0.1, 0.06, headMat);
+    point.position.y = 0.53;
+    g.add(point);
+  }
   return g;
 }

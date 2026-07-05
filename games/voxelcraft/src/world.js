@@ -1,6 +1,20 @@
 // Chunked voxel world: storage, block get/set, edit overlay for persistence.
 
 import { AIR, BLOCKS } from "./blocks.js";
+import { makeStack, stackToSave } from "./inventory.js";
+
+// container slot -> save entry: tools keep wear as a third element and a
+// woven thread as a fourth [id, count, dur, mod] (additive — older loaders
+// ignore the extras)
+const saveSlot = stackToSave;
+// save entry -> container slot: makeStack is the one validated constructor
+// (per-id count ceiling, dur + thread validation) — no hand-rolled copy here
+function loadSlot(e) {
+  if (!Array.isArray(e)) return null;
+  const [id, n, dur, mod] = e;
+  if (!Number.isInteger(id) || !BLOCKS[id] || !Number.isInteger(n) || n <= 0) return null;
+  return makeStack(id, n, dur, mod);
+}
 
 export const CHUNK = 16;
 export const HEIGHT = 96;
@@ -10,6 +24,19 @@ export const SEA_LEVEL = 30;
 export function chunkKey(cx, cz) { return (cx + 16384) * 32768 + (cz + 16384); }
 
 export function blockIndex(lx, y, lz) { return lx + CHUNK * (lz + CHUNK * y); }
+
+// a Notice Post board holds 4 lines of 16 characters — the one clamp shared
+// by the write window (hud.js) and the save loader, so no oversized text ever
+// reaches world.signs
+export const SIGN_LINES = 4;
+export const SIGN_COLS = 16;
+export function clampSignText(text) {
+  return String(text)
+    .split("\n").slice(0, SIGN_LINES)
+    .map((line) => line.slice(0, SIGN_COLS))
+    .join("\n")
+    .replace(/\s+$/, ""); // an all-blank board is no notice at all
+}
 
 export class Chunk {
   constructor(cx, cz) {
@@ -25,9 +52,20 @@ export class Chunk {
     if (y < 0 || y >= HEIGHT) return AIR;
     return this.data[blockIndex(lx, y, lz)];
   }
+  // the one owner of the emitter registry: every write — generation
+  // (terrain/ruins), player edits (World.setBlock), and the overlay
+  // re-application in ensureChunk — keeps it current through here
   set(lx, y, lz, id) {
     if (y < 0 || y >= HEIGHT) return;
-    this.data[blockIndex(lx, y, lz)] = id;
+    const idx = blockIndex(lx, y, lz);
+    // keep the emitter registry current here, at the one write everything
+    // funnels through: worldgen seeds glowing blocks now (gleam moss, wispcaps,
+    // emberwash, buried starstone), and a later stamp (tree, ruin, delving)
+    // that overwrites one must clear its glow
+    const prev = this.data[idx];
+    if (BLOCKS[prev].lightEmit > 0) this.emitters.delete(idx);
+    if (BLOCKS[id].lightEmit > 0) this.emitters.set(idx, BLOCKS[id].lightEmit);
+    this.data[idx] = id;
   }
 }
 
@@ -36,27 +74,165 @@ export class World {
     this.seed = seed;
     this.chunks = new Map();          // chunkKey -> Chunk
     this.edits = new Map();           // chunkKey -> Map(blockIndex -> id)
-    this.chests = new Map();          // "x,y,z" -> Map(blockId -> count)
+    this.chests = new Map();          // "x,y,z" -> Array(>=27) of null|{id,count}
+    this.kilns = new Map();           // "x,y,z" -> {slots:[in,fuel,out], burnLeft, progress}
+    this.signs = new Map();           // "x,y,z" -> Notice Post text (see signs.js)
+    this.ruinsSeeded = new Set();     // "cx,cz" ruin chunks whose chest/sign
+                                      // state was seeded (once per world — a
+                                      // regenerated chunk never re-deals loot)
+    this.delvesSeeded = new Set();    // same contract for the Delvings-Under
+    this.steads = new Map();          // "cx,cz" -> { residents: [{job, homeIdx,
+                                      // hp, trades, tradeDay, dead}] } — a
+                                      // Living Stead's residents, seeded once
+                                      // per world (steads.js)
     this.generator = null;            // set by terrain.js
     this._lastChunk = null;           // 1-entry lookup cache (meshing/physics locality)
   }
 
+  // v2: chest values are slot arrays (null | {id,count}, stacks capped at 64,
+  // length >= 27; migrated oversize chests keep extra slots so nothing is
+  // destroyed, and trailing empties beyond 27 are trimmed on save)
   serializeChests() {
-    return [...this.chests].map(([key, store]) => [key, [...store]]);
+    return [...this.chests].map(([key, slots]) => {
+      const out = slots.map(saveSlot);
+      while (out.length > 27 && out[out.length - 1] === 0) out.pop();
+      return [key, { slots: out }];
+    });
   }
 
   loadChests(arr) {
     if (!Array.isArray(arr)) return;
     for (const pair of arr) {
-      if (!Array.isArray(pair) || typeof pair[0] !== "string" || !Array.isArray(pair[1])) continue;
-      const store = new Map();
-      for (const entry of pair[1]) {
-        if (!Array.isArray(entry)) continue;
-        const [id, n] = entry;
-        if (!Number.isInteger(id) || !BLOCKS[id] || !Number.isInteger(n) || n <= 0) continue;
-        store.set(id, Math.min(9999, n));
+      if (!Array.isArray(pair) || typeof pair[0] !== "string") continue;
+      const payload = pair[1];
+      let slots = null;
+      if (payload && Array.isArray(payload.slots)) {
+        // v2 shape (with the additive per-slot dur for stored tools)
+        slots = payload.slots.map(loadSlot);
+      } else if (Array.isArray(payload)) {
+        // v1 shape: [id, count] pairs with unbounded counts — pack losslessly
+        slots = [];
+        for (const entry of payload) {
+          if (!Array.isArray(entry)) continue;
+          const [id, n] = entry;
+          if (!Number.isInteger(id) || !BLOCKS[id] || !Number.isInteger(n) || n <= 0) continue;
+          let left = n;
+          while (left > 0) {
+            const take = Math.min(64, left);
+            slots.push({ id, count: take });
+            left -= take;
+          }
+        }
       }
-      if (store.size > 0) this.chests.set(pair[0], store);
+      if (!slots) continue;
+      while (slots.length < 27) slots.push(null);
+      if (slots.some((s) => s)) this.chests.set(pair[0], slots);
+    }
+  }
+
+  // kilns (additive save field): {slots: [in, fuel, out] as [id,count]|0,
+  // burn: seconds of heat left, prog: smelt progress seconds}
+  serializeKilns() {
+    return [...this.kilns].map(([key, k]) => [key, {
+      slots: k.slots.map(saveSlot),
+      burn: Math.max(0, k.burnLeft),
+      prog: Math.max(0, k.progress),
+    }]);
+  }
+
+  loadKilns(arr) {
+    if (!Array.isArray(arr)) return;
+    for (const pair of arr) {
+      if (!Array.isArray(pair) || typeof pair[0] !== "string") continue;
+      const payload = pair[1];
+      if (!payload || !Array.isArray(payload.slots)) continue;
+      const slots = payload.slots.slice(0, 3).map(loadSlot);
+      while (slots.length < 3) slots.push(null);
+      const burnLeft = Number.isFinite(payload.burn) ? Math.max(0, payload.burn) : 0;
+      const progress = Number.isFinite(payload.prog) ? Math.max(0, payload.prog) : 0;
+      // an empty, cold kiln carries no state worth keeping
+      if (!slots.some((s) => s) && burnLeft <= 0) continue;
+      this.kilns.set(pair[0], { slots, burnLeft, progress });
+    }
+  }
+
+  // signs (additive save field): [["x,y,z", text]...] — the sign BLOCKS live
+  // in the edit overlay; this is only the writing on their boards
+  serializeSigns() {
+    return [...this.signs];
+  }
+
+  loadSigns(arr) {
+    if (!Array.isArray(arr)) return;
+    for (const pair of arr) {
+      if (!Array.isArray(pair) || typeof pair[0] !== "string" ||
+          typeof pair[1] !== "string") continue;
+      if (!/^-?\d+,-?\d+,-?\d+$/.test(pair[0])) continue;
+      const text = clampSignText(pair[1]);
+      if (text) this.signs.set(pair[0], text);
+    }
+  }
+
+  // ruin seeding markers (additive save field): ["cx,cz", ...] — which ruin
+  // chunks already had their chest/sign state dealt (see ruins.js)
+  serializeRuins() {
+    return [...this.ruinsSeeded];
+  }
+
+  loadRuins(arr) {
+    if (!Array.isArray(arr)) return;
+    for (const key of arr) {
+      if (typeof key === "string" && /^-?\d+,-?\d+$/.test(key)) {
+        this.ruinsSeeded.add(key);
+      }
+    }
+  }
+
+  // delve seeding markers (additive save field): the Delvings-Under's
+  // once-per-world chest/sign dealing, exactly like the ruins pair
+  serializeDelves() {
+    return [...this.delvesSeeded];
+  }
+
+  loadDelves(arr) {
+    if (!Array.isArray(arr)) return;
+    for (const key of arr) {
+      if (typeof key === "string" && /^-?\d+,-?\d+$/.test(key)) {
+        this.delvesSeeded.add(key);
+      }
+    }
+  }
+
+  // Living Stead resident records (additive save field): [["cx,cz",
+  // [[job, homeIdx, hp, trades, tradeDay, dead], ...]], ...]. The stead's
+  // BLOCKS regenerate from the seed; this is only the mutable resident state
+  // (which are dead, their warmth, their hurt), keyed per stead.
+  serializeSteads() {
+    return [...this.steads].map(([key, rec]) => [key, rec.residents.map((r) => [
+      r.job, r.homeIdx, Math.max(0, Math.round(r.hp)),
+      r.trades | 0, r.tradeDay | 0, r.dead ? 1 : 0,
+    ])]);
+  }
+
+  loadSteads(arr) {
+    if (!Array.isArray(arr)) return;
+    for (const pair of arr) {
+      if (!Array.isArray(pair) || typeof pair[0] !== "string" ||
+          !/^-?\d+,-?\d+$/.test(pair[0]) || !Array.isArray(pair[1])) continue;
+      const residents = [];
+      for (const r of pair[1]) {
+        if (!Array.isArray(r) || r.length < 6) continue;
+        const [job, homeIdx, hp, trades, tradeDay, dead] = r;
+        if (typeof job !== "string" || !Number.isFinite(homeIdx)) continue;
+        residents.push({
+          job, homeIdx: homeIdx | 0,
+          hp: Number.isFinite(hp) ? Math.max(0, hp) : 10,
+          trades: Number.isFinite(trades) ? trades | 0 : 0,
+          tradeDay: Number.isFinite(tradeDay) ? tradeDay | 0 : -1,
+          dead: dead === 1 || dead === true,
+        });
+      }
+      if (residents.length) this.steads.set(pair[0], { residents });
     }
   }
 
@@ -90,12 +266,7 @@ export class World {
     if (!chunk || !chunk.generated) return [];
     const lx = x - (cx << 4), lz = z - (cz << 4);
     const idx = blockIndex(lx, y, lz);
-    const prev = chunk.data[idx];
-    chunk.set(lx, y, lz, id);
-
-    // keep the chunk's light-emitter registry current
-    if (BLOCKS[prev].lightEmit > 0) chunk.emitters.delete(idx);
-    if (BLOCKS[id].lightEmit > 0) chunk.emitters.set(idx, BLOCKS[id].lightEmit);
+    chunk.set(lx, y, lz, id); // Chunk.set keeps the emitter registry current
 
     const key = chunkKey(cx, cz);
     let overlay = this.edits.get(key);
@@ -119,6 +290,15 @@ export class World {
     return affected;
   }
 
+  // is this cell in the persistent edit overlay? (snow accumulation asks
+  // before settling a drift — never rework what a player worked)
+  hasEdit(x, y, z) {
+    if (y < 0 || y >= HEIGHT) return false;
+    const overlay = this.edits.get(chunkKey(x >> 4, z >> 4));
+    if (!overlay) return false;
+    return overlay.has(blockIndex(x - ((x >> 4) << 4), y, z - ((z >> 4) << 4)));
+  }
+
   // Create + generate a chunk (or return the existing one).
   ensureChunk(cx, cz) {
     const key = chunkKey(cx, cz);
@@ -128,14 +308,21 @@ export class World {
       chunk = new Chunk(cx, cz);
       this.chunks.set(key, chunk);
     }
-    this.generator(this, chunk);
-    // apply persisted player edits on top of the generated terrain
+    // clear BEFORE generating: the generator registers its own emitters
+    // through Chunk.set (Emberwash pools, glow flora, gleam moss) — clearing
+    // after it would render every generated light dark
     chunk.emitters.clear();
-    const overlay = this.edits.get(key);
-    if (overlay) {
-      for (const [idx, id] of overlay) {
-        chunk.data[idx] = id;
+    this.generator(this, chunk);
+    // apply persisted player edits on top of the generated terrain: an edit
+    // may add an emitter OR pave over a generated one (a mined gleam moss
+    // must not keep glowing out of its regenerated cell), so set-or-delete
+    const overlayEdits = this.edits.get(key);
+    if (overlayEdits) {
+      for (const [idx, id] of overlayEdits) {
+        const prev = chunk.data[idx];
+        if (BLOCKS[prev].lightEmit > 0) chunk.emitters.delete(idx);
         if (BLOCKS[id].lightEmit > 0) chunk.emitters.set(idx, BLOCKS[id].lightEmit);
+        chunk.data[idx] = id;
       }
     }
     chunk.generated = true;

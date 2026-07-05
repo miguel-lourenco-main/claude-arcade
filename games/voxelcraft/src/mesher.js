@@ -4,7 +4,7 @@
 import * as THREE from "three";
 import { BLOCKS, AIR, LEAVES, LEAVES_COLD } from "./blocks.js";
 import { CHUNK, HEIGHT } from "./world.js";
-import { tileUV } from "./textures.js";
+import { tileUV, TILE } from "./textures.js";
 import { hash2 } from "./noise.js";
 
 // Corner order per face: bl, br, tr, tl (uv 00,10,11,01), CCW from outside.
@@ -182,6 +182,10 @@ let lightScratch = null;            // Uint8Array(LDIM * LDIM * HEIGHT), reused
 
 function computeBlockLight(world, chunk) {
   const emitters = [];
+  // the meshed chunk's footprint, expanded by 1 (faces sample one cell into
+  // the neighbors) — used for the lossless seed prune below
+  const fx0 = chunk.cx * CHUNK - 1, fx1 = chunk.cx * CHUNK + CHUNK;
+  const fz0 = chunk.cz * CHUNK - 1, fz1 = chunk.cz * CHUNK + CHUNK;
   for (let dz = -1; dz <= 1; dz++) {
     for (let dx = -1; dx <= 1; dx++) {
       const c = world.getChunk(chunk.cx + dx, chunk.cz + dz);
@@ -190,7 +194,16 @@ function computeBlockLight(world, chunk) {
         const lx = idx % CHUNK;
         const lz = ((idx / CHUNK) | 0) % CHUNK;
         const y = (idx / (CHUNK * CHUNK)) | 0;
-        emitters.push([c.cx * CHUNK + lx, y, c.cz * CHUNK + lz, level]);
+        const ex = c.cx * CHUNK + lx, ez = c.cz * CHUNK + lz;
+        // block light decays 1 per step (manhattan is a lower bound of the
+        // BFS distance), so an emitter whose closest approach to the
+        // footprint is >= its level can't reach a sampled cell — skipping
+        // it is lossless. This is what keeps a lava lake in a neighboring
+        // chunk from seeding thousands of dead BFS sources per remesh.
+        const ddx = ex < fx0 ? fx0 - ex : ex > fx1 ? ex - fx1 : 0;
+        const ddz = ez < fz0 ? fz0 - ez : ez > fz1 ? ez - fz1 : 0;
+        if (ddx + ddz >= level) continue;
+        emitters.push([ex, y, ez, level]);
       }
     }
   }
@@ -233,6 +246,277 @@ function computeBlockLight(world, chunk) {
     }
   }
   return light;
+}
+
+// test/debug helper: the torch-light level the mesher would bake at a cell —
+// runs the same BFS a chunk mesh uses and samples one voxel. NOT for the hot
+// path (it floods the whole padded volume); tests use it to assert that a
+// placed emitter (a torch, a landed starstone) actually propagates.
+export function sampleBlockLight(world, x, y, z) {
+  if (y < 0 || y >= HEIGHT) return 0;
+  const chunk = world.getChunk(x >> 4, z >> 4);
+  if (!chunk || !chunk.generated) return 0;
+  const light = computeBlockLight(world, chunk);
+  if (!light) return 0;
+  const vx = x - chunk.cx * CHUNK + LIGHT_PAD;
+  const vz = z - chunk.cz * CHUNK + LIGHT_PAD;
+  return light[vx + LDIM * (vz + LDIM * y)];
+}
+
+// --- shaped blocks (slabs, stairs, later fences) ------------------------------
+// A shape is a list of axis-aligned boxes in unit-cell coordinates. Faces that
+// lie exactly on the cell boundary cull against opaque full-cube neighbors;
+// interior faces (a slab's top, a stair's riser) are never culled. Shaped
+// blocks keep AO simple: flat face shade × the cell's column skylight.
+
+// stairs: a bottom slab plus a full-height back box on the `facing` side.
+// The back box rests on the slab, so its bottom face is never visible.
+const STAIR_BACK = [
+  { x0: 0, z0: 0, x1: 1, z1: 0.5 },   // 0 north (-z)
+  { x0: 0.5, z0: 0, x1: 1, z1: 1 },   // 1 east (+x)
+  { x0: 0, z0: 0.5, x1: 1, z1: 1 },   // 2 south (+z)
+  { x0: 0, z0: 0, x1: 0.5, z1: 1 },   // 3 west (-x)
+];
+
+const SLAB_BOX = { x0: 0, y0: 0, z0: 0, x1: 1, y1: 0.5, z1: 1 };
+
+// --- fences + gates -----------------------------------------------------------
+// Wattle-work is neighbor-aware: a center post grows connecting arms toward
+// each horizontal neighbor that is a fence, a gate, or a solid full cube.
+// Connections are recomputed on every remesh — setBlock already dirties the
+// chunk (and border neighbors), so arms follow the world as it changes.
+
+const FENCE_POST = { x0: 0.375, y0: 0, z0: 0.375, x1: 0.625, y1: 1, z1: 0.625 };
+const RAILS = [[0.375, 0.5625], [0.75, 0.9375]]; // two courses of woven withies
+const ARM = 0.4375; // rail cross-section: ARM..1-ARM
+
+// does a fence/gate arm reach toward this neighbor?
+function fenceConnects(id) {
+  const n = BLOCKS[id];
+  return n.shape === "fence" || n.shape === "gate" ||
+    (n.solid && n.kind === "cube" && !n.shape && n.colHeight >= 1);
+}
+
+// c: [north(-z), east(+x), south(+z), west(-x)] connection flags.
+// Boxes are ordered back-to-front (N/W arms, post, S/E arms) so the HUD's
+// painter's-order iso projector layers them correctly.
+function fenceBoxes(c) {
+  const boxes = [];
+  for (const [y0, y1] of RAILS) {
+    if (c[0]) boxes.push({ x0: ARM, x1: 1 - ARM, y0, y1, z0: 0, z1: 0.375 });
+    if (c[3]) boxes.push({ x0: 0, x1: 0.375, y0, y1, z0: ARM, z1: 1 - ARM });
+  }
+  boxes.push(FENCE_POST);
+  for (const [y0, y1] of RAILS) {
+    if (c[2]) boxes.push({ x0: ARM, x1: 1 - ARM, y0, y1, z0: 0.625, z1: 1 });
+    if (c[1]) boxes.push({ x0: 0.625, x1: 1, y0, y1, z0: ARM, z1: 1 - ARM });
+  }
+  return boxes;
+}
+
+// The gate spans the axis its neighbors suggest: hinge posts at the two cell
+// edges, a woven leaf between them. Open, the leaf splits and both halves
+// fold aside (toward +z / +x), leaving the middle clear to walk through.
+function gateBoxes(open, c) {
+  const spanX = (c[1] || c[3]) || !(c[0] || c[2]); // default: spans x
+  const post = (x0, x1) => ({ x0, x1, y0: 0.25, y1: 1, z0: ARM, z1: 1 - ARM });
+  const boxes = [post(0, 0.125)]; // far hinge post first (icon painter order)
+  if (open) {
+    // the leaf splits and both halves fold back against the posts (toward
+    // +z), leaving the middle of the cell clear to walk through
+    for (const [y0, y1] of RAILS) {
+      boxes.push({ x0: 0, x1: 0.125, y0, y1, z0: 1 - ARM, z1: 0.9375 });
+      boxes.push({ x0: 0.875, x1: 1, y0, y1, z0: 1 - ARM, z1: 0.9375 });
+    }
+  } else {
+    for (const [y0, y1] of RAILS) {
+      boxes.push({ x0: 0.125, x1: 0.875, y0, y1, z0: ARM, z1: 1 - ARM });
+    }
+    // center brace joining the two courses — reads as the leaf's frame
+    boxes.push({ x0: ARM, x1: 1 - ARM, y0: 0.375, y1: 0.9375, z0: ARM, z1: 1 - ARM });
+  }
+  boxes.push(post(0.875, 1)); // near hinge post
+  if (spanX) return boxes;
+  // spanning z: mirror every box across the x/z diagonal
+  return boxes.map((b) => ({ x0: b.z0, x1: b.z1, y0: b.y0, y1: b.y1, z0: b.x0, z1: b.x1 }));
+}
+
+// --- the Waybar (rail) ----------------------------------------------------------
+// Ties + two sky-iron bars, inset flat on the block top. The shape is baked
+// into the id (like stairs): straights, four corners, four stepped slopes.
+// Bar boxes carry a per-box tile override (box.tiles) so the ties stay
+// knotwood while the bars read as metal — addShapedBlock, the icon projector
+// (hud.js), and buildBlockGeometry all honor it.
+
+const RAIL_TIE_H = 0.09;   // tie tops
+const RAIL_BAR_H = 0.17;   // bar tops (the running surface)
+const RAIL_BARS = [[2.5 / 16, 4.5 / 16], [11.5 / 16, 13.5 / 16]]; // bar u-strips
+const RAIL_TIES = [[1 / 16, 4 / 16], [6.5 / 16, 9.5 / 16], [12 / 16, 15 / 16]];
+const RAIL_BAR_TILES = { top: TILE.RAIL_BAR, side: TILE.RAIL_BAR, bottom: TILE.RAIL_BAR };
+// slope step tops, low end first: a linear rise from the flat-rail height at
+// one edge up to the neighboring block top at the other
+const RAIL_SLOPE_TOPS = [0.3, 0.55, 0.8, 1.0];
+
+const railBar = (x0, x1, z0, z1, y0 = RAIL_TIE_H, y1 = RAIL_BAR_H) =>
+  ({ x0, x1, z0, z1, y0, y1, tiles: RAIL_BAR_TILES });
+const railTie = (x0, x1, z0, z1, y0 = 0, y1 = RAIL_TIE_H) => ({ x0, x1, z0, z1, y0, y1 });
+const railMirrorX = (b) => ({ ...b, x0: 1 - b.x1, x1: 1 - b.x0 });
+const railMirrorZ = (b) => ({ ...b, z0: 1 - b.z1, z1: 1 - b.z0 });
+// mirror the whole cell across the x/z diagonal (the gateBoxes idiom)
+const railSwapXZ = (b) => ({ ...b, x0: b.z0, x1: b.z1, z0: b.x0, z1: b.x1 });
+
+function railBoxes(def) {
+  const r = def.rail;
+  let boxes = [];
+  if (r.kind === "straight") {
+    for (const [z0, z1] of RAIL_TIES) boxes.push(railTie(1 / 16, 15 / 16, z0, z1));
+    for (const [x0, x1] of RAIL_BARS) boxes.push(railBar(x0, x1, 0, 1));
+    if (r.axis === "x") boxes = boxes.map(railSwapXZ);
+  } else if (r.kind === "corner") {
+    // built as the NE bend (joins -z and +x), then mirrored into place:
+    // the outer bar sweeps wide through the cell, the inner hugs the turn
+    boxes.push(railTie(1 / 16, 15 / 16, 1 / 16, 4 / 16));   // north-arm tie
+    boxes.push(railTie(12 / 16, 15 / 16, 4 / 16, 15 / 16)); // east-arm tie
+    boxes.push(railBar(2.5 / 16, 4.5 / 16, 0, 13.5 / 16));       // outer, north run
+    boxes.push(railBar(4.5 / 16, 1, 11.5 / 16, 13.5 / 16));      // outer, east run
+    boxes.push(railBar(11.5 / 16, 13.5 / 16, 0, 4.5 / 16));      // inner, north run
+    boxes.push(railBar(13.5 / 16, 1, 2.5 / 16, 4.5 / 16));       // inner, east run
+    if (r.mx) boxes = boxes.map(railMirrorX);
+    if (r.mz) boxes = boxes.map(railMirrorZ);
+  } else {
+    // slope: four rail-slices stepping up toward the `up` direction, each a
+    // tie plate with the two bar strips riding on top (floating boxes are
+    // fine — interior faces never cull)
+    const ascendPos = r.up[0] + r.up[1] > 0; // high end at the +axis edge?
+    for (let k = 0; k < 4; k++) {           // k counts from the LOW end
+      const top = RAIL_SLOPE_TOPS[k];
+      const a0 = (ascendPos ? k : 3 - k) / 4;
+      const a1 = a0 + 0.25;
+      boxes.push(railTie(1 / 16, 15 / 16, a0, a1, top - 0.15, top - 0.08));
+      for (const [x0, x1] of RAIL_BARS) {
+        boxes.push(railBar(x0, x1, a0, a1, top - 0.08, top));
+      }
+    }
+    if (r.axis === "x") boxes = boxes.map(railSwapXZ);
+  }
+  return boxes;
+}
+
+// --- the Notice Post ----------------------------------------------------------
+// A slim ground post carrying a wide framed board. The board's thin axis
+// follows the facing (0/2 = board spans x, faces ±z; 1/3 = spans z, faces ±x);
+// the facing itself matters to signs.js, which mounts the text plane on the
+// board's front face. Post top ends INSIDE the board so no coplanar faces
+// fight. Ordered post-then-board for the HUD's painter's-order iso projector.
+const SIGN_POST = { x0: 0.4375, y0: 0, z0: 0.4375, x1: 0.5625, y1: 0.55, z1: 0.5625 };
+function signBoxes(facing) {
+  const board = facing % 2 === 0
+    ? { x0: 0.0625, x1: 0.9375, y0: 0.5, y1: 0.95, z0: 0.45, z1: 0.55 }
+    : { x0: 0.45, x1: 0.55, y0: 0.5, y1: 0.95, z0: 0.0625, z1: 0.9375 };
+  return [SIGN_POST, board];
+}
+
+// neighbor-aware boxes for a shaped block standing in the world
+function shapeBoxesAt(def, get, wx, y, wz) {
+  if (def.shape !== "fence" && def.shape !== "gate") return shapeBoxes(def);
+  const c = [
+    fenceConnects(get(wx, y, wz - 1)),
+    fenceConnects(get(wx + 1, y, wz)),
+    fenceConnects(get(wx, y, wz + 1)),
+    fenceConnects(get(wx - 1, y, wz)),
+  ];
+  return def.shape === "fence" ? fenceBoxes(c) : gateBoxes(def.open, c);
+}
+
+// def -> [{x0,y0,z0,x1,y1,z1,skipBottom?}], cached per block def. For fences
+// and gates this is the CONTEXT-FREE shape (arms east+west) used by icons,
+// item drops, and the held mesh; world meshing goes through shapeBoxesAt.
+const shapeBoxCache = new Map();
+export function shapeBoxes(def) {
+  let boxes = shapeBoxCache.get(def);
+  if (boxes) return boxes;
+  if (def.shape === "slab") {
+    boxes = [SLAB_BOX];
+  } else if (def.shape === "layer") {
+    // a thin ground layer (Snowdrift): the box height IS the collision
+    // height, so what the boot meets is exactly what the eye sees
+    boxes = [{ x0: 0, y0: 0, z0: 0, x1: 1, y1: def.colHeight, z1: 1 }];
+  } else if (def.shape === "stairs") {
+    const b = STAIR_BACK[def.facing];
+    boxes = [SLAB_BOX, { ...b, y0: 0.5, y1: 1, skipBottom: true }];
+  } else if (def.shape === "fence") {
+    boxes = fenceBoxes([false, true, false, true]);
+  } else if (def.shape === "gate") {
+    boxes = gateBoxes(def.open, [false, true, false, true]);
+  } else if (def.shape === "sign") {
+    boxes = signBoxes(def.facing);
+  } else if (def.shape === "rail") {
+    boxes = railBoxes(def);
+  } else {
+    boxes = [];
+  }
+  shapeBoxCache.set(def, boxes);
+  return boxes;
+}
+
+// is this box face flush with the cell boundary in the face direction?
+function boxFaceOnBoundary(box, dir) {
+  const [dx, dy, dz] = dir;
+  if (dx !== 0) return dx > 0 ? box.x1 === 1 : box.x0 === 0;
+  if (dy !== 0) return dy > 0 ? box.y1 === 1 : box.y0 === 0;
+  return dz > 0 ? box.z1 === 1 : box.z0 === 0;
+}
+
+// sub-rect of the tile matching the box extents on this face, so half-height
+// sides sample only the bottom half of the texture (no squashing)
+function boxFaceUV(tile, box, dir) {
+  const { u0, u1, v0, v1 } = tileUV(tile);
+  const u = (a, b) => [u0 + (u1 - u0) * a, u0 + (u1 - u0) * b];
+  const v = (a, b) => [v0 + (v1 - v0) * a, v0 + (v1 - v0) * b];
+  let ur, vr;
+  const [dx, dy, dz] = dir;
+  if (dy > 0) { ur = u(box.x0, box.x1); vr = v(1 - box.z1, 1 - box.z0); }
+  else if (dy < 0) { ur = u(box.x0, box.x1); vr = v(box.z0, box.z1); }
+  else if (dx > 0) { ur = u(1 - box.z1, 1 - box.z0); vr = v(box.y0, box.y1); }
+  else if (dx < 0) { ur = u(box.z0, box.z1); vr = v(box.y0, box.y1); }
+  else if (dz > 0) { ur = u(box.x0, box.x1); vr = v(box.y0, box.y1); }
+  else { ur = u(1 - box.x1, 1 - box.x0); vr = v(box.y0, box.y1); }
+  return { u0: ur[0], u1: ur[1], v0: vr[0], v1: vr[1] };
+}
+
+// corner of a face scaled to the box extents (FACES corners are 0/1 flags)
+function boxCorner(box, p) {
+  return [
+    p[0] ? box.x1 : box.x0,
+    p[1] ? box.y1 : box.y0,
+    p[2] ? box.z1 : box.z0,
+  ];
+}
+
+function addShapedBlock(bucket, def, lx, y, lz, get, wx, wz, lightAt, blockLightAt) {
+  for (const box of shapeBoxesAt(def, get, wx, y, wz)) {
+    for (const face of FACES) {
+      const [dx, dy, dz] = face.dir;
+      if (dy < 0 && box.skipBottom) continue;
+      const boundary = boxFaceOnBoundary(box, face.dir);
+      if (boundary && BLOCKS[get(wx + dx, y + dy, wz + dz)].opaque) continue;
+      // boundary faces are lit by the neighbor cell; interior faces by the
+      // block's own (light-passable) cell
+      const sx = boundary ? dx : 0, sy = boundary ? dy : 0, sz = boundary ? dz : 0;
+      const light = lightAt(lx + sx, Math.max(0, y + sy), lz + sz);
+      const torch = blockLightAt(lx + sx, y + sy, lz + sz);
+      const tiles = box.tiles || def.tiles; // per-box override (waybar bars)
+      const tile = dy > 0 ? tiles.top : dy < 0 ? tiles.bottom : tiles.side;
+      const corners = face.corners.map((p) => {
+        const c = boxCorner(box, p);
+        return [lx + c[0], y + c[1], lz + c[2]];
+      });
+      const b = face.shade * light;
+      const t = face.shade * torch;
+      bucket.quad(corners, tile, [b, b, b, b], [t, t, t, t], false,
+        boxFaceUV(tile, box, face.dir));
+    }
+  }
 }
 
 function faceVisible(id, def, neighborId) {
@@ -295,6 +579,12 @@ export function meshChunk(world, chunk, materials, scene) {
           addCross(buckets.cutout, def, lx, y, lz, wx, wz,
             glow ? 1 : lightAt(lx, y, lz),
             glow ? 1 : blockLightAt(lx, y, lz));
+          continue;
+        }
+
+        if (def.shape) {
+          addShapedBlock(buckets[def.bucket], def, lx, y, lz, get, wx, wz,
+            lightAt, blockLightAt);
           continue;
         }
 
@@ -365,8 +655,9 @@ export function meshChunk(world, chunk, materials, scene) {
 
 function addCross(bucket, def, lx, y, lz, wx, wz, light = 1, blockLight = 0) {
   // deterministic little offset so plants don't sit on a perfect grid
-  // (torches stay centered so they read as attached to the block below)
-  const jitter = def.lightEmit > 0 ? 0 : 1;
+  // (torches stay centered so they read as attached to the block below, and
+  // sturdy fixtures — ladders, open door leaves — stay squarely in their cell)
+  const jitter = def.lightEmit > 0 || def.sturdy ? 0 : 1;
   const ox = (hash2(wx, wz, 0x9e37) - 0.5) * 0.3 * jitter;
   const oz = (hash2(wz, wx, 0x79b9) - 0.5) * 0.3 * jitter;
   const l = 0.15 + ox, h = 0.85 + ox;
@@ -391,6 +682,17 @@ export function buildBlockGeometry(blockId, blockLight = 0.25) {
   if (def.kind === "cross") {
     b.quad([[0, 0, 0.5], [1, 0, 0.5], [1, 1, 0.5], [0, 1, 0.5]],
       def.tiles.side, [1, 1, 1, 1], def.lightEmit > 0 ? [1, 1, 1, 1] : bl);
+  } else if (def.shape) {
+    for (const box of shapeBoxes(def)) {
+      for (const face of FACES) {
+        if (face.dir[1] < 0 && box.skipBottom) continue;
+        const tiles = box.tiles || def.tiles;
+        const tile = face.dir[1] > 0 ? tiles.top : face.dir[1] < 0 ? tiles.bottom : tiles.side;
+        const s = face.shade;
+        b.quad(face.corners.map((p) => boxCorner(box, p)), tile, [s, s, s, s], bl,
+          false, boxFaceUV(tile, box, face.dir));
+      }
+    }
   } else {
     for (const face of FACES) {
       const tile = face.dir[1] > 0 ? def.tiles.top : face.dir[1] < 0 ? def.tiles.bottom : def.tiles.side;
