@@ -81,4 +81,12 @@ window.GAMES = [
       "Swap neighbouring gems to line up three or more, ride the cascades, and " +
       "forge cross and burst gems to beat each level's target before moves run out.",
   },
+  {
+    slug: "bulwark",
+    title: "Bulwark",
+    genre: "Arcade / Shooter",
+    description:
+      "Fifty-five pixel-creatures march down in lockstep, sprinting as their ranks " +
+      "thin. Four crumbling bunkers and one bolt at a time stand between them and you.",
+  },
 ];

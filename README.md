@@ -34,6 +34,7 @@ directly via `file://` only works for the arcade shell itself.)
 | [Shardfield](games/shardfield/) | Arcade / space | Inertial vector shooter: frictionless glide, 4-bullet cap, splitting shards, two saucer types, wrap-seam rendering. |
 | [Crateshift](games/crateshift/) | Puzzle / box-pusher | 21 original solver-verified crate puzzles: push-only movement, full undo, corner-deadlock hints, star ratings. |
 | [Gemgrove](games/gemgrove/) | Puzzle / match-3 | Swap-adjacent match-3: cascade multipliers, cross/burst specials, no-match reverts, idle hints, move-limited levels. |
+| [Bulwark](games/bulwark/) | Arcade / shooter | Fixed shooter: lockstep fleet that sprints as it thins, one-bullet limit, per-pixel shield erosion, mystery saucer. |
 
 ## Structure
 

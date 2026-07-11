@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bulwark</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="frame">
+    <header id="topbar">
+      <a href="../../index.html" class="back">&larr; Arcade</a>
+      <h1>BULWARK</h1>
+      <button id="audio-toggle" type="button" title="toggle sound">sound: on</button>
+    </header>
+
+    <div id="hud">
+      <div class="stat"><span class="label">score</span><span id="score">0</span></div>
+      <div class="stat"><span class="label">best</span><span id="best">0</span></div>
+      <div class="stat"><span class="label">wave</span><span id="wave">1</span></div>
+    </div>
+
+    <div id="stage">
+      <canvas id="game" width="448" height="512"></canvas>
+      <div id="overlay" class="show">
+        <div class="panel">
+          <div id="overlay-title">BULWARK</div>
+          <div id="overlay-sub">press SPACE to defend</div>
+          <div id="overlay-score"></div>
+        </div>
+      </div>
+    </div>
+
+    <footer id="controls">
+      <span><b>&larr;&rarr;</b> / <b>AD</b> move</span>
+      <span><b>Space</b> fire</span>
+      <span><b>P</b> pause</span>
+      <span><b>M</b> sound</span>
+    </footer>
+  </main>
+
+  <script src="game.js"></script>
+</body>
+</html>
