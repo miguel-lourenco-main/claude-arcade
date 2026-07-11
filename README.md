@@ -37,6 +37,7 @@ directly via `file://` only works for the arcade shell itself.)
 | [Bulwark](games/bulwark/) | Arcade / shooter | Fixed shooter: lockstep fleet that sprints as it thins, one-bullet limit, per-pixel shield erosion, mystery saucer. |
 | [Patience](games/patience/) | Cards / solitaire | Klondike: draw-1/draw-3, run drag & drop, full undo, auto-complete, seeded shareable deals, cascade win physics. |
 | [Reversi](games/reversi/) | Board / strategy | Disc-flipping strategy vs 3 AI tiers (greedy, positional, alpha-beta + endgame solve in a worker) or hotseat. |
+| [Quarry](games/quarry/) | Puzzle / falling-block | Pentomino faller (12 five-cell stones, 12×24 pit): lock delay, original kicks, bag randomizer, DAS, ghost piece. |
 
 ## Structure
 

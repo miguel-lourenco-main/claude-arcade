@@ -105,4 +105,12 @@ window.GAMES = [
       "Bracket enemy discs between two of yours to flip whole lines at once — " +
       "outwit three tiers of AI, up to a deep endgame-solving searcher, or duel hotseat.",
   },
+  {
+    slug: "quarry",
+    title: "Quarry",
+    genre: "Puzzle / Falling-block",
+    description:
+      "Stack the twelve five-cell pentomino stones in a 12-wide pit and collapse " +
+      "full seams before the quarry floods — five rows at once is a MOTHERLODE.",
+  },
 ];
