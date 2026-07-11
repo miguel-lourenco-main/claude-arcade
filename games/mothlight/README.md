@@ -44,12 +44,17 @@ goes out.
 
 ## Architecture
 
-Three files, zero dependencies, no build step:
+Zero dependencies, no build step, classic `<script>` tags (works straight
+from `file://`):
 
 - `index.html` — canvas + arcade chrome (back link, sound toggle, controls footer).
 - `style.css` — dark shell styling; the canvas is a fixed 480×720 logical
   resolution scaled to fit the viewport.
-- `game.js` — one IIFE containing everything:
+- `logic.js` — the pure rules: every constant above plus gravity, gap
+  placement, collision, scoring, and tilt as side-effect-free functions.
+  Dual-environment (`window.MothlightLogic` in the browser,
+  `module.exports` in node), so the tests exercise the exact shipped code.
+- `game.js` — one IIFE containing everything else:
   - a tiny Web Audio synth (oscillator blips + filtered noise bursts;
     `AudioContext` is created only after the first user gesture, and the
     toggle persists in `arcade.mothlight.audio`),
@@ -58,3 +63,10 @@ Three files, zero dependencies, no build step:
     antennae), glowing paper lanterns on swaying chains, and four parallax
     layers (twinkling stars + moon, a far treeline, drifting fireflies at two
     depths, a near treeline), each scrolling at its own fraction of world speed.
+
+## Tests
+
+- `node test/logic.test.js` — node-only pure-logic suite against `logic.js`.
+- `node test/browser.test.mjs` — headless-Chrome CDP suite; drives every
+  README feature with real input over both `http://` and `file://` and
+  asserts zero console errors. See `test/README.md` for the full list.

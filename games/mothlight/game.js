@@ -6,33 +6,16 @@
 "use strict";
 
 // ---------------------------------------------------------------- constants
+// Numbers + pure rules live in logic.js (window.MothlightLogic), which is
+// dual-environment so test/logic.test.js exercises the same code in node.
 
-const W = 480, H = 720;
-const GROUND_H = 46;                 // mossy strip along the bottom
-const SKY_H = H - GROUND_H;
+const L = window.MothlightLogic;
+const {
+  W, H, GROUND_H, SKY_H, DT, FLAP_VY, SCROLL, MOTH_X, SPACING, GAP_HALF,
+  CEILING_Y, FLOOR_Y, RESTART_DELAY_MS,
+} = L.constants;
 
-const DT = 1 / 120;                  // fixed physics timestep (s)
 const MAX_FRAME = 0.25;              // clamp long frames (tab hitches)
-
-const GRAVITY = 1750;                // px/s^2
-const FLAP_VY = -470;                // flap SETS vy to this (not additive)
-const TERMINAL_VY = 640;             // max fall speed
-const SCROLL = 156;                  // world scroll speed, px/s
-
-const MOTH_X = W * 0.3;              // moth's fixed screen x
-const MOTH_R = 9;                    // collision radius (drawn moth is ~3x wider)
-
-const SPACING = 236;                 // fixed horizontal spacing between chains
-const GAP_HALF = 84;                 // half-height of the safe gap
-const GAP_MARGIN = 60;               // keep gap centers inside a safe band
-const GAP_MAX_STEP = 230;            // max center shift between neighbours
-                                     // (a full-effort climb covers ~215 px/s,
-                                     //  chains are 1.51 s apart — keeps every
-                                     //  random layout actually reachable)
-const CHAIN_HALF_W = 15;             // collision half-width of a lantern chain
-
-const TILT_UP = -0.42;               // rad, nose-up right after a flap
-const TILT_DOWN = 1.25;              // rad, nose-dive at terminal velocity
 
 const LS_HIGH = "arcade.mothlight.high";
 const LS_AUDIO = "arcade.mothlight.audio";
@@ -45,8 +28,7 @@ const ctx = canvas.getContext("2d");
 // ---------------------------------------------------------------- helpers
 
 const rand = (a, b) => a + Math.random() * (b - a);
-const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
-const lerp = (a, b, t) => a + (b - a) * t;
+const clamp = L.clamp, lerp = L.lerp;
 
 // ---------------------------------------------------------------- audio
 
@@ -196,14 +178,9 @@ function reset() {
 }
 
 function newChain(x, prevGapY) {
-  const lo = GAP_MARGIN + GAP_HALF;
-  const hi = SKY_H - GAP_MARGIN - GAP_HALF;
-  let gapY = rand(lo, hi);
-  if (prevGapY !== undefined)        // random, but always reachable
-    gapY = clamp(gapY, prevGapY - GAP_MAX_STEP, prevGapY + GAP_MAX_STEP);
   return {
     x, px: x,
-    gapY: clamp(gapY, lo, hi),
+    gapY: L.chainGapY(prevGapY, Math.random()),  // random, but always reachable
     scored: false,
     sway: rand(0, Math.PI * 2),      // gentle lantern sway phase
   };
@@ -223,7 +200,7 @@ function onAction() {
   if (paused) { paused = false; return; }
   if (state === S_TITLE) { reset(); state = S_PLAY; flap(); return; }
   if (state === S_PLAY) { flap(); return; }
-  if (state === S_OVER && performance.now() - overAt > 350) {
+  if (state === S_OVER && performance.now() - overAt > RESTART_DELAY_MS) {
     reset(); state = S_PLAY; flap();
   }
   // S_DYING ignores input; the tumble plays out
@@ -239,7 +216,7 @@ window.addEventListener("keydown", (e) => {
   if (paused) { paused = false; return; }     // any key resumes
   if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyW") {
     e.preventDefault(); onAction();
-  } else if (state === S_OVER && performance.now() - overAt > 350) {
+  } else if (state === S_OVER && performance.now() - overAt > RESTART_DELAY_MS) {
     reset(); state = S_PLAY; ensureAudio(); flap();
   }
 });
@@ -292,15 +269,15 @@ function step() {
   if (state === S_OVER) return;
 
   // ---- moth physics (PLAY and DYING share gravity) ----
-  moth.vy = Math.min(moth.vy + GRAVITY * DT, TERMINAL_VY);
+  moth.vy = L.fall(moth.vy, DT);
   moth.y += moth.vy * DT;
   moth.flapAge += DT;
   moth.wing += DT;
 
   if (state === S_DYING) {
     moth.rot += moth.spin * DT;      // tumble
-    if (moth.y >= SKY_H - 6) {       // hit the moss — done
-      moth.y = SKY_H - 6;
+    if (moth.y >= FLOOR_Y) {         // hit the moss — done
+      moth.y = FLOOR_Y;
       state = S_OVER;
       overAt = performance.now();
       sfx.thud();
@@ -308,13 +285,14 @@ function step() {
     return;
   }
 
+  if (testPinY !== null) { moth.y = testPinY; moth.vy = 0; }  // test handle
+
   // ceiling clamps (no death), floor kills
-  if (moth.y < 14) { moth.y = 14; moth.vy = Math.max(moth.vy, 0); }
-  if (moth.y >= SKY_H - 6) { moth.y = SKY_H - 6; die(); return; }
+  if (moth.y < CEILING_Y) { moth.y = CEILING_Y; moth.vy = Math.max(moth.vy, 0); }
+  if (moth.y >= FLOOR_Y) { moth.y = FLOOR_Y; die(); return; }
 
   // rotation follows vy: snap up on flap, ease into a nose-dive falling
-  const t = clamp((moth.vy - FLAP_VY) / (TERMINAL_VY - FLAP_VY), 0, 1);
-  const target = lerp(TILT_UP, TILT_DOWN, t * t);
+  const target = L.tiltTarget(moth.vy);
   moth.rot = moth.flapAge < 0.12 ? target
                                  : lerp(moth.rot, target, 1 - Math.exp(-8 * DT));
 
@@ -326,18 +304,15 @@ function step() {
 
   for (const c of chains) {
     // score exactly when the moth passes the gap's center-line
-    if (!c.scored && c.x <= MOTH_X) {
+    if (!c.scored && L.passedGap(c.x, MOTH_X)) {
       c.scored = true;
       score++;
       sfx.score();
     }
     // collision — circle (smaller than the drawn moth) vs chain rectangles
-    if (Math.abs(c.x - MOTH_X) < CHAIN_HALF_W + MOTH_R) {
-      if (moth.y - MOTH_R < c.gapY - GAP_HALF ||
-          moth.y + MOTH_R > c.gapY + GAP_HALF) {
-        die();
-        return;
-      }
+    if (L.inChainBand(c.x, MOTH_X) && L.hitsChain(moth.y, c.gapY)) {
+      die();
+      return;
     }
   }
 }
@@ -575,7 +550,7 @@ function drawUI() {
     text("score  " + score, W / 2, 320, 22, "#e8e2f5");
     text((newHigh ? "new best!  " : "best  ") + high, W / 2, 354, 16,
          newHigh ? "#7ee787" : "#9aa3ad");
-    if (performance.now() - overAt > 350 && Math.floor(elapsed * 1.6) % 2 === 0)
+    if (performance.now() - overAt > RESTART_DELAY_MS && Math.floor(elapsed * 1.6) % 2 === 0)
       text("press anything to fly again", W / 2, 430, 15, "#e8e2f5");
   }
   if (paused) {
@@ -612,6 +587,29 @@ function render(alpha) {
 
   drawUI();
 }
+
+// ---------------------------------------------------------------- test handle
+// A small debug handle for test/browser.test.mjs: read-only views of live
+// state plus a few scenario helpers. The game itself never calls these.
+
+let testPinY = null;                 // while set, step() holds the moth here
+
+window.__mothlight = {
+  get state() { return state; },
+  get paused() { return paused; },
+  get score() { return score; },
+  get high() { return high; },
+  get newHigh() { return newHigh; },
+  get audioOn() { return audioOn; },
+  get overAt() { return overAt; },
+  get moth() { return { y: moth.y, vy: moth.vy, rot: moth.rot }; },
+  get chains() { return chains.map((c) => ({ x: c.x, gapY: c.gapY, scored: c.scored })); },
+  pin(y) { testPinY = y; },
+  unpin() { testPinY = null; },
+  setMoth(y, vy) { moth.y = moth.py = y; moth.vy = vy; },
+  setGaps(y) { for (const c of chains) c.gapY = y; },
+  warp(dx) { for (const c of chains) { c.x -= dx; c.px = c.x; } },
+};
 
 // ---------------------------------------------------------------- main loop
 
