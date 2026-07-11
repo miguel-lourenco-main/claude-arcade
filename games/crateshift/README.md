@@ -44,10 +44,12 @@ puzzles.
 - `index.html` — shell: level-select view + play view, HUD, overlays.
 - `levels.js` — the level set as ASCII maps (`#` wall, `.` pad, `$` crate,
   `@` worker, `*`/`+` on-pad variants) with verified `par`/`parPushes`.
-- `game.js` — everything else, dependency-free:
+- `logic.js` — the pure rules, dependency-free and dual-environment (browser
+  global `CrateLogic`, `module.exports` under node for the tests):
   - **State**: parsed grid (walls / pads / interior floor via flood fill from
     the worker), crate list, full undo history of
     `(player pos, crate from→to)` tuples. Counters derive from the history.
+- `game.js` — everything else:
   - **Input**: keyboard only; held-direction repeat is timestamped
     (frame-rate independent), and held keys are dropped on window blur.
   - **Rendering**: one canvas, everything drawn procedurally each frame
@@ -60,6 +62,10 @@ puzzles.
     persisted.
 - `localStorage` keys are namespaced `arcade.crateshift.*`
   (`best.<n>`, `level`, `audio`).
+- `test/` — committed suite: `logic.test.js` (pure rules under node,
+  including a BFS solver that re-verifies `par` on every tractable level) and
+  `browser.test.mjs` (headless-Chrome CDP run of every feature above, over
+  both http:// and file://). See `test/README.md`.
 
 Level validation tooling (BFS move-optimal solver with dead-square pruning,
 plus a push-optimal solver with player-region normalization for the finale)

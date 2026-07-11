@@ -15,12 +15,7 @@
   const WIN_DELAY = 260;    // let the last push finish before the overlay
   const NS = "arcade.crateshift.";
 
-  const DIR = {
-    up:    { dx: 0, dy: -1 },
-    down:  { dx: 0, dy: 1 },
-    left:  { dx: -1, dy: 0 },
-    right: { dx: 1, dy: 0 },
-  };
+  const DIR = CrateLogic.DIR; // pure rules live in logic.js
   const KEY_DIRS = {
     ArrowUp: "up", KeyW: "up",
     ArrowDown: "down", KeyS: "down",
@@ -42,8 +37,7 @@
   };
   const bestOf = (i) => store.get("best." + i, null);
   const isUnlocked = (i) => i === 0 || bestOf(i - 1) !== null;
-  const starsFor = (lv, moves) =>
-    moves <= lv.par ? 3 : moves <= Math.ceil(lv.par * 1.6) ? 2 : 1;
+  const starsFor = (lv, moves) => CrateLogic.starsFor(lv.par, moves);
 
   // ---------- audio (all synthesized, created after a user gesture) ----------
   let audioOn = store.get("audio", true);
@@ -142,59 +136,21 @@
   let L = null;              // active level state
 
   function parseLevel(i) {
-    const def = LEVELS[i];
-    const rows = def.map;
-    const h = rows.length;
-    const w = Math.max(...rows.map((r) => r.length));
-    const wall = new Set();
-    const targets = new Set();
-    const crates = [];
-    let player = null;
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        const c = x < rows[y].length ? rows[y][x] : " ";
-        const k = x + "," + y;
-        if (c === "#") wall.add(k);
-        if (c === "." || c === "*" || c === "+") targets.add(k);
-        if (c === "$" || c === "*") crates.push({ x, y, ax: x, ay: y, fx: x, fy: y, t0: 0 });
-        if (c === "@" || c === "+") player = { x, y, ax: x, ay: y, fx: x, fy: y, t0: 0, face: "down" };
-      }
-    }
-    // interior floor: flood fill from the worker
-    const floor = new Set();
-    const stack = [player.x + "," + player.y];
-    while (stack.length) {
-      const k = stack.pop();
-      if (floor.has(k) || wall.has(k)) continue;
-      floor.add(k);
-      const [x, y] = k.split(",").map(Number);
-      for (const d of Object.values(DIR)) {
-        const nx = x + d.dx, ny = y + d.dy;
-        if (nx >= 0 && ny >= 0 && nx < w && ny < h) stack.push(nx + "," + ny);
-      }
-    }
-    // static corner cells (non-target floor boxed on two perpendicular sides)
-    const corners = new Set();
-    for (const k of floor) {
-      if (targets.has(k)) continue;
-      const [x, y] = k.split(",").map(Number);
-      const solid = (xx, yy) => wall.has(xx + "," + yy) || !floor.has(xx + "," + yy);
-      const vert = solid(x, y - 1) || solid(x, y + 1);
-      const horz = solid(x - 1, y) || solid(x + 1, y);
-      if (vert && horz) corners.add(k);
-    }
-    return {
-      index: i, def, w, h, wall, targets, floor, crates, player, corners,
-      history: [], solved: false, winAt: 0,
-    };
+    // pure rules state from logic.js, plus per-entity tween fields
+    const s = CrateLogic.parseLevel(LEVELS[i]);
+    s.index = i;
+    s.winAt = 0;
+    for (const c of s.crates) Object.assign(c, { ax: c.x, ay: c.y, fx: c.x, fy: c.y, t0: 0 });
+    Object.assign(s.player, {
+      ax: s.player.x, ay: s.player.y, fx: s.player.x, fy: s.player.y, t0: 0, face: "down",
+    });
+    return s;
   }
 
-  const crateAt = (x, y) => L.crates.find((c) => c.x === x && c.y === y) || null;
-  const isWall = (x, y) => L.wall.has(x + "," + y) || !L.floor.has(x + "," + y);
-  const onTarget = (c) => L.targets.has(c.x + "," + c.y);
-  const inCorner = (c) => L.corners.has(c.x + "," + c.y);
-  const movesCount = () => L.history.length;
-  const pushesCount = () => L.history.reduce((n, e) => n + (e.crate ? 1 : 0), 0);
+  const onTarget = (c) => CrateLogic.onTarget(L, c);
+  const inCorner = (c) => CrateLogic.inCorner(L, c);
+  const movesCount = () => CrateLogic.movesCount(L);
+  const pushesCount = () => CrateLogic.pushesCount(L);
 
   // ---------- movement ----------
   function beginTween(e, fromX, fromY) {
@@ -203,51 +159,35 @@
 
   function tryMove(dirName) {
     if (!L || L.solved) return;
-    const d = DIR[dirName];
     L.player.face = dirName;
-    const nx = L.player.x + d.dx, ny = L.player.y + d.dy;
-    if (isWall(nx, ny)) { sfx.bump(); return; }
-    const crate = crateAt(nx, ny);
-    const entry = { px: L.player.x, py: L.player.y, crate: null };
-    if (crate) {
-      // push exactly one crate, only if the cell beyond it is free
-      const bx = nx + d.dx, by = ny + d.dy;
-      if (isWall(bx, by) || crateAt(bx, by)) { sfx.bump(); return; }
-      const wasOn = onTarget(crate);
-      entry.crate = { ref: crate, fx: crate.x, fy: crate.y, tx: bx, ty: by };
-      beginTween(crate, crate.x, crate.y);
-      crate.x = bx; crate.y = by;
+    const res = CrateLogic.move(L, dirName); // mutates L, appends history
+    if (!res) { sfx.bump(); return; }
+    if (res.crate) {
+      beginTween(res.crate.ref, res.crate.fx, res.crate.fy);
       sfx.push();
-      if (onTarget(crate) && !wasOn) sfx.goal();
-      else if (!onTarget(crate) && wasOn) sfx.ungoal();
-      else if (inCorner(crate)) sfx.deadlock();
+      if (res.crate.entered) sfx.goal();
+      else if (res.crate.left) sfx.ungoal();
+      else if (res.crate.deadlocked) sfx.deadlock();
     } else {
       sfx.step();
     }
-    beginTween(L.player, L.player.x, L.player.y);
-    L.player.x = nx; L.player.y = ny;
-    L.history.push(entry);
+    beginTween(L.player, res.px, res.py);
     updateHud();
     checkWin();
   }
 
   function undo() {
-    if (!L || L.solved || !L.history.length) return;
-    const e = L.history.pop();
-    beginTween(L.player, L.player.x, L.player.y);
-    L.player.x = e.px; L.player.y = e.py;
-    if (e.crate) {
-      const c = e.crate.ref;
-      beginTween(c, c.x, c.y);
-      c.x = e.crate.fx; c.y = e.crate.fy;
-    }
+    if (!L || L.solved) return;
+    const res = CrateLogic.undo(L); // mutates L, pops history
+    if (!res) return;
+    beginTween(L.player, res.player.fx, res.player.fy);
+    if (res.crate) beginTween(res.crate.ref, res.crate.fx, res.crate.fy);
     sfx.undo();
     updateHud();
   }
 
   function checkWin() {
-    if (!L.crates.every(onTarget)) return;
-    L.solved = true;
+    if (!L.solved) return; // CrateLogic.move flags it the moment all pads fill
     L.winAt = performance.now();
     held.length = 0;
     const moves = movesCount(), pushes = pushesCount();
@@ -255,6 +195,7 @@
     const prev = bestOf(L.index);
     if (!prev || moves < prev.m) store.set("best." + L.index, { m: moves, p: pushes, s: stars });
     store.set("level", Math.min(L.index + 1, LEVELS.length - 1));
+    updateHud(); // the winning move may have set a new best; don't show a stale one
     sfx.win();
     setTimeout(showWinOverlay, WIN_DELAY);
   }
@@ -649,4 +590,15 @@
   while (cursor > 0 && !isUnlocked(cursor)) cursor--;
   showSelect();
   requestAnimationFrame(frame);
+
+  // read-mostly debug handle for the committed test suite (test/browser.test.mjs)
+  window.__crateshift = {
+    get view() { return view; },
+    get cursor() { return cursor; },
+    get L() { return L; },
+    get held() { return held.slice(); },
+    get audioOn() { return audioOn; },
+    logic: CrateLogic,
+    levels: LEVELS,
+  };
 })();
