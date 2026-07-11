@@ -51,7 +51,10 @@ and a wall of bricks that gets meaner every level.
 
 - `index.html` — DOM chrome (HUD, overlay, footer) around a single canvas.
 - `style.css` — dark arcade theme, monospace UI.
-- `game.js` — one IIFE, no dependencies:
+- `logic.js` — the pure gameplay logic (level generation, collision math,
+  speed model). Dual-environment: `window.BrickstormLogic` in the browser,
+  `module.exports` in node so the tests can exercise it directly.
+- `game.js` — one IIFE, no dependencies beyond `logic.js`:
   - fixed-timestep simulation (120 Hz accumulator), rendering interpolates
     ball/paddle/capsule positions between ticks;
   - `mulberry32`-seeded level generator so each level is deterministic;
@@ -60,4 +63,11 @@ and a wall of bricks that gets meaner every level.
     persists;
   - screen shake + brick-shatter particles for juice.
 
-Everything is procedural — no external assets, no build step.
+Everything is procedural — no external assets, no build step. Works opened
+straight from disk (`file://`) — classic scripts only.
+
+## Tests
+
+- `node test/logic.test.js` — pure-logic suite (levels, collisions, speed model).
+- `node test/browser.test.mjs` — headless-Chrome CDP suite; plays every
+  README feature over both `http://` and `file://`. See `test/README.md`.
