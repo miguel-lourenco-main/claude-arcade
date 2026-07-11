@@ -55,6 +55,8 @@
   var dragging = false, dragX = 0, dragY = 0, downSq = -1, wasSelectedOnDown = false;
 
   var worker = null, searchId = 0, thinking = false;
+  var workerFailed = false;      // true once Worker is unusable (e.g. file://)
+  var lastRequest = null;        // last search message, re-sent if the worker dies
 
   // ---- settings --------------------------------------------------------------
   function loadSettings() {
@@ -75,27 +77,127 @@
   }
 
   // ---- worker ------------------------------------------------------------------
+  function handleSearchMessage(e) {
+    var msg = e.data;
+    if (!msg || msg.id !== searchId) return; // stale search
+    if (msg.type === "info") {
+      thinkingText.textContent = "thinking d" + msg.depth;
+      return;
+    }
+    if (msg.type === "result") {
+      thinking = false;
+      thinkingEl.classList.add("hidden");
+      if (msg.from < 0) return;
+      var m = E.findMove(pos, msg.from, msg.to, msg.promo || 0);
+      if (m) commitMove(m);
+      return;
+    }
+    if (msg.type === "error") {
+      thinking = false;
+      thinkingEl.classList.add("hidden");
+    }
+  }
+
+  // Main-thread fallback engine for when Web Workers are unavailable (e.g. the
+  // page was opened via file://, where Chrome blocks worker scripts). Mimics
+  // the worker's message protocol, but slices the search across setTimeout
+  // ticks (one bounded chunk at a time) so the UI stays responsive.
+  var FALLBACK_LEVELS = { // keep in sync with LEVELS in worker.js
+    1: { maxDepth: 2, timeMs: 800, jitter: true },
+    2: { maxDepth: 4, timeMs: 2500, jitter: false },
+    3: { maxDepth: 6, timeMs: 6000, jitter: false }
+  };
+  var FALLBACK_CHUNK_MS = 250;
+
+  function FallbackWorker() {
+    this.onmessage = null;
+    this.onerror = null;
+    this._timer = null;
+  }
+  FallbackWorker.prototype.postMessage = function (msg) {
+    var self = this;
+    if (!msg || msg.type !== "search") return;
+    this.terminate(); // drop any search still ticking
+    function emit(data) {
+      if (self.onmessage) self.onmessage({ data: data });
+    }
+    var cfg = FALLBACK_LEVELS[msg.level] || FALLBACK_LEVELS[2];
+    var searchPos;
+    try {
+      searchPos = E.fromFen(msg.fen);
+    } catch (err) {
+      emit({ type: "error", id: msg.id, message: String(err) });
+      return;
+    }
+    var stepper = window.ChessSearch.createStepper(searchPos, {
+      maxDepth: cfg.maxDepth,
+      timeMs: cfg.timeMs,
+      jitter: cfg.jitter,
+      gameHashes: msg.gameHashes || [],
+      onInfo: function (info) {
+        emit({ type: "info", id: msg.id, depth: info.depth, score: info.score, nodes: info.nodes });
+      }
+    });
+    function pump() {
+      self._timer = null;
+      try {
+        stepper.step(FALLBACK_CHUNK_MS);
+      } catch (err) {
+        emit({ type: "error", id: msg.id, message: String(err) });
+        return;
+      }
+      if (!stepper.done) {
+        self._timer = setTimeout(pump, 0);
+        return;
+      }
+      var r = stepper.result();
+      emit({
+        type: "result",
+        id: msg.id,
+        from: r.move ? E.moveFrom(r.move) : -1,
+        to: r.move ? E.moveTo(r.move) : -1,
+        promo: r.move ? E.movePromo(r.move) : 0,
+        score: r.score, depth: r.depth, nodes: r.nodes
+      });
+    }
+    this._timer = setTimeout(pump, 10);
+  };
+  FallbackWorker.prototype.terminate = function () {
+    if (this._timer) {
+      clearTimeout(this._timer);
+      this._timer = null;
+    }
+  };
+
+  function switchToFallback() {
+    workerFailed = true;
+    try { if (worker && worker.terminate) worker.terminate(); } catch (e) { /* already dead */ }
+    worker = new FallbackWorker();
+    worker.onmessage = handleSearchMessage;
+    // a search may have been posted into the dead worker — re-issue it
+    if (thinking && lastRequest && lastRequest.id === searchId) {
+      worker.postMessage(lastRequest);
+    }
+  }
+
   function createWorker() {
-    worker = new Worker("src/worker.js");
-    worker.onmessage = function (e) {
-      var msg = e.data;
-      if (!msg || msg.id !== searchId) return; // stale search
-      if (msg.type === "info") {
-        thinkingText.textContent = "thinking d" + msg.depth;
-        return;
-      }
-      if (msg.type === "result") {
-        thinking = false;
-        thinkingEl.classList.add("hidden");
-        if (msg.from < 0) return;
-        var m = E.findMove(pos, msg.from, msg.to, msg.promo || 0);
-        if (m) commitMove(m);
-        return;
-      }
-      if (msg.type === "error") {
-        thinking = false;
-        thinkingEl.classList.add("hidden");
-      }
+    if (workerFailed || typeof Worker === "undefined") {
+      worker = new FallbackWorker();
+      worker.onmessage = handleSearchMessage;
+      return;
+    }
+    try {
+      worker = new Worker("src/worker.js");
+    } catch (e) {
+      // synchronous failure (Chrome on file:// throws here)
+      switchToFallback();
+      return;
+    }
+    worker.onmessage = handleSearchMessage;
+    worker.onerror = function (ev) {
+      // asynchronous failure (script blocked/failed to load)
+      if (ev && ev.preventDefault) ev.preventDefault();
+      switchToFallback();
     };
   }
   function cancelSearch() {
@@ -115,10 +217,11 @@
     thinkingEl.classList.remove("hidden");
     var hashes = pos.hist.map(function (u) { return u.h1 + ":" + u.h2; });
     hashes.push(pos.h1 + ":" + pos.h2);
-    worker.postMessage({
+    lastRequest = {
       type: "search", id: searchId,
       fen: E.toFen(pos), gameHashes: hashes, level: level
-    });
+    };
+    worker.postMessage(lastRequest);
   }
 
   // ---- board geometry ------------------------------------------------------------
@@ -659,7 +762,13 @@
     fenInput.value = E.toFen(pos);
     fenInput.select();
     try {
-      navigator.clipboard.writeText(fenInput.value);
+      var written = navigator.clipboard.writeText(fenInput.value);
+      if (written && written.catch) {
+        written.catch(function () {
+          fenMsg.textContent = "select + copy manually";
+          fenMsg.className = "";
+        });
+      }
       fenMsg.textContent = "copied";
       fenMsg.className = "ok";
     } catch (e) {
@@ -711,6 +820,39 @@
   document.querySelectorAll("#seg-mode button").forEach(function (b) { b.classList.toggle("on", b.dataset.v === mode); });
   document.querySelectorAll("#seg-side button").forEach(function (b) { b.classList.toggle("on", b.dataset.v === sidePref); });
   document.querySelectorAll("#seg-level button").forEach(function (b) { b.classList.toggle("on", b.dataset.v === String(level)); });
+
+  // Read-only debug/test hook: exposes observable UI state (used by the
+  // committed browser tests). Does not alter behavior.
+  window.ChessUI = {
+    state: function () {
+      return {
+        fen: pos ? E.toFen(pos) : null,
+        moves: records.length,
+        sans: records.map(function (r) { return r.san; }),
+        mode: mode,
+        level: level,
+        flipped: flipped,
+        thinking: thinking,
+        gameOver: gameOver ? gameOver.reason : null,
+        check: !!(lastStatus && lastStatus.check),
+        selected: selected,
+        legalTargets: legalTargets.slice(),
+        sound: Sound.enabled,
+        humanColor: humanColor,
+        sideToMove: pos ? pos.side : -1,
+        backend: workerFailed ? "main-thread" : "worker"
+      };
+    },
+    // client-pixel center of a square like "e2", honoring the current flip
+    squareCenter: function (name) {
+      var f = name.charCodeAt(0) - 97, r = name.charCodeAt(1) - 49;
+      var rect = canvas.getBoundingClientRect();
+      var px = rect.width / 8;
+      var col = flipped ? 7 - f : f;
+      var row = flipped ? r : 7 - r;
+      return { x: rect.left + (col + 0.5) * px, y: rect.top + (row + 0.5) * px };
+    }
+  };
 
   createWorker();
   pos = E.fromFen(E.START_FEN);

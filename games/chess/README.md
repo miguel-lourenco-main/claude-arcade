@@ -36,7 +36,11 @@ Plain script tags, no build step. Everything below `src/`:
   terms. Difficulty = depth/time caps (2/4/6); the lowest level picks
   randomly among near-best root moves.
 - `worker.js` — Web Worker wrapper so the UI thread never blocks; posts
-  depth progress for the thinking indicator.
+  depth progress for the thinking indicator. If workers are unavailable
+  (e.g. the page is opened via `file://`, where Chrome blocks worker
+  scripts), `ui.js` detects the failure and falls back to running the same
+  search on the main thread, sliced across `setTimeout` ticks so the UI
+  stays responsive.
 - `pieces.js` — original vector piece designs drawn with canvas paths,
   cached as per-size sprites.
 - `audio.js` — Web Audio synthesized move/capture/check/promote/game-end

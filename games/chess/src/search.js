@@ -208,8 +208,10 @@
   var TT_EXACT = 0, TT_LOWER = 1, TT_UPPER = 2;
 
   Searcher.prototype.checkTime = function () {
-    if ((this.nodes & 2047) === 0 && Date.now() - this.startTime > this.timeMs) {
-      throw new AbortSearch();
+    if ((this.nodes & 2047) === 0) {
+      var now = Date.now();
+      if (now - this.startTime > this.timeMs) throw new AbortSearch();
+      if (this.stepDeadline && now > this.stepDeadline) throw new AbortSearch();
     }
   };
 
@@ -353,75 +355,111 @@
     return best;
   };
 
-  // Root search with iterative deepening.
-  // opts: {maxDepth, timeMs, jitter, gameHashes, onInfo}
-  function search(pos, opts) {
-    var searcher = new Searcher(pos, opts);
-    var legal = E.legalMoves(pos);
-    if (legal.length === 0) return { move: 0, score: 0, depth: 0, nodes: 0 };
-    if (legal.length === 1 && !opts.jitter) {
-      return { move: legal[0], score: 0, depth: 0, nodes: 1 };
+  // Resumable root search: one step() call = one iterative-deepening depth.
+  // Lets a main-thread caller (no-worker fallback) slice the search across
+  // setTimeout ticks so the UI stays responsive. search() below drives it
+  // to completion synchronously with identical behavior to the old loop.
+  function Stepper(pos, opts) {
+    this.pos = pos;
+    this.opts = opts;
+    this.searcher = new Searcher(pos, opts);
+    this.legal = E.legalMoves(pos);
+    this.bestMove = this.legal.length ? this.legal[0] : 0;
+    this.bestScore = -Infinity;
+    this.completedDepth = 0;
+    this.rootScores = null;
+    this.depth = 0;
+    this.done = false;
+    if (this.legal.length === 0) {
+      this.done = true;
+      this.bestMove = 0;
+      this.bestScore = 0;
+    } else if (this.legal.length === 1 && !opts.jitter) {
+      this.done = true;
+      this.bestScore = 0;
+      this.searcher.nodes = 1;
     }
+  }
 
-    var bestMove = legal[0], bestScore = -Infinity, completedDepth = 0;
-    var rootScores = null;
+  // Runs the next depth iteration. stepBudgetMs (optional) additionally caps
+  // how long this single call may block; an aborted iteration keeps the best
+  // move from the previous depth. Returns false once the search is finished.
+  Stepper.prototype.step = function (stepBudgetMs) {
+    if (this.done) return false;
+    var searcher = this.searcher, pos = this.pos;
+    this.depth++;
+    if (this.depth > searcher.maxDepth) { this.done = true; return false; }
+    searcher.stepDeadline = stepBudgetMs ? Date.now() + stepBudgetMs : 0;
 
-    for (var depth = 1; depth <= searcher.maxDepth; depth++) {
-      var iterBest = 0, iterScore = -Infinity;
-      var iterScores = [];
-      var alpha = -Infinity, beta = Infinity;
-      var ordered = searcher.orderMoves(legal, bestMove, 0);
-      try {
-        for (var i = 0; i < ordered.length; i++) {
-          var m = ordered[i];
-          E.makeMove(pos, m);
-          searcher.pathHashes.push(pos.h1 + ":" + pos.h2);
-          var score;
-          try {
-            score = -searcher.negamax(depth - 1, -beta, -alpha, 1);
-          } finally {
-            searcher.pathHashes.pop();
-            E.unmakeMove(pos);
-          }
-          iterScores.push({ move: m, score: score });
-          if (score > iterScore) {
-            iterScore = score;
-            iterBest = m;
-            if (score > alpha) alpha = score;
-          }
+    var iterBest = 0, iterScore = -Infinity;
+    var iterScores = [];
+    var alpha = -Infinity, beta = Infinity;
+    var ordered = searcher.orderMoves(this.legal, this.bestMove, 0);
+    try {
+      for (var i = 0; i < ordered.length; i++) {
+        var m = ordered[i];
+        E.makeMove(pos, m);
+        searcher.pathHashes.push(pos.h1 + ":" + pos.h2);
+        var score;
+        try {
+          score = -searcher.negamax(this.depth - 1, -beta, -alpha, 1);
+        } finally {
+          searcher.pathHashes.pop();
+          E.unmakeMove(pos);
         }
-      } catch (e) {
-        if (e instanceof AbortSearch) break;
-        throw e;
+        iterScores.push({ move: m, score: score });
+        if (score > iterScore) {
+          iterScore = score;
+          iterBest = m;
+          if (score > alpha) alpha = score;
+        }
       }
-      bestMove = iterBest;
-      bestScore = iterScore;
-      completedDepth = depth;
-      rootScores = iterScores;
-      if (searcher.onInfo) {
-        searcher.onInfo({ depth: depth, score: bestScore, nodes: searcher.nodes });
-      }
-      // found a forced mate — no point going deeper
-      if (bestScore > MATE_FLOOR || bestScore < -MATE_FLOOR) break;
-      // don't start an iteration we probably can't finish
-      if (Date.now() - searcher.startTime > searcher.timeMs * 0.5) break;
+    } catch (e) {
+      if (e instanceof AbortSearch) { this.done = true; return false; }
+      throw e;
     }
+    this.bestMove = iterBest;
+    this.bestScore = iterScore;
+    this.completedDepth = this.depth;
+    this.rootScores = iterScores;
+    if (searcher.onInfo) {
+      searcher.onInfo({ depth: this.depth, score: this.bestScore, nodes: searcher.nodes });
+    }
+    // found a forced mate — no point going deeper
+    if (this.bestScore > MATE_FLOOR || this.bestScore < -MATE_FLOOR) this.done = true;
+    // don't start an iteration we probably can't finish
+    else if (Date.now() - searcher.startTime > searcher.timeMs * 0.5) this.done = true;
+    else if (this.depth >= searcher.maxDepth) this.done = true;
+    return true;
+  };
 
+  Stepper.prototype.result = function () {
+    var bestMove = this.bestMove, bestScore = this.bestScore;
+    if (this.legal.length === 0) return { move: 0, score: 0, depth: 0, nodes: 0 };
     // easy-level jitter: pick randomly among moves within a window of the best
-    if (opts.jitter && rootScores && rootScores.length > 1) {
+    if (this.opts.jitter && this.rootScores && this.rootScores.length > 1) {
       var window = 60;
-      var pool = rootScores.filter(function (rs) { return rs.score >= bestScore - window; });
+      var pool = this.rootScores.filter(function (rs) { return rs.score >= bestScore - window; });
       if (pool.length > 1) {
         var pick = pool[Math.floor(Math.random() * pool.length)];
         bestMove = pick.move;
         bestScore = pick.score;
       }
     }
+    return { move: bestMove, score: bestScore, depth: this.completedDepth, nodes: this.searcher.nodes };
+  };
 
-    return { move: bestMove, score: bestScore, depth: completedDepth, nodes: searcher.nodes };
+  // Root search with iterative deepening (synchronous, worker/node path).
+  // opts: {maxDepth, timeMs, jitter, gameHashes, onInfo}
+  function search(pos, opts) {
+    var stepper = new Stepper(pos, opts);
+    while (!stepper.done) stepper.step(0);
+    return stepper.result();
   }
 
-  var ChessSearch = { search: search, evaluate: evaluate, MATE: MATE };
+  function createStepper(pos, opts) { return new Stepper(pos, opts); }
+
+  var ChessSearch = { search: search, createStepper: createStepper, evaluate: evaluate, MATE: MATE };
   global.ChessSearch = ChessSearch;
   if (typeof module !== "undefined" && module.exports) module.exports = ChessSearch;
 })(typeof self !== "undefined" ? self : globalThis);
