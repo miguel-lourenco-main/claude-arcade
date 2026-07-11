@@ -293,6 +293,13 @@ export const ROCKET_GLEAM = 156; // Gleam Rocket — a nacre-green ring
 // interact.js writes it when a full Ember Pail gives a whole frame its fire
 // back, and portal.js collapses it the moment the ring stops being whole.
 export const PORTAL_FILM = 157;
+// the Undersky's own country (see LORE.md / undersky.js): PEARLSAND is the
+// pale dune skin of the drowned old floor; STARKELP is the petrified kelp
+// of the sea that used to hang overhead, still holding a bead of the
+// drowned light. Both generate only under the other sky, but travel home
+// in a satchel like anything else.
+export const PEARLSAND = 158;
+export const STARKELP = 159;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -1157,6 +1164,29 @@ BLOCKS[PORTAL_FILM] = def("Cinder Door", {
   lightEmit: 11,
   hidden: true,
   sound: "glass",
+});
+
+// Pearlsand: sand-family handling all the way down (shovel, soft, sounds
+// like a beach) — only the color says it never saw this sun
+BLOCKS[PEARLSAND] = def("Pearlsand", {
+  hardness: 0.5,
+  tiles: cube(TILE.PEARLSAND),
+  sound: "sand",
+  toolKind: "shovel",
+});
+// Starkelp: a plant by every mesh/pop rule (cross, breaks in one pinch,
+// replants on any solid top), glowing dimmer than a Wispcap — a bead of
+// light, not a lamp. Its glow guards only its own cell's pool, like all
+// dim flora.
+BLOCKS[STARKELP] = def("Starkelp", {
+  hardness: 0.05,
+  tiles: cube(TILE.STARKELP),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  sound: "plant",
+  lightEmit: 6,
 });
 
 // --- the Pearlfall's gifts ------------------------------------------------------

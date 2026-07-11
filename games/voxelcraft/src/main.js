@@ -2066,6 +2066,7 @@ function tick(now) {
     night: sky.lightLevel < 0.45,
     delve: player.pos.y < 24 || !skyOpen,
     cold: inColdBiome,
+    undersky: dim.id === "undersky", // its own room, over depth and dusk
     rain: washLevel,
     pulse: prowl.active, // the Prowl's low pulse under the night mood
   });

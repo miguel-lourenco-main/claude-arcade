@@ -48,6 +48,12 @@ const MOODS = {
     notes: [3, 6], dur: [1.4, 2.6], rest: [16, 34],
     wave: "sine", peak: 0.07, attack: 0.05, // struck, like tapped river glass
   },
+  undersky: {
+    scale: [0, 3, 7, 10, 12],      // a hollowed minor — the sea's old room
+    octave: 1,                      // at pitch, but slow and far apart
+    notes: [2, 4], dur: [2.8, 5.2], rest: [24, 44],
+    wave: "sine", peak: 0.09, attack: 0.5, // every note arrives like a tide
+  },
 };
 
 export class Music {
@@ -250,7 +256,11 @@ export class Music {
   // usual day/night pair. moodTarget updates even before start() so tests
   // can assert the read without an unlocked AudioContext.
   update(state) {
-    const mood = state.delve ? "delve" : state.cold ? "cold"
+    // the Undersky outranks everything: down there the depth gate would
+    // read "delve" and the fixed dusk would read "night", and both would
+    // be the wrong room
+    const mood = state.undersky ? "undersky"
+      : state.delve ? "delve" : state.cold ? "cold"
       : state.night ? "night" : "day";
     this.moodTarget = mood;
     this.pulseTarget = state.pulse ? 1 : 0; // the Prowl's low pulse

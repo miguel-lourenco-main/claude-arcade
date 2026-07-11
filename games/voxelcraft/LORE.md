@@ -282,6 +282,20 @@ specific item vocabulary.
   who cross say the quiet has a texture. What else is down there — what
   tends the pearl-beds, and what it guards — the delvers are still arguing
   about, mostly from a distance.
+- **Pearlsand** — the Undersky's dune skin: sand that never saw this sun,
+  pale as the inside of a shell and glinting faintly pink and green where
+  the drowned light still catches. Scoops like any beach; journals as ×64
+  like any beach; is not, the Wanderlings insist, any beach.
+- **Starkelp** — the kelp of the sea that used to hang overhead, petrified
+  mid-sway when the water became the night. Each stalk still holds a few
+  lit beads of the drowned light — dimmer than a Wispcap, a bead rather
+  than a lamp — and it comes away at a pinch and stands back up on any
+  solid top. Delvers of the far country plant it the way delvers of the
+  near one press Gleam Moss: a trail of company through the quiet.
+- **The Pearl-Beds** — the wide shallow basins of the Undersky where the
+  drowned light pooled and sank in. The dunes dip, the Starkelp crowds up
+  thick, and lit starstone studs the floor itself — treasure lying in the
+  open, which any Wanderling will tell you is the most suspicious kind.
 - **The Delvings-Under** — the Steads-Before didn't just farm; they dug.
   Timbered galleries chasing sky-iron down into the old-sky dark, rung
   shafts up to little head-frames that have mostly given up standing

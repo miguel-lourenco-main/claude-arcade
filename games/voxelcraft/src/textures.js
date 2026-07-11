@@ -181,6 +181,10 @@ export const TILE = {
   // the Cinder Door's film (see LORE.md): the fire a Cinderglass ring
   // remembers, standing open — an ember-to-plum sheet with bright seams.
   CINDER_FILM: 136,
+  // the Undersky's country (see LORE.md): the pale dune skin of the
+  // drowned floor, and the petrified kelp still holding its bead of light.
+  PEARLSAND: 137,
+  STARKELP: 138,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -2198,6 +2202,41 @@ painters[TILE.CINDER_FILM] = (p) => {
   }
   // nacre sparks — the drowned stars on the far side
   p.px(4, 3, 226, 230, 246); p.px(12, 6, 238, 240, 252); p.px(6, 12, 226, 230, 246);
+};
+
+painters[TILE.PEARLSAND] = (p) => {
+  // pearlsand: the sand recipe gone nacre — a pale violet-grey bed with the
+  // faint two-tone shimmer of the inside of a shell (a few pink and green
+  // glints where the drowned light still catches)
+  p.noiseFill([196, 188, 198], 10);
+  p.speckle(14, [176, 166, 182], 8);
+  p.speckle(8, [214, 208, 218], 6);
+  p.px(3, 5, 210, 186, 196); p.px(12, 9, 208, 190, 184);   // pink glints
+  p.px(7, 12, 186, 204, 194); p.px(13, 3, 190, 206, 198);  // green glints
+};
+
+painters[TILE.STARKELP] = (p) => {
+  // starkelp: a petrified kelp stalk, dark sea-slate with a gentle sway
+  // baked into its silhouette, carrying three lit beads — the drowned
+  // light that never quite went out
+  p.clear();
+  const STALK = [46, 66, 64], EDGE = [34, 50, 50], FROND = [58, 84, 76];
+  let x = 8;
+  for (let y = 15; y >= 2; y--) {
+    const d = (p.rand() * 2 - 1) * 8;
+    p.px(x, y, STALK[0] + d, STALK[1] + d, STALK[2] + d);
+    p.px(x - 1, y, EDGE[0] + d, EDGE[1] + d, EDGE[2] + d);
+    if (y % 4 === 1) { // short fronds trailing off the sway
+      p.px(x + 1, y, FROND[0], FROND[1], FROND[2]);
+      p.px(x - 2, y - 1, FROND[0] - 8, FROND[1] - 8, FROND[2] - 8);
+    }
+    if (p.rand() < 0.4 && y > 3) x = Math.max(5, Math.min(11, x + (p.rand() < 0.5 ? -1 : 1)));
+  }
+  // the beads: nacre-bright cores with a green-white halo pixel each
+  for (const [bx, by] of [[8, 12], [7, 7], [9, 4]]) {
+    p.px(bx, by, 224, 240, 226);
+    p.px(bx, by - 1, 168, 204, 182);
+  }
 };
 
 export function buildAtlas(seed = 1337) {
