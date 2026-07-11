@@ -1,14 +1,19 @@
 // Palisade — browser glue: fixed-timestep loop, input, HUD, overlays, persistence.
 
-import {
+// Classic script (file:// safe): reads deps from the Palisade namespace.
+// Load order: engine/data.js, engine/maps.js, engine/game.js, render.js, sfx.js, then this file.
+(function () {
+'use strict';
+const NS = globalThis.Palisade = globalThis.Palisade || {};
+const {
   createGame, tick, TICK, drainEvents,
   placeTower, upgradeTower, sellTower, cycleTargetMode, canPlace,
   startNextWave, upgradeCost, sellValue, towerStats, wavePreview,
-} from './engine/game.js';
-import { MAPS, CELL, W, H } from './engine/maps.js';
-import { TOWERS, TOWER_ORDER, CREEPS, EARLY_GOLD_PER_SEC } from './engine/data.js';
-import { Renderer, drawMapThumb } from './render.js';
-import { Sfx } from './sfx.js';
+} = NS.game;
+const { MAPS, CELL, W, H } = NS.maps;
+const { TOWERS, TOWER_ORDER, CREEPS, EARLY_GOLD_PER_SEC } = NS.data;
+const { Renderer, drawMapThumb } = NS.render;
+const { Sfx } = NS.sfx;
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('game');
@@ -424,6 +429,13 @@ window.addEventListener('focus', () => {
 
 // ------------------------------------------------------------------ boot
 
+// Read-only introspection hook for the automated browser tests.
+NS.ui = {
+  getGame: () => game,
+  getState: () => ({ running, paused, pausedByBlur, speedMul, placingType, selectedId }),
+};
+
 updateAudioBtn();
 showMapSelect();
 requestAnimationFrame((t) => { last = t; requestAnimationFrame(frame); });
+})();

@@ -1,9 +1,14 @@
 // Palisade — canvas renderer. All art is drawn procedurally; nothing is loaded.
 // Owns transient visual FX (particles, float text, beams, rings) fed from engine events.
 
-import { CELL, COLS, ROWS, W, H, posAt, cellKey } from './engine/maps.js';
-import { TOWERS } from './engine/data.js';
-import { towerStats } from './engine/game.js';
+// Classic script (file:// safe): reads deps from and attaches to the Palisade namespace.
+// Load order: engine/data.js, engine/maps.js, engine/game.js, then this file.
+(function () {
+'use strict';
+const NS = globalThis.Palisade = globalThis.Palisade || {};
+const { CELL, COLS, ROWS, W, H, posAt, cellKey } = NS.maps;
+const { TOWERS } = NS.data;
+const { towerStats } = NS.game;
 
 const CREEP_COLORS = {
   normal: '#c9a86a',
@@ -26,7 +31,7 @@ function hash(x, y) {
   return ((h ^ (h >> 16)) >>> 0) / 4294967296;
 }
 
-export class Renderer {
+class Renderer {
   constructor(canvas) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
@@ -599,7 +604,7 @@ export class Renderer {
 }
 
 // Small helper for map-select thumbnails.
-export function drawMapThumb(canvas, map) {
+function drawMapThumb(canvas, map) {
   const g = canvas.getContext('2d');
   const sx = canvas.width / W, sy = canvas.height / H;
   g.fillStyle = '#11160f';
@@ -622,3 +627,6 @@ export function drawMapThumb(canvas, map) {
     g.beginPath(); g.arc(s1.x * sx, s1.y * sy, 3, 0, Math.PI * 2); g.fill();
   }
 }
+
+NS.render = { Renderer, drawMapThumb };
+})();

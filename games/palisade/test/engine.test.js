@@ -1,13 +1,19 @@
 // Palisade engine tests — run with: node test/engine.test.js
 // Drives the pure engine headlessly; no DOM required.
+// The engine files are classic scripts that attach to globalThis.Palisade,
+// so we load them for their side effects (in dependency order) and destructure.
 
-import {
+import '../src/engine/data.js';
+import '../src/engine/maps.js';
+import '../src/engine/game.js';
+
+const {
   createGame, tick, TICK, drainEvents,
   placeTower, upgradeTower, sellTower, cycleTargetMode,
   canPlace, startNextWave, upgradeCost, sellValue, creepPos, wavePreview,
-} from '../src/engine/game.js';
-import { MAPS, posAt, isBuildableCell, COLS, ROWS } from '../src/engine/maps.js';
-import { TOWERS, CREEPS, WAVES, SLOW_FACTOR, START_GOLD, START_LIVES } from '../src/engine/data.js';
+} = globalThis.Palisade.game;
+const { MAPS, posAt, isBuildableCell, COLS, ROWS } = globalThis.Palisade.maps;
+const { TOWERS, CREEPS, WAVES, SLOW_FACTOR, START_GOLD, START_LIVES } = globalThis.Palisade.data;
 
 let passed = 0, failed = 0;
 function assert(cond, msg) {

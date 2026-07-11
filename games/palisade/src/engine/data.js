@@ -1,20 +1,24 @@
 // Palisade — static game data: towers, creeps, waves, scaling curves.
 // Pure data + pure functions; no DOM, no side effects.
+// Classic script (file:// safe): attaches to the Palisade namespace.
+(function () {
+'use strict';
+const NS = globalThis.Palisade = globalThis.Palisade || {};
 
-export const SLOW_FACTOR = 0.55;   // speed multiplier while slowed (constant; slows stack DURATION, never factor)
-export const SLOW_CAP = 6;         // max seconds of slow that can be banked on one creep
-export const POISON_TICK = 0.5;    // seconds between poison damage ticks
-export const SELL_REFUND = 0.7;    // fraction of invested gold refunded on sell
-export const RETARGET_RADIUS = 70; // px — homing projectiles retarget within this of themselves
-export const START_GOLD = 150;
-export const START_LIVES = 20;
-export const FIRST_INTERMISSION = 15; // s before wave 1 auto-starts
-export const INTERMISSION = 12;       // s between waves
-export const EARLY_GOLD_PER_SEC = 2;  // early-call bonus rate
+const SLOW_FACTOR = 0.55;   // speed multiplier while slowed (constant; slows stack DURATION, never factor)
+const SLOW_CAP = 6;         // max seconds of slow that can be banked on one creep
+const POISON_TICK = 0.5;    // seconds between poison damage ticks
+const SELL_REFUND = 0.7;    // fraction of invested gold refunded on sell
+const RETARGET_RADIUS = 70; // px — homing projectiles retarget within this of themselves
+const START_GOLD = 150;
+const START_LIVES = 20;
+const FIRST_INTERMISSION = 15; // s before wave 1 auto-starts
+const INTERMISSION = 12;       // s between waves
+const EARLY_GOLD_PER_SEC = 2;  // early-call bonus rate
 
-export const TARGET_MODES = ['first', 'last', 'nearest', 'strongest'];
+const TARGET_MODES = ['first', 'last', 'nearest', 'strongest'];
 
-export const TOWERS = {
+const TOWERS = {
   arrow: {
     name: 'Arrow',
     blurb: 'Fast single-target bolts. Homing — never misses.',
@@ -64,9 +68,9 @@ export const TOWERS = {
   },
 };
 
-export const TOWER_ORDER = ['arrow', 'splash', 'frost', 'poison'];
+const TOWER_ORDER = ['arrow', 'splash', 'frost', 'poison'];
 
-export const CREEPS = {
+const CREEPS = {
   normal: { name: 'Walker', hp: 38, speed: 60, bounty: 4, lives: 1, radius: 7, gap: 0.8 },
   fast: { name: 'Skitter', hp: 26, speed: 108, bounty: 4, lives: 1, radius: 6, gap: 0.55 },
   tank: { name: 'Hulk', hp: 175, speed: 40, bounty: 11, lives: 2, radius: 10, gap: 1.5 },
@@ -76,7 +80,7 @@ export const CREEPS = {
 
 // Scripted wave compositions. Groups spawn in order with a short pause between groups.
 // Counts/HP/speed are further scaled by wave index (see hpScale/speedScale below).
-export const WAVES = [
+const WAVES = [
   /*  1 */ [{ type: 'normal', n: 8 }],
   /*  2 */ [{ type: 'normal', n: 11 }],
   /*  3 */ [{ type: 'normal', n: 6 }, { type: 'fast', n: 5 }],
@@ -99,10 +103,18 @@ export const WAVES = [
   /* 20 */ [{ type: 'tank', n: 6 }, { type: 'regen', n: 10 }, { type: 'swarm', n: 14 }],
 ];
 
-export const GROUP_GAP = 1.2; // s pause between groups within a wave
+const GROUP_GAP = 1.2; // s pause between groups within a wave
 
 // w is the 0-based wave index.
-export function hpScale(w) { return 1 + 0.18 * w + 0.012 * w * w; }
-export function speedScale(w) { return Math.min(1.35, 1 + 0.012 * w); }
-export function bountyScale(w) { return 1 + 0.07 * w; }
-export function waveClearBonus(w) { return 20 + 4 * w; }
+function hpScale(w) { return 1 + 0.18 * w + 0.012 * w * w; }
+function speedScale(w) { return Math.min(1.35, 1 + 0.012 * w); }
+function bountyScale(w) { return 1 + 0.07 * w; }
+function waveClearBonus(w) { return 20 + 4 * w; }
+
+NS.data = {
+  SLOW_FACTOR, SLOW_CAP, POISON_TICK, SELL_REFUND, RETARGET_RADIUS,
+  START_GOLD, START_LIVES, FIRST_INTERMISSION, INTERMISSION, EARLY_GOLD_PER_SEC,
+  TARGET_MODES, TOWERS, TOWER_ORDER, CREEPS, WAVES, GROUP_GAP,
+  hpScale, speedScale, bountyScale, waveClearBonus,
+};
+})();

@@ -43,21 +43,27 @@ creeps tint blue, poisoned creeps ring green.
 
 ## Architecture
 
-Vanilla ES modules, zero dependencies, no build step.
+Vanilla JS, zero dependencies, no build step. Each file is a classic script
+wrapped in an IIFE that attaches its API to a single page-global namespace
+(`window.Palisade`), loaded in dependency order by plain `<script>` tags —
+no ES modules, so the game works when index.html is opened directly via
+`file://` (double-click), where module imports are blocked by CORS.
 
 ```
-index.html         shell + sidebar UI
-style.css          dark arcade chrome
+index.html          shell + sidebar UI, loads the scripts in dependency order
+style.css           dark arcade chrome
 src/
   engine/
-    data.js        towers, creeps, waves, scaling curves (pure data)
-    maps.js        3 maps, waypoint paths, path/water/buildable grid
-    game.js        the whole simulation: pure logic, no DOM
-  render.js        procedural canvas art + particles/floats/beams
-  sfx.js           Web Audio synthesized SFX (created on first gesture)
-  main.js          fixed-timestep loop, input, HUD, persistence
+    data.js         towers, creeps, waves, scaling curves (pure data)
+    maps.js         3 maps, waypoint paths, path/water/buildable grid
+    game.js         the whole simulation: pure logic, no DOM
+  render.js         procedural canvas art + particles/floats/beams
+  sfx.js            Web Audio synthesized SFX (created on first gesture)
+  main.js           fixed-timestep loop, input, HUD, persistence
 test/
-  engine.test.js   node-run headless suite (node test/engine.test.js)
+  logic.test.js     node-run headless engine suite (node test/logic.test.js)
+  engine.test.js    the suite itself, run by logic.test.js (or directly)
+  browser.test.mjs  headless-Chrome feature test over http:// AND file://
 ```
 
 Key design decisions:

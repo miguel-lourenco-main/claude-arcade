@@ -1,7 +1,12 @@
 // Palisade — Web Audio synthesized sound effects. No samples, all synthesis.
 // AudioContext is only created after a user gesture (unlock()).
 
-export class Sfx {
+// Classic script (file:// safe): attaches to the Palisade namespace.
+(function () {
+'use strict';
+const NS = globalThis.Palisade = globalThis.Palisade || {};
+
+class Sfx {
   constructor() {
     this.ctx = null;
     this.master = null;
@@ -118,3 +123,6 @@ export class Sfx {
     notes.forEach((f, i) => this.tone({ type: 'sawtooth', f0: f, dur: 0.22, vol: 0.25, delay: i * 0.15 }));
   }
 }
+
+NS.sfx = { Sfx };
+})();

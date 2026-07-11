@@ -2,17 +2,22 @@
 // Fixed timestep: call tick(state) once per TICK seconds of simulated time.
 // Every tick pushes renderable/audible happenings onto state.events; the caller drains them.
 
-import {
+// Classic script (file:// safe): reads deps from and attaches to the Palisade namespace.
+// Load order: data.js, maps.js, then this file.
+(function () {
+'use strict';
+const NS = globalThis.Palisade = globalThis.Palisade || {};
+const {
   TOWERS, CREEPS, WAVES, TARGET_MODES,
   SLOW_FACTOR, SLOW_CAP, POISON_TICK, SELL_REFUND, RETARGET_RADIUS,
   START_GOLD, START_LIVES, FIRST_INTERMISSION, INTERMISSION, EARLY_GOLD_PER_SEC,
   GROUP_GAP, hpScale, speedScale, bountyScale, waveClearBonus,
-} from './data.js';
-import { MAPS, posAt, cellKey, isBuildableCell } from './maps.js';
+} = NS.data;
+const { MAPS, posAt, cellKey, isBuildableCell } = NS.maps;
 
-export const TICK = 1 / 60;
+const TICK = 1 / 60;
 
-export function createGame(mapIdx) {
+function createGame(mapIdx) {
   return {
     mapIdx,
     map: MAPS[mapIdx],
@@ -38,7 +43,7 @@ export function createGame(mapIdx) {
 
 function emit(state, ev) { state.events.push(ev); }
 
-export function drainEvents(state) {
+function drainEvents(state) {
   const evs = state.events;
   state.events = [];
   return evs;
@@ -46,11 +51,11 @@ export function drainEvents(state) {
 
 // ---------------------------------------------------------------- placement
 
-export function canPlace(state, c, r) {
+function canPlace(state, c, r) {
   return isBuildableCell(state.map, c, r) && !state.occupied.has(cellKey(c, r));
 }
 
-export function placeTower(state, c, r, type) {
+function placeTower(state, c, r, type) {
   const def = TOWERS[type];
   if (!def || state.phase === 'won' || state.phase === 'lost') return null;
   if (!canPlace(state, c, r) || state.gold < def.cost) return null;
@@ -72,12 +77,12 @@ export function placeTower(state, c, r, type) {
   return tower;
 }
 
-export function upgradeCost(tower) {
+function upgradeCost(tower) {
   const def = TOWERS[tower.type];
   return tower.level < 2 ? def.upgrades[tower.level] : null;
 }
 
-export function upgradeTower(state, id) {
+function upgradeTower(state, id) {
   const tower = state.towers.find(t => t.id === id);
   if (!tower || tower.level >= 2) return false;
   const cost = upgradeCost(tower);
@@ -89,9 +94,9 @@ export function upgradeTower(state, id) {
   return true;
 }
 
-export function sellValue(tower) { return Math.floor(tower.invested * SELL_REFUND); }
+function sellValue(tower) { return Math.floor(tower.invested * SELL_REFUND); }
 
-export function sellTower(state, id) {
+function sellTower(state, id) {
   const i = state.towers.findIndex(t => t.id === id);
   if (i < 0) return false;
   const tower = state.towers[i];
@@ -103,7 +108,7 @@ export function sellTower(state, id) {
   return true;
 }
 
-export function cycleTargetMode(state, id) {
+function cycleTargetMode(state, id) {
   const tower = state.towers.find(t => t.id === id);
   if (!tower) return null;
   const i = TARGET_MODES.indexOf(tower.mode);
@@ -111,18 +116,18 @@ export function cycleTargetMode(state, id) {
   return tower.mode;
 }
 
-export function towerStats(tower) {
+function towerStats(tower) {
   return TOWERS[tower.type].levels[tower.level];
 }
 
 // ---------------------------------------------------------------- waves
 
-export function wavePreview(state) {
+function wavePreview(state) {
   if (state.waveIdx >= state.totalWaves) return null;
   return WAVES[state.waveIdx];
 }
 
-export function startNextWave(state) {
+function startNextWave(state) {
   if (state.phase !== 'build' || state.waveIdx >= state.totalWaves) return false;
   // Early-call bonus: gold for every second left on the intermission timer.
   const early = Math.max(0, Math.ceil(state.intermission * EARLY_GOLD_PER_SEC));
@@ -184,7 +189,7 @@ function spawnCreep(state, type, pathIdx) {
 
 // ---------------------------------------------------------------- combat
 
-export function creepPos(state, creep) {
+function creepPos(state, creep) {
   return posAt(state.map.paths[creep.pathIdx], creep.s);
 }
 
@@ -292,7 +297,7 @@ function creditKill(state, proj, creep) {
 
 // ---------------------------------------------------------------- tick
 
-export function tick(state) {
+function tick(state) {
   const dt = TICK;
   if (state.phase === 'won' || state.phase === 'lost') return;
   state.time += dt;
@@ -449,3 +454,10 @@ export function tick(state) {
     }
   }
 }
+
+NS.game = {
+  TICK, createGame, drainEvents, canPlace, placeTower, upgradeCost, upgradeTower,
+  sellValue, sellTower, cycleTargetMode, towerStats, wavePreview, startNextWave,
+  creepPos, tick,
+};
+})();

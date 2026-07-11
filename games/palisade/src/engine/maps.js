@@ -1,12 +1,16 @@
 // Palisade — map definitions and path geometry.
 // A path is a list of axis-aligned waypoints in CELL coordinates; creeps store only
 // their distance s along the path and derive x/y by segment interpolation.
+// Classic script (file:// safe): attaches to the Palisade namespace.
+(function () {
+'use strict';
+const NS = globalThis.Palisade = globalThis.Palisade || {};
 
-export const CELL = 32;
-export const COLS = 20;
-export const ROWS = 14;
-export const W = COLS * CELL;
-export const H = ROWS * CELL;
+const CELL = 32;
+const COLS = 20;
+const ROWS = 14;
+const W = COLS * CELL;
+const H = ROWS * CELL;
 
 const RAW_MAPS = [
   {
@@ -80,10 +84,10 @@ function buildMap(raw) {
   };
 }
 
-export const MAPS = RAW_MAPS.map(buildMap);
+const MAPS = RAW_MAPS.map(buildMap);
 
 // Derive x/y (and facing direction) from distance s along path.
-export function posAt(path, s) {
+function posAt(path, s) {
   if (s <= 0) {
     const g = path.segs[0];
     return { x: g.a.x, y: g.a.y, dx: (g.b.x - g.a.x) / g.len, dy: (g.b.y - g.a.y) / g.len };
@@ -103,14 +107,17 @@ export function posAt(path, s) {
   return { x: last.b.x, y: last.b.y, dx: (last.b.x - last.a.x) / last.len, dy: (last.b.y - last.a.y) / last.len };
 }
 
-export function cellKey(c, r) { return c + ',' + r; }
+function cellKey(c, r) { return c + ',' + r; }
 
-export function inBounds(c, r) { return c >= 0 && c < COLS && r >= 0 && r < ROWS; }
+function inBounds(c, r) { return c >= 0 && c < COLS && r >= 0 && r < ROWS; }
 
 // Buildable = on the grid, not path, not water. (Towers can never block the path
 // by construction — the path is fixed cells, so there is no pathfinding at all.)
-export function isBuildableCell(map, c, r) {
+function isBuildableCell(map, c, r) {
   if (!inBounds(c, r)) return false;
   const k = cellKey(c, r);
   return !map.pathCells.has(k) && !map.waterCells.has(k);
 }
+
+NS.maps = { CELL, COLS, ROWS, W, H, MAPS, posAt, cellKey, inBounds, isBuildableCell };
+})();
