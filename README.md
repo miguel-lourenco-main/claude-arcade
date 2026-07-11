@@ -43,6 +43,7 @@ directly via `file://` only works for the arcade shell itself.)
 | [Delve](games/delve/) | RPG / roguelike | Turn-based roguelike: shadowcasting FOV, energy scheduler, persistent floors, permadeath saves, 9 depths to the artifact. |
 | [Gloamkeep](games/gloamkeep/) | FPS / raycaster | Software raycaster: DDA columns, textured walls, z-buffered sprites, sliding doors, secret push-walls, 3 floors. |
 | [Palisade](games/palisade/) | Strategy / tower defense | Waypoint-path TD: 4 towers with upgrades, first/last/nearest/strongest targeting, 20 scripted waves, 3 maps. |
+| [Slipstream](games/slipstream/) | Arcade / racer | Pseudo-3D segment racer: accumulated-curve projection, centrifugal pull, traffic, checkpoint timer, 5 stages. |
 
 ## Structure
 

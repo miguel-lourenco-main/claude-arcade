@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slipstream</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="frame">
+    <header id="topbar">
+      <a href="../../index.html" class="back">&larr; Arcade</a>
+      <h1>SLIPSTREAM</h1>
+      <button id="audio-toggle" type="button" title="toggle sound">sound: on</button>
+    </header>
+
+    <div id="stage">
+      <canvas id="game" width="640" height="400"></canvas>
+      <div id="overlay">
+        <div class="panel">
+          <div id="overlay-title">SLIPSTREAM</div>
+          <div id="overlay-sub">press ENTER to race</div>
+          <div id="overlay-detail"></div>
+        </div>
+      </div>
+    </div>
+
+    <footer id="controls">
+      <span><b>&larr;&rarr;</b> / <b>A D</b> steer</span>
+      <span><b>&uarr;</b> / <b>W</b> accelerate</span>
+      <span><b>&darr;</b> / <b>S</b> brake</span>
+      <span><b>P</b> pause</span>
+      <span><b>M</b> sound</span>
+      <span><b>ESC</b> title</span>
+    </footer>
+  </main>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

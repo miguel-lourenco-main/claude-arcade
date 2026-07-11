@@ -153,4 +153,12 @@ window.GAMES = [
       "Creeps march the fixed trail toward your gate — buy, upgrade, and sell four " +
       "tower types to hold all 20 waves across three maps.",
   },
+  {
+    slug: "slipstream",
+    title: "Slipstream",
+    genre: "Arcade / Racer",
+    description:
+      "Pseudo-3D checkpoint racer: beat the clock through five themed stages, weave " +
+      "through traffic, and brake into the bends before the pull throws you off the road.",
+  },
 ];
