@@ -46,7 +46,14 @@ canvas atlas at boot, and every sound is synthesized with WebAudio.
   flip, reached through a **Cinder Door** (below). Permanent dusk under
   close bright stars, pearlsand dunes over slate, glowing **Starkelp**,
   and **the pearl-beds** — basins where lit starstone studs the open
-  floor and the **Shellback** keeps it.
+  floor and the **Shellback** keeps it. Scattered across the dunes stand
+  **the Sunken Steads**: the pre-flip world's own sea-floor leavings —
+  drowned cottages sunk to their sills and the stump-lines of old
+  jetties, with once-per-world loot chests and boards still legible in
+  the drowned voice. Ring a **Pearl Chime** in a pearl-bed and **the
+  Undertow** rises: the second boss — a wall of old shell that, past
+  half health, takes to the floor and comes up beside you. It drops the
+  **Tideheart**, which the kiln runs molten into **Heartglass**.
 - **Weather & sky** — 10-minute day/night cycle (sun, moon, stars, blocky
   clouds, dusk tint, matched fog), rain showers that fall as snow over the
   Rimelands (settling real Snowdrifts), and **the Pearlfall**: clear-night
@@ -73,11 +80,15 @@ canvas atlas at boot, and every sound is synthesized with WebAudio.
   (levels) shown on a meter over the hotbar; death spills nothing.
 - **The Loomstone** — the gleam sink: weave permanent **Threads** into gear
   (Keen +2 bite, Flint 1.5× digging, Knotwood half wear, Ward +4%
-  protection, and the post-boss Dusk Thread). One thread per item, carried
-  on the stack through every save, chest, and drop.
+  protection, the post-boss Dusk Thread, and the **Tide Thread** — nacre
+  through a pair of treads: swim half again as fast and the Mire Sod
+  forgets to grab). One thread per item, carried on the stack through
+  every save, chest, and drop.
 - **The Whims** — timed status effects with HUD badges: Fleetfoot, Emberglow,
-  Mire-rot (the Mirewalker's gift), Kelpguard, and Dimmed. Broths simmer in
-  the kiln from meadow flowers and a Mirewalker's own Kelp Gland.
+  Mire-rot (the Mirewalker's gift), Kelpguard, Dimmed, and **Tidebreath**
+  (a minute of lungs that neither drain nor drown). Broths simmer in the
+  kiln from meadow flowers, a Mirewalker's own Kelp Gland, and starkelp
+  simmered whole — or pressed flat in the field as the **Kelp Crisp**.
 - **Farming** — till dirt/turf/Mire Sod into Turned Earth with a Furrower,
   plant Root Pips (meal roots) or Bogbean Pods, watch them grow (rain
   helps), and simmer Wanderer's Pottage. Feed two snuffets Root Pips and a
@@ -99,11 +110,18 @@ canvas atlas at boot, and every sound is synthesized with WebAudio.
   horn sounds at dusk and tagged hunters press toward you all night at 3×
   cadence, +20% pace, double loot. Torchlight holds; standing the whole
   night earns the quiet-morning mend.
-- **The Unshaken** — the boss. Craft a **Murk Lantern** (a lantern that
-  sheds dark), raise it on open ground at night, and fight the one shadow
-  the flip couldn't shake off: 60 hp, Dimming blows, and a half-health
-  split that peels murklings off its flanks before it starts lunging.
-  Drops the **Dusk Pearl** — the Dusk Thread's material.
+- **The Unshaken** — the first boss. Craft a **Murk Lantern** (a lantern
+  that sheds dark), raise it on open ground at night, and fight the one
+  shadow the flip couldn't shake off: 60 hp, Dimming blows, and a
+  half-health split that peels murklings off its flanks before it starts
+  lunging. Drops the **Dusk Pearl** — the Dusk Thread's material.
+- **The Undertow** — the second boss, under the other sky. Craft a
+  **Pearl Chime** (nacre on a starglass bar) and ring it standing in a
+  pearl-bed: 80 hp, near-immune to knockback, and past half health it
+  BURROWS — untouchable under the floor, then up beside you with one
+  beat to move. Drops the **Tideheart**; the kiln runs it molten into
+  **Heartglass**, a full-brightness pane the dark gives DOUBLE a torch's
+  berth — one pane holds a homestead the way a wall of torches does.
 
 ## Stations, blocks & fixtures
 
@@ -145,8 +163,9 @@ residents — passive, leashed to their well, trading from job tables), the
 **Shellback** (the pearl-beds' keeper: a nacre-shelled ambusher that parks
 as one more boulder of the bed floor, sheds **Nacre** — the material of
 the Nacre Crown — and is the one hostile the light doesn't turn away),
-and The Unshaken. Spawning is time/biome/surface gated; proper lights
-(torches, starstone, the Emberwash) suppress hostile spawns nearby, while
+The Unshaken, and the Undertow. Spawning is time/biome/surface gated; proper
+lights (torches, starstone, the Emberwash — and Heartglass, at double the
+watch) suppress hostile spawns nearby, while
 dim flora (Wispcaps, Gleam Moss, Starkelp) only guards its own small pool
 of light. Night creatures caught by dawn deep in a cave keep their posts.
 Creatures share the player's fluid contract — they float in water and
@@ -197,6 +216,7 @@ src/blocks.js      block/item registry (tiles, buckets, tools, armor, food)
 src/world.js       chunk store, get/set, emitters, persistent edit overlay
 src/terrain.js     heightmap/biomes/caves/ores/lava — pure fn of (x,z,seed)
 src/undersky.js    the far side: pearlsand dunes, pearl-beds, starkelp
+src/sunken.js      the Sunken Steads: drowned wrecks + once-per-world loot
 src/portal.js      the Cinder Door: frame scan, film collapse, arrivals
 src/mesher.js      culled faces + AO + BFS block light -> 3 buckets + shader
 src/ruins.js       the Steads-Before: seeded surface ruins + loot
