@@ -89,4 +89,12 @@ window.GAMES = [
       "Fifty-five pixel-creatures march down in lockstep, sprinting as their ranks " +
       "thin. Four crumbling bunkers and one bolt at a time stand between them and you.",
   },
+  {
+    slug: "patience",
+    title: "Patience",
+    genre: "Cards / Solitaire",
+    description:
+      "Full Klondike with seeded, shareable deals: drag runs across seven piles, " +
+      "undo everything, and finish with a physics-driven cascade of bouncing cards.",
+  },
 ];

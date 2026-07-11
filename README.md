@@ -35,6 +35,7 @@ directly via `file://` only works for the arcade shell itself.)
 | [Crateshift](games/crateshift/) | Puzzle / box-pusher | 21 original solver-verified crate puzzles: push-only movement, full undo, corner-deadlock hints, star ratings. |
 | [Gemgrove](games/gemgrove/) | Puzzle / match-3 | Swap-adjacent match-3: cascade multipliers, cross/burst specials, no-match reverts, idle hints, move-limited levels. |
 | [Bulwark](games/bulwark/) | Arcade / shooter | Fixed shooter: lockstep fleet that sprints as it thins, one-bullet limit, per-pixel shield erosion, mystery saucer. |
+| [Patience](games/patience/) | Cards / solitaire | Klondike: draw-1/draw-3, run drag & drop, full undo, auto-complete, seeded shareable deals, cascade win physics. |
 
 ## Structure
 

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Patience</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header id="topbar">
+    <div class="tb-left">
+      <a href="../../index.html" class="back">&larr; Arcade</a>
+      <h1>PATIENCE</h1>
+    </div>
+    <div class="tb-mid">
+      <span id="clock">0:00</span>
+      <span class="sep">&middot;</span>
+      <span id="movecount">0 moves</span>
+      <span id="paused-tag" class="hidden">&middot; paused</span>
+    </div>
+    <div class="tb-right">
+      <label id="seed-box" title="deals are seeded — same number, same deal">
+        <span>deal #</span><input id="seed-input" inputmode="numeric" maxlength="9" spellcheck="false" autocomplete="off">
+      </label>
+      <button id="btn-deal" title="deal the seed in the box">Deal</button>
+      <button id="btn-new" title="new random deal (N)">New</button>
+      <button id="btn-restart" title="restart this deal (R)">&#8635;</button>
+      <button id="btn-undo" title="undo (Z)">Undo</button>
+      <button id="btn-mode" title="toggle draw mode">Draw 3</button>
+      <button id="btn-sound" title="sound (M)">&#9834; on</button>
+    </div>
+  </header>
+
+  <main id="stage">
+    <canvas id="board"></canvas>
+    <button id="btn-auto" class="hidden">Auto-complete &#9654;</button>
+    <div id="winbox" class="hidden">
+      <div id="win-panel">
+        <h2>Cleared!</h2>
+        <p id="win-stats"></p>
+        <p class="win-hint">press any key for a new deal</p>
+      </div>
+    </div>
+  </main>
+
+  <footer id="controls">
+    <span><b>drag</b> cards &middot; <b>dbl-click</b> send to foundation &middot; <b>Space</b> draw &middot; <b>Z</b> undo &middot; <b>N</b> new &middot; <b>R</b> redeal &middot; <b>A</b> auto</span>
+    <span id="stats-line"></span>
+  </footer>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
