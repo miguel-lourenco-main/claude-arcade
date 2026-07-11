@@ -113,4 +113,12 @@ window.GAMES = [
       "Stack the twelve five-cell pentomino stones in a 12-wide pit and collapse " +
       "full seams before the quarry floods — five rows at once is a MOTHERLODE.",
   },
+  {
+    slug: "lamplighter",
+    title: "Lamplighter",
+    genre: "Arcade / Maze",
+    description:
+      "Light every lantern in a night-time maze while four smoke-wisp gloams with " +
+      "distinct hunting personalities close in — kindle a brazier to banish them.",
+  },
 ];
