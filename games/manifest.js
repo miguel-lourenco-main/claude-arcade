@@ -33,4 +33,12 @@ window.GAMES = [
       "Something hollow sleeps under this field — dig every safe plot, read the " +
       "numbers, and plant markers where the rod trembles before the ground gives way.",
   },
+  {
+    slug: "brickstorm",
+    title: "Brickstorm",
+    genre: "Arcade / Paddle",
+    description:
+      "A paddle, a ball, and a wall that deserves it — smash procedural brick " +
+      "patterns, catch falling power capsules, and hang on as the ball ramps faster.",
+  },
 ];
