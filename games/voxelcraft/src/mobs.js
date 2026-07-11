@@ -7,7 +7,7 @@ import * as THREE from "three";
 import {
   BLOCKS, GRASS, SAND, MUD, WATER, LAVA, isFluid, COAL_ORE, TORCH,
   SNUFFET_LOIN, MOSS_CLUMP, KELP_GLAND, DUSK_PEARL, STARSTONE, AIR,
-  LEAVES, LEAVES_COLD, isSolid, PEARLSAND, NACRE,
+  LEAVES, LEAVES_COLD, isSolid, PEARLSAND, NACRE, TIDEHEART,
 } from "./blocks.js";
 import { mulberry32 } from "./noise.js";
 
@@ -84,13 +84,26 @@ export const SPECIES = {
   unshaken: {
     name: "The Unshaken", hp: 60, speed: 2.0, behavior: "hostile", habitat: "boss",
     cap: 1, halfW: 0.6, height: 2.6, damage: 6, aggro: 48, attackRange: 2.2,
-    knockResist: 0.9, gleam: 40, boss: true, sound: "bellow",
+    knockResist: 0.9, gleam: 40, boss: true, phase: "split", sound: "bellow",
     drops: [[DUSK_PEARL, 1], [STARSTONE, 2]],
     inflicts: ["dimmed", 5], // its hits hang the dark on you
     // flavor lines main.js reads — a second boss brings its own words
     deathLine: "The Unshaken comes apart into ordinary night.",
     splitLine: "The shadow splits!",
     goneLine: "The shadow settles back into the ground.",
+  },
+  // the Undertow: what the drowned sea does instead of waves (see LORE.md).
+  // Summon-only, like every boss — the Pearl Chime rung IN a pearl-bed —
+  // and its half-health turn is the BURROW: it sinks under the floor
+  // (untouchable, unwalkable) and comes up beside you, all shoulders.
+  undertow: {
+    name: "The Undertow", hp: 80, speed: 2.2, behavior: "hostile", habitat: "boss",
+    cap: 1, halfW: 0.7, height: 2.2, damage: 7, aggro: 48, attackRange: 2.4,
+    knockResist: 0.95, gleam: 60, boss: true, phase: "burrow", sound: "bellow",
+    drops: [[TIDEHEART, 1], [NACRE, 2]],
+    deathLine: "The Undertow lets go of the floor.",
+    splitLine: "The floor swallows it!",
+    goneLine: "The sand settles, unconvinced.",
   },
   // the Shellback: the keeper of the pearl-beds (see LORE.md). To a passing
   // Wanderling it reads as one more nacre-crusted boulder on the bed floor —
@@ -485,6 +498,35 @@ export class Mobs {
         }
         return { group: g, legs };
       },
+      // the Undertow: a wall of old shell with the sea's own kelp still
+      // draped off its shoulders — reads as a piece of the floor stood up
+      undertow: () => {
+        const g = new THREE.Group();
+        const torso = box(1.1, 1.1, 0.7, shShell);
+        torso.position.y = 1.1;
+        g.add(torso);
+        const chest = box(0.9, 0.5, 0.6, shBody);
+        chest.position.y = 1.85;
+        g.add(chest);
+        const head = box(0.5, 0.4, 0.5, shBody);
+        head.position.set(0, 2.0, 0.35);
+        g.add(head);
+        for (const side of [-1, 1]) {
+          const drape = box(0.2, 0.9, 0.4, miBody); // the old kelp, still on
+          drape.position.set(side * 0.62, 1.55, -0.12);
+          g.add(drape);
+        }
+        const legs = [];
+        for (const side of [-1, 1]) {
+          const arm = box(0.28, 1.1, 0.28, shShell);
+          arm.position.set(side * 0.78, 1.1, 0);
+          g.add(arm); legs.push(arm);
+          const leg = box(0.3, 0.55, 0.3, shBody);
+          leg.position.set(side * 0.3, 0.28, 0);
+          g.add(leg); legs.push(leg);
+        }
+        return { group: g, legs };
+      },
       mirewalker: () => {
         const g = new THREE.Group();
         const body = box(0.6, 1.05, 0.42, miBody);
@@ -678,6 +720,8 @@ export class Mobs {
       mode: "follow",    // tamed: "follow" | "stay"
       split: false,      // boss: the half-health shadow-split fired
       lungeCd: 0,        // boss phase 2: seconds to the next lunge
+      burrowT: 0,        // boss (burrow phase): seconds still under the floor
+      burrowCd: 0,       // boss: seconds to the next allowed burrow
       farT: 0,           // boss: seconds spent >60 blocks from the player
       dimT: 0,           // a Dusk Thread's mark: halved pace while it holds
       // the Steadfolk (steads.js): a resident manager fills these in — null
@@ -824,7 +868,7 @@ export class Mobs {
   // CLICKED cell — a cave summon rises in the cave, not on the surface
   // sixty blocks up. Returns the boss, or null if one already stalks the
   // world (callers announce; consume-last discipline lives in main.js).
-  summonBoss(world, x, y, z) {
+  summonBoss(world, x, y, z, species = "unshaken") {
     for (const m of this.mobs) if (m.spec.boss) return null;
     // first open pair of cells above the clicked block (it needs headroom)
     const bx = Math.floor(x), bz = Math.floor(z);
@@ -835,7 +879,7 @@ export class Mobs {
           world.getBlock(bx, cy + 3, bz) === AIR) { sy = cy; break; }
     }
     if (sy < 0) return null;
-    const boss = this.spawnAt(x, sy + 1.01, z, "unshaken");
+    const boss = this.spawnAt(x, sy + 1.01, z, species);
     if (boss) {
       boss.critT = 0.3; // rises with a pop
       if (this.onSound) this.onSound(boss.spec.sound);
@@ -1065,6 +1109,25 @@ export class Mobs {
       // NOT wake up because someone walked overhead
       const dist3 = Math.hypot(m.x - player.pos.x, m.y - player.pos.y, m.z - player.pos.z);
 
+      // the Undertow's burrow: under the floor there is nothing to hit and
+      // nothing walking — the whole update skips until it resurfaces,
+      // right beside the player, all shoulders
+      if (m.burrowT > 0) {
+        m.burrowT -= dt;
+        if (m.burrowT > 0) continue;
+        const a = Math.random() * Math.PI * 2;
+        m.x = player.pos.x + Math.cos(a) * 2.5;
+        m.z = player.pos.z + Math.sin(a) * 2.5;
+        m.y = player.pos.y + 0.2; // gravity settles the rest
+        m.vx = m.vy = m.vz = 0;
+        m.group.visible = true;
+        m.group.position.set(m.x, m.y, m.z);
+        m.critT = 0.3;
+        m.attackCd = 0.6; // one beat to get a foot out of the way
+        if (this.onSound) this.onSound(spec.sound);
+        if (this.onBurrow) this.onBurrow(m.x, m.y, m.z);
+      }
+
       // bondlings and tamed companions never despawn — distance is handled
       // by their own teleports; a boss has its own leash below
       if (distToPlayer > DESPAWN_DIST && !m.bonded && !m.tamed && !spec.boss && !m.stead) {
@@ -1135,6 +1198,7 @@ export class Mobs {
       m.breedCd = Math.max(0, m.breedCd - dt);
       m.dimT = Math.max(0, m.dimT - dt);
       m.lungeCd = Math.max(0, m.lungeCd - dt);
+      m.burrowCd = Math.max(0, m.burrowCd - dt);
       if (m.baby) {
         m.growT -= dt;
         if (m.growT <= 0) { m.baby = false; m.sizeMul = 1; }
@@ -1187,7 +1251,22 @@ export class Mobs {
         // The Unshaken's phases: crossing half health it SPLITS — two
         // murklings peel off its flanks — then it moves half again as
         // fast and starts lunging in bursts the substepped mover handles
-        if (spec.boss) {
+        if (spec.boss && spec.phase === "burrow") {
+          // the Undertow's turn: under half health it takes to the floor —
+          // sinks (untouchable), then erupts beside the player. Between
+          // dives it presses a third again as fast.
+          if (m.hp <= spec.hp / 2) {
+            targetSpeed = spec.speed * 1.3;
+            if (m.burrowCd <= 0 && m.onGround && distToPlayer > 2.5) {
+              m.burrowCd = 9;
+              m.burrowT = 1.6;
+              m.group.visible = false;
+              if (this.onSound) this.onSound(spec.sound);
+              if (this.onBossSplit) this.onBossSplit(spec); // "The floor swallows it!"
+              if (this.onBurrow) this.onBurrow(m.x, m.y, m.z);
+            }
+          }
+        } else if (spec.boss) {
           if (!m.split && m.hp <= spec.hp / 2) {
             m.split = true;
             m.critT = 0.3;
@@ -1600,6 +1679,7 @@ export class Mobs {
   rayHit(origin, dir, maxDist) {
     let best = null, bestT = maxDist;
     for (const m of this.mobs) {
+      if (m.burrowT > 0) continue; // a burrowed boss eats no clicks
       const hw = m.spec.halfW * m.sizeMul, hh = m.spec.height * m.sizeMul;
       const min = [m.x - hw, m.y, m.z - hw];
       const max = [m.x + hw, m.y + hh, m.z + hw];
@@ -1637,6 +1717,7 @@ export class Mobs {
   // land a hit on a mob: damage, knockback away from fromPos, and the full
   // reaction suite. Shared by punches and thrown sling-stones.
   strike(m, dmg, fromPos, opts = {}) {
+    if (m.burrowT > 0) return; // under the floor, nothing holds an edge
     // any hit the PLAYER lands marks the target for a following Tuftling.
     // Mob-landed strikes (byPet, or a bondling/hostile feud's attacker)
     // never mark — a hostile striking back at a bondling must not point

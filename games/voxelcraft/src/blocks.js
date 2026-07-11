@@ -313,6 +313,11 @@ export const NACRE_CROWN = 161;
 // they're home (player.js EFFECTS).
 export const KELP_CRISP = 162;
 export const TIDE_BROTH = 163;
+// the Undertow's fight (see LORE.md / mobs.js): TIDEHEART is what it lets
+// go of — nothing else sheds one; PEARL_CHIME is what calls it up, rung
+// standing in a pearl-bed (consumed by the ringing).
+export const TIDEHEART = 164;
+export const PEARL_CHIME = 165;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -893,6 +898,34 @@ BLOCKS[TIDE_BROTH] = def("Tidebreath Broth", cropCross({
   placeable: false,
   food: { restore: 1, effect: ["tidebreath", 60] },
 }));
+
+// the Tideheart: the Dusk Pearl's counterpart from the second boss —
+// nothing sheds it but the Undertow, and (next commit) nothing consumes
+// it but the kiln
+BLOCKS[TIDEHEART] = def("Tideheart", {
+  tiles: cube(TILE.TIDEHEART),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  hardness: 0.05,
+  placeable: false,
+  sound: "stone",
+  maxStack: 1,
+});
+// the Pearl Chime: rung (right-click) standing in a pearl-bed, it calls
+// the Undertow up through the floor. Carried, never placed, spent by the
+// ringing — consume-LAST like the Murk Lantern (interact.js/main.js).
+BLOCKS[PEARL_CHIME] = def("Pearl Chime", {
+  tiles: cube(TILE.PEARL_CHIME),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  hardness: 0.05,
+  placeable: false,
+  sound: "glass",
+});
 
 // the Loomstone: a pearl bedded in stone; the light pools in the basin.
 // Glows a little (a hollowed starstone would), pick-work to move.

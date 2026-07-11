@@ -191,6 +191,9 @@ export const TILE = {
   // the far country's hearth: the pressed snack and the simmered whim
   KELP_CRISP: 141,
   TIDE_BROTH: 142,
+  // the Undertow's fight: what it drops, and what calls it up
+  TIDEHEART: 143,
+  PEARL_CHIME: 144,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -2280,6 +2283,34 @@ painters[TILE.KELP_CRISP] = (p) => {
     }
   }
   p.px(8, 8, 196, 216, 200); // the bead's ghost
+};
+
+painters[TILE.TIDEHEART] = (p) => {
+  // the Tideheart: a fist-sized knot of deep teal with a slow pale pulse
+  // banded through it — the piece of the sea that kept beating
+  p.clear();
+  for (let y = 4; y <= 12; y++) {
+    const half = Math.round(4 - Math.abs(y - 8) * 0.6);
+    for (let x = 8 - half; x <= 7 + half; x++) {
+      const d = (p.rand() * 2 - 1) * 10;
+      p.px(x, y, 30 + d, 92 + d, 98 + d);
+    }
+  }
+  for (let x = 5; x <= 10; x++) p.px(x, 8, 148, 214, 208); // the pulse band
+  p.px(7, 6, 190, 236, 230); p.px(9, 10, 170, 224, 218);   // the beat
+};
+
+painters[TILE.PEARL_CHIME] = (p) => {
+  // the Pearl Chime: a starglass bar hung with two nacre drops on cords
+  p.clear();
+  for (let x = 4; x <= 12; x++) p.px(x, 4, 228, 232, 250); // the bar
+  for (const [cx, len] of [[6, 4], [10, 6]]) {
+    for (let y = 5; y <= 4 + len; y++) p.px(cx, y, 150, 142, 120); // cords
+    p.px(cx, 5 + len, 224, 226, 238);
+    p.px(cx, 6 + len, 204, 206, 222); // the nacre drops
+    p.px(cx - 1, 6 + len, 186, 190, 210);
+  }
+  p.px(11, 11, 244, 246, 250); // one bright catch where they'd kiss
 };
 
 export function buildAtlas(seed = 1337) {

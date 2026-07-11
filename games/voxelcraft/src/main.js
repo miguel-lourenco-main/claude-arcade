@@ -40,7 +40,7 @@ import {
   IRON_INGOT as IRON_INGOT_ID, GLOAM_INGOT as GLOAM_INGOT_ID,
   STARGLASS as STARGLASS_ID, QUILL as QUILL_ID,
   MURK_LANTERN as MURK_LANTERN_ID, LOOMSTONE as LOOMSTONE_ID,
-  PORTAL_FILM as PORTAL_FILM_ID,
+  PORTAL_FILM as PORTAL_FILM_ID, PEARL_CHIME as PEARL_CHIME_ID,
 } from "./blocks.js";
 import { makeGenerator, findSpawn, findBiomeLocation } from "./terrain.js";
 import { makeUnderskyGenerator, underskySpawn } from "./undersky.js";
@@ -1038,6 +1038,36 @@ const interaction = new Interaction(world, player, scene, hud, {
     if (player.mode === "survival") interaction.canConsume(MURK_LANTERN_ID);
     hud.announce("The dark gathers itself…", 3200);
   },
+  // the Pearl Chime: rung standing in a pearl-bed, it calls the Undertow
+  // up through the floor. Murk Lantern contract: every refusal — wrong
+  // sky, thin bed, boss already walking, no room — before the spend.
+  onChime: () => {
+    if (dim.id !== "undersky") {
+      hud.announce("The chime wants the floor it was made from.", 2600);
+      return;
+    }
+    const bx = Math.floor(player.pos.x), bz = Math.floor(player.pos.z);
+    if (!terrain.pearlBedAt || terrain.pearlBedAt(bx, bz) < 0.5) {
+      hud.announce("The ring falls flat — this is no pearl-bed.", 2600);
+      return;
+    }
+    if (mobs.mobs.some((m) => m.spec.boss)) {
+      hud.announce("The floor is already awake.", 2600);
+      return;
+    }
+    // rise a few paces ahead, where the player is looking
+    const dir = player.lookDir();
+    const boss = mobs.summonBoss(world,
+      player.pos.x + dir.x * 4, player.pos.y - 1, player.pos.z + dir.z * 4,
+      "undertow");
+    if (!boss) {
+      hud.announce("The floor wants more room than this.", 2600);
+      return;
+    }
+    if (player.mode === "survival") interaction.canConsume(PEARL_CHIME_ID);
+    sfx.chime();
+    hud.announce("Something lets go of the floor…", 3200);
+  },
   // right-click a Loomstone: the weaving window. The target is always the
   // SELECTED hotbar stack — the basin follows the belt.
   onOpenLoom: () => {
@@ -1308,6 +1338,11 @@ mobs.onSteadfolkDeath = (m) => {
 };
 // the door-chime: a soft knock as a resident passes its own doorway
 mobs.onSteadKnock = () => sfx.creature("knock");
+// the Undertow's dives: a sand-burst and a ground-groan at both ends
+mobs.onBurrow = (x, y, z) => {
+  sfx.burrow();
+  interaction.particles.burst(x - 0.5, y + 0.2, z - 0.5, [0.78, 0.75, 0.79], 30);
+};
 
 // the Living Stead's resident manager: instantiates a stead's Steadfolk as
 // live mobs when the player is near and their chunk is loaded, folds them

@@ -192,6 +192,17 @@ specific item vocabulary.
   Pearl**: nacre in negative, the material of the Dusk Thread, and the
   only proof the Upturn accepts that you met the last shadow and it
   shook first.
+- **The Undertow & the Pearl Chime** — the drowned sea has no waves left,
+  so it does the other thing seas do: it takes hold of what walks on its
+  floor. The Undertow is the floor's own grip stood upright — a wall of
+  old shell with the kelp still draped off its shoulders — and it does
+  not come when called; it comes when RUNG: a **Pearl Chime** (two nacre
+  drops hung from a starglass bar) sounded standing in a pearl-bed. It
+  hits like a closing hand, and past half strength it takes to the floor
+  — sinks clean out of reach and comes up beside you, all shoulders,
+  which the Wanderlings agree is very rude and very like a sea. What it
+  finally lets go of is the **Tideheart**: the piece of the drowned sea
+  that kept beating, and proof the floor shook first.
 - **The Tuftling** — a small tufty burrower of the meadows, mostly tail
   and opinion, and mad for Silverfin. Offer it one and it might decide
   you are its person (it keeps the fish either way; it is not a

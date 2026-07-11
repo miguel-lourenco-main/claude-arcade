@@ -7,7 +7,7 @@ import {
   GATE, GATE_OPEN, SEED_TO_SPROUT, DIRT, GRASS, MUD, FARMLAND, LOOMSTONE,
   SLING_STONE, BOAT, WATER, LAVA, FISHING_POLE, SNOW_LAYER, QUILL, ROOT_SEED,
   SILVERFIN, MURK_LANTERN, GLEAM_MOSS, RAIL, CART,
-  PAIL, WATER_PAIL, EMBER_PAIL, CINDERGLASS, PORTAL_FILM,
+  PAIL, WATER_PAIL, EMBER_PAIL, CINDERGLASS, PORTAL_FILM, PEARL_CHIME,
   BLOCKS, isSolid, isPlant, isFluid, isDoor, isDoorLower, isGate, isSign, isRail, isRocket,
   DOOR_TOGGLE, dropFor, yawToFacing,
 } from "./blocks.js";
@@ -131,6 +131,7 @@ export class Interaction {
     this.onOpenKiln = opts.onOpenKiln;     // (x, y, z) => open kiln UI (survival)
     this.onOpenLoom = opts.onOpenLoom;     // () => open Loomstone UI (survival)
     this.onSummon = opts.onSummon;         // (target) => the Murk Lantern's use
+    this.onChime = opts.onChime;           // () => the Pearl Chime's ring
     this.onSleep = opts.onSleep;           // (x, y, z) => Moss Cot rest (survival)
     this.onOpenSign = opts.onOpenSign;     // (x, y, z) => Notice Post write window
     this.onPrimeKeg = opts.onPrimeKeg;     // (x, y, z) => light a Blast Keg
@@ -986,6 +987,12 @@ export class Interaction {
     // night check and the polite daytime refusal (nothing consumed)
     if (this.hotbar.selectedId() === MURK_LANTERN && !this._interactiveTarget()) {
       if (t && this.onSummon) this.onSummon(t);
+      return;
+    }
+    // the Pearl Chime rings where you STAND — no target needed, the bed
+    // underfoot is the whole condition (main.js owns the refusals)
+    if (this.hotbar.selectedId() === PEARL_CHIME && !this._interactiveTarget()) {
+      if (this.onChime) this.onChime();
       return;
     }
     // a sling stone throws instead of placing — unless an interactive block

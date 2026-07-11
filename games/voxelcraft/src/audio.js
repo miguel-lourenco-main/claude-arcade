@@ -512,6 +512,21 @@ export class Sfx {
     setTimeout(() => this._noiseBurst(500, 0.3, 0.05), 90);
   }
 
+  // the Pearl Chime: two clear bell tones stepping DOWN — a call sent into
+  // the floor, and the pause where an answer starts moving
+  chime() {
+    this._bellTone(880, 1.0, 0.06);
+    setTimeout(() => this._bellTone(659, 1.4, 0.055), 320);
+  }
+
+  // the Undertow taking to (or leaving) the floor: a deep ground-groan
+  // under a rush of shifting sand
+  burrow() {
+    this._noiseBurst(90, 0.7, 0.4);
+    this._noiseBurst(700, 0.35, 0.12); // the sand
+    setTimeout(() => this._noiseBurst(60, 0.5, 0.2), 160);
+  }
+
   pickup() {
     if (!this.enabled || !this._ensure()) return;
     const ctx = this.ctx;

@@ -19,7 +19,7 @@ import {
   PLANK_HOE, STONE_HOE, IRON_HOE, MEAL_ROOT, BOGBEAN, POTTAGE, LOOMSTONE,
   QUILL, SPRINGSTAVE, STARGLASS, MURK_LANTERN, PAIL,
   ROCKET_SUN, ROCKET_EMBER, ROCKET_GLEAM, POPPY, DANDELION, GLEAM_MOSS,
-  NACRE, NACRE_CROWN, STARKELP, KELP_CRISP,
+  NACRE, NACRE_CROWN, STARKELP, KELP_CRISP, PEARL_CHIME,
 } from "./blocks.js";
 
 // in: [[blockId, count], ...]  out: [blockId, count]  note: extra recipe copy
@@ -122,6 +122,8 @@ export const RECIPES = [
   // the far country's export, set over a gloam band: gloam-crown protection,
   // and the wearer's lungs remember the sea (the air meter doubles)
   { in: [[NACRE, 4], [GLOAM_INGOT, 2]], out: [NACRE_CROWN, 1], note: "the drowned sea, bent to the brow" },
+  // rung standing in a pearl-bed, it calls the Undertow up through the floor
+  { in: [[NACRE, 2], [STARGLASS, 1]], out: [PEARL_CHIME, 1], note: "ring it where the floor glows" },
   { in: [[GLOAM_INGOT, 8]], out: [GLOAM_JERKIN, 1], note: "dusk-gold plate, lashed at the seam" },
   { in: [[GLOAM_INGOT, 7]], out: [GLOAM_LEGGINGS, 1], note: "gloam greaves for the walking legs" },
   { in: [[GLOAM_INGOT, 4]], out: [GLOAM_TREADS, 1], note: "gloam wraps for the hand-feet" },
