@@ -43,8 +43,10 @@ Play against the computer at three difficulty levels, or hotseat two-player.
   evaluation, alpha-beta negamax, the exact end-game solver, and the three
   move pickers.
 - `src/ai-worker.js` — thin Web Worker wrapper around `searchDeep`. If
-  workers are unavailable (e.g. the page is opened via `file://`), the game
-  falls back to a slightly shallower synchronous search on the main thread.
+  workers are unavailable (e.g. the page is opened via `file://`, where
+  Chrome blocks worker creation) or the worker dies mid-search, the game
+  falls back to a slightly shallower search on the main thread, sliced one
+  root move per `setTimeout` chunk so the UI stays responsive.
 - `src/audio.js` — Web Audio synth blips (place, ripple flips, pass,
   win/lose/draw). The `AudioContext` is created only after a user gesture and
   respects the sound toggle.

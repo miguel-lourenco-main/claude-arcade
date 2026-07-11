@@ -249,6 +249,13 @@
 
   function ensureWorker() {
     if (worker || workerBroken) return;
+    // Workers created from file:// are blocked by Chrome's origin rules, and
+    // some browsers report that asynchronously instead of throwing — detect
+    // the protocol up front so the main-thread fallback engages immediately.
+    if (typeof Worker === "undefined" || location.protocol === "file:") {
+      workerBroken = true;
+      return;
+    }
     try {
       worker = new Worker("src/ai-worker.js");
       worker.onmessage = function (e) {
@@ -269,15 +276,42 @@
     }
   }
 
+  // Main-thread fallback for the deep search: evaluates one root move per
+  // setTimeout slice so the UI (animations, thinking indicator, buttons)
+  // stays responsive when no worker is available (e.g. opened via file://).
+  // Same move ordering and pruning as E.searchDeep, so it picks the same move.
+  function searchDeepChunked(board, player, opts, cb) {
+    var tok = S.seq;
+    var moves = E.legalMoves(board, player);
+    if (!moves.length) { setTimeout(function () { cb(-1); }, 0); return; }
+    if (moves.length === 1) { setTimeout(function () { cb(moves[0].idx); }, 0); return; }
+    var exact = E.counts(board).empty <= opts.exactAt;
+    moves.sort(function (a, b) { return E.WEIGHTS[b.idx] - E.WEIGHTS[a.idx]; });
+    var bestIdx = moves[0].idx, alpha = -Infinity, i = 0;
+    function step() {
+      if (tok !== S.seq) return; // undo/new-game cancelled this search
+      var m = moves[i];
+      E.applyMove(board, m.idx, player, m.flips);
+      var v = exact
+        ? -E.solveExact(board, 3 - player, -Infinity, -alpha, false)
+        : -E.negamax(board, 3 - player, opts.depth - 1, -Infinity, -alpha, false);
+      E.undoMove(board, m.idx, player, m.flips);
+      if (v > alpha) { alpha = v; bestIdx = m.idx; }
+      i++;
+      if (i < moves.length) setTimeout(step, 0);
+      else cb(bestIdx);
+    }
+    // First slice waits a beat so the thinking indicator paints.
+    setTimeout(step, 30);
+  }
+
   function deepMove(board, player, token, cb) {
     ensureWorker();
     if (worker && !workerBroken) {
       workerJobs.set(token, function (idx) {
         if (idx == null) {
-          // Worker died: fall back synchronously with a lighter search.
-          setTimeout(function () {
-            cb(E.searchDeep(board.slice(), player, { depth: 4, exactAt: 10 }).idx);
-          }, 30);
+          // Worker died mid-search: re-run on the main-thread fallback.
+          searchDeepChunked(board.slice(), player, { depth: 4, exactAt: 10 }, cb);
         } else cb(idx);
       });
       worker.postMessage({
@@ -288,11 +322,8 @@
         exactAt: 12,
       });
     } else {
-      // No worker available (e.g. opened via file://): chunk via setTimeout
-      // so the thinking indicator paints before the search runs.
-      setTimeout(function () {
-        cb(E.searchDeep(board.slice(), player, { depth: 4, exactAt: 10 }).idx);
-      }, 30);
+      // No worker available (e.g. opened via file://).
+      searchDeepChunked(board.slice(), player, { depth: 4, exactAt: 10 }, cb);
     }
   }
 
@@ -710,6 +741,29 @@
     engine: E,
     settings: settings,
     play: function (idx) { return humanCanAct() && S.legalSet.has(idx) ? playMove(idx, S.current) : false; },
+    // Load an arbitrary position (used by the automated feature tests to
+    // reach pass/end-game situations quickly). Keeps current mode settings.
+    setPosition: function (arr, current) {
+      S.seq++;
+      S.board.fill(EMPTY);
+      for (var i = 0; i < 64 && i < arr.length; i++) S.board[i] = arr[i];
+      S.current = current;
+      S.over = false;
+      S.busy = false;
+      S.thinking = false;
+      S.lastMove = -1;
+      S.hoverIdx = -1;
+      S.history.length = 0;
+      S.started = true;
+      anims.clear();
+      hideToast();
+      gameoverEl.classList.add("hidden");
+      setupEl.classList.add("hidden");
+      updateStatus();
+      if (isAiTurn()) later(50, aiMove);
+    },
+    workerStatus: function () { return { active: !!worker, broken: workerBroken }; },
+    getWorker: function () { return worker; },
   };
 
   // ----------------------------------------------------------------- boot ---

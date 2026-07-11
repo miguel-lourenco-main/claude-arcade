@@ -265,6 +265,8 @@
     applyMove: applyMove,
     undoMove: undoMove,
     evaluate: evaluate,
+    negamax: negamax,
+    solveExact: solveExact,
     bestMoveGreedy: bestMoveGreedy,
     bestMovePositional: bestMovePositional,
     searchDeep: searchDeep,
