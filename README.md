@@ -27,6 +27,7 @@ directly via `file://` only works for the arcade shell itself.)
 | [Voxelcraft](games/voxelcraft/) | Sandbox / voxel | A voxel sandbox in the Upturn: infinite procedural terrain, biomes, caves, trees, day/night, block building, saving. Three.js via CDN. |
 | [Wyrm](games/wyrm/) | Arcade / grid | Snake rebuilt: buffered turns, tail-vacate movement, speed ramp, interpolated glow rendering. |
 | [Fuse](games/fuse/) | Puzzle / sliding | Slide-and-merge doubling tiles: merge-locking, animated slides, one-step undo, state survives reload. |
+| [Dowser](games/dowser/) | Puzzle / logic | Minesweeper rebuilt: safe first dig, flood fill, chording, three presets, best times. |
 
 ## Structure
 

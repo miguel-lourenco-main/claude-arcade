@@ -25,4 +25,12 @@ window.GAMES = [
       "Slide the 4×4 grid and fuse equal tiles into their doubled value along a " +
       "cold-to-hot ember palette. Reach the burning-gold 2048 tile — then keep going.",
   },
+  {
+    slug: "dowser",
+    title: "Dowser",
+    genre: "Puzzle / Logic",
+    description:
+      "Something hollow sleeps under this field — dig every safe plot, read the " +
+      "numbers, and plant markers where the rod trembles before the ground gives way.",
+  },
 ];
