@@ -45,6 +45,7 @@ import {
 import { makeGenerator, findSpawn, findBiomeLocation } from "./terrain.js";
 import { makeUnderskyGenerator, underskySpawn } from "./undersky.js";
 import { detectFrame, collapseOrphanFilm, findArrival } from "./portal.js";
+import { sunkenForChunk, findNearestSunken } from "./sunken.js";
 import { findNearestRuin, ruinForChunk } from "./ruins.js";
 import { findNearestDelve, delveForChunk } from "./delvings.js";
 import {
@@ -296,6 +297,9 @@ if (save && save.editsU) uWorld.loadEdits(save.editsU);
 if (save && save.chestsU) uWorld.loadChests(save.chestsU);
 if (save && save.kilnsU) uWorld.loadKilns(save.kilnsU);
 if (save && save.signsU) uWorld.loadSigns(save.signsU);
+// the Sunken Steads' dealt-once markers — like the overworld's ruins, this
+// must load before any far-side chunk generates or a looted wreck re-deals
+if (save && save.ruinsU) uWorld.loadRuins(save.ruinsU);
 // additive v2 field: the bonded companions (bondlings) — species, pos, hp,
 // sitting, scarf seed. Older saves simply have no scarves tied anywhere.
 if (save && Array.isArray(save.bondlings)) mobs.loadBondlings(save.bondlings);
@@ -1470,6 +1474,7 @@ const stopAutosave = startAutosave(() => writeSave(dims.overworld.world, player,
   chestsU: uWorld.serializeChests(),
   kilnsU: uWorld.serializeKilns(),
   signsU: uWorld.serializeSigns(),
+  ruinsU: uWorld.serializeRuins(), // the Sunken Steads' dealt-once markers
   // additive: the bondlings [[species,x,y,z,hp,sitting,scarfSeed]...]
   bondlings: mobs.serializeBondlings(),
   weather: [
@@ -2151,5 +2156,9 @@ if (NO_LOCK) {
     getPortalT: () => portalT,
     getPortalCooldown: () => portalCooldown,
     teleportTo, // so tests can assert the under-sky refusal
+    // the Sunken Steads: the placement/finder pair, always against the
+    // Undersky's terrain (there are no wrecks under the true sun)
+    sunkenForChunk: (cx, cz) => sunkenForChunk(dims.undersky.terrain, cx, cz),
+    findNearestSunken: (x, z) => findNearestSunken(dims.undersky.terrain, x, z),
   };
 }

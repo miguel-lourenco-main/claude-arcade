@@ -122,6 +122,10 @@ export function writeSave(world, player, sky, hud, inventory, extra = {}) {
       // cross a Cinder Door) — absent in older saves: nothing afloat there
       boatsU: extra.boatsU || [],
       cartsU: extra.cartsU || [],
+      // additive: the Sunken Steads' dealt-once loot markers (the far
+      // sky's ruinsSeeded) — absent in older saves, whose wrecks simply
+      // seed on first generation like a new world's
+      ruinsU: extra.ruinsU || [],
     }));
   } catch (e) {
     if (!warnedQuota) {

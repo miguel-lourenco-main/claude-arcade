@@ -9,6 +9,7 @@
 import { STONE, BEDROCK, STARSTONE, PEARLSAND, STARKELP } from "./blocks.js";
 import { CHUNK, HEIGHT } from "./world.js";
 import { Perlin, hash2 } from "./noise.js";
+import { sunkenForChunk, stampSunken, seedSunkenState } from "./sunken.js";
 
 function smoothstep(a, b, t) {
   t = Math.min(1, Math.max(0, (t - a) / (b - a)));
@@ -75,9 +76,17 @@ export function makeUnderskyGenerator(seed) {
             hash2(x * 13, z * 13, seed ^ 0x6e19) < kelpChance) {
           chunk.set(lx, h + 1, lz, STARKELP); // Chunk.set registers the glow
         }
-        // no water, no caves, no ores, no structures — what else is down
-        // here arrives with its keeper (see LORE.md, the Undersky)
+        // no water, no caves, no ores — the far sky's other furniture is
+        // its wrecks (below) and its keeper (mobs.js)
       }
+    }
+    // pass 2: the Sunken Steads — the pre-flip world's own sea-floor
+    // leavings, stamped last (over dune skin and kelp alike), loot dealt
+    // exactly once per world through this World's own seeded markers
+    const wreck = sunkenForChunk(generate.terrain, chunk.cx, chunk.cz);
+    if (wreck) {
+      seedSunkenState(world, wreck);
+      stampSunken(chunk, wreck);
     }
   };
 

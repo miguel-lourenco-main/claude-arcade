@@ -296,6 +296,15 @@ specific item vocabulary.
   drowned light pooled and sank in. The dunes dip, the Starkelp crowds up
   thick, and lit starstone studs the floor itself — treasure lying in the
   open, which any Wanderling will tell you is the most suspicious kind.
+- **The Sunken Steads** — the pre-flip world didn't only farm and dig; it
+  FISHED. When the water went up and became the night, everything that
+  stood in it was left standing in the air instead: cottages of the old
+  shore-folk sunk to their sills in pearlsand, and the stump-lines of
+  jetties still marching across the dunes toward a shore that is now
+  overhead. Wanderlings who cross read whatever the drowned boards still
+  say, take what the sea kept in the chests — old timber, coal, a shard
+  of nacre, now and then a netted star — and leave the stumps pointing
+  home. Home, the boards agree, points up.
 - **The Shellback** — what tends the pearl-beds, and the answer to why the
   treasure lies in the open. A low broad dome of slate hide under a
   nacre-crusted shell, parked among the boulders of a bed floor and
