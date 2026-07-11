@@ -18,7 +18,10 @@ in `localStorage` under `arcade.wyrm.best`.
 
 ## Architecture
 
-Single vanilla-JS file (`game.js`), no dependencies, no build step.
+Vanilla JS, no dependencies, no build step. Pure grid rules live in
+`logic.js` (dual-environment: `window.WyrmLogic` in the browser,
+`module.exports` under node, so the test suite runs the exact game rules);
+everything DOM/canvas/audio lives in `game.js`.
 
 - **Fixed-timestep logic** — the accumulator pattern drives discrete grid
   ticks starting at 8/s and ramping (+0.28/s per ember, capped at 15/s).

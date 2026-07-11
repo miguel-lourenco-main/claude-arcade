@@ -6,29 +6,15 @@
  */
 
 (function () {
-  // ---- constants ----------------------------------------------------------
-  const COLS = 26;
-  const ROWS = 22;
-  const CELL = 26;                 // logical px per cell
-  const BASE_TPS = 8;              // logic ticks per second at start
-  const MAX_TPS = 15;
-  const TPS_PER_FOOD = 0.28;       // speed ramp per food eaten (i.e. per length)
-  const START_LEN = 4;
-  const QUEUE_MAX = 2;             // buffered direction changes per tick window
+  // ---- constants (pure rules live in logic.js -> window.WyrmLogic) --------
+  const L = window.WyrmLogic;
+  const COLS = L.COLS;
+  const ROWS = L.ROWS;
+  const CELL = 26;                 // logical px per cell (render-only)
+  const BASE_TPS = L.BASE_TPS;
   const LS = (k) => "arcade.wyrm." + k;
-
-  const DIRS = {
-    up:    { x: 0, y: -1 },
-    down:  { x: 0, y: 1 },
-    left:  { x: -1, y: 0 },
-    right: { x: 1, y: 0 },
-  };
-  const KEYMAP = {
-    ArrowUp: "up",    KeyW: "up",
-    ArrowDown: "down", KeyS: "down",
-    ArrowLeft: "left", KeyA: "left",
-    ArrowRight: "right", KeyD: "right",
-  };
+  const DIRS = L.DIRS;
+  const KEYMAP = L.KEYMAP;
 
   // ---- DOM ----------------------------------------------------------------
   const canvas = document.getElementById("game");
@@ -138,9 +124,7 @@
   let particles = [];
   let eatFlash = 0;          // brief glow boost after eating
 
-  function tps() {
-    return Math.min(MAX_TPS, BASE_TPS + foodEaten * TPS_PER_FOOD);
-  }
+  function tps() { return L.tps(foodEaten); }
   function tickMs() { return 1000 / tps(); }
 
   function updateHud() {
@@ -151,10 +135,7 @@
   }
 
   function resetGame() {
-    const cy = Math.floor(ROWS / 2);
-    const cx = Math.floor(COLS / 2) - 2;
-    snake = [];
-    for (let i = 0; i < START_LEN; i++) snake.push({ x: cx - i, y: cy });
+    snake = L.makeSnake();
     prevSnake = snake.map((s) => ({ x: s.x, y: s.y }));
     dir = DIRS.right;
     dirQueue = [];
@@ -170,33 +151,17 @@
 
   // Food spawns uniformly over FREE cells only — never on the snake.
   function spawnFood() {
-    const occupied = new Set(snake.map((s) => s.y * COLS + s.x));
-    const free = [];
-    for (let i = 0; i < COLS * ROWS; i++) if (!occupied.has(i)) free.push(i);
-    if (free.length === 0) { win(); return; }
-    const i = free[Math.floor(Math.random() * free.length)];
-    food = { x: i % COLS, y: Math.floor(i / COLS) };
+    const f = L.spawnFood(snake, Math.random);
+    if (!f) { win(); return; }
+    food = f;
   }
 
   // ---- input --------------------------------------------------------------
+  // Reversal check runs against the LAST QUEUED direction, not the current
+  // one — otherwise two fast taps (e.g. up,left,down while moving right)
+  // would slip a 180 past the guard and the wyrm would bite its own neck.
   function queueDirection(name) {
-    if (dirQueue.length >= QUEUE_MAX) return;
-    // Reversal check is against the LAST QUEUED direction, not the current
-    // one — otherwise two fast taps (e.g. up,left,down while moving right)
-    // would slip a 180 past the guard and the wyrm would bite its own neck.
-    const refName = dirQueue.length
-      ? dirQueue[dirQueue.length - 1]
-      : dirNameOf(dir);
-    const ref = DIRS[refName];
-    const next = DIRS[name];
-    if (next.x === -ref.x && next.y === -ref.y) return; // 180° — rejected
-    if (next.x === ref.x && next.y === ref.y) return;   // no-op
-    dirQueue.push(name);
-  }
-
-  function dirNameOf(d) {
-    for (const k in DIRS) if (DIRS[k].x === d.x && DIRS[k].y === d.y) return k;
-    return "right";
+    L.queueDirection(dirQueue, dir, name);
   }
 
   window.addEventListener("keydown", (e) => {
@@ -316,40 +281,23 @@
     // one buffered turn is consumed per tick
     if (dirQueue.length) dir = DIRS[dirQueue.shift()];
 
-    const head = snake[0];
-    const nx = head.x + dir.x;
-    const ny = head.y + dir.y;
-
-    // wall collision
-    if (nx < 0 || ny < 0 || nx >= COLS || ny >= ROWS) { die(); return; }
-
-    const eating = nx === food.x && ny === food.y;
-
-    // Self collision: movement is push-head + pop-tail in the SAME tick, so
-    // when not growing the tail cell vacates this tick — stepping into it is
-    // legal. We therefore exclude the tail segment from the check unless the
-    // wyrm is growing (eating), in which case the tail stays put.
-    const checkLen = eating ? snake.length : snake.length - 1;
-    for (let i = 0; i < checkLen; i++) {
-      if (snake[i].x === nx && snake[i].y === ny) { die(); return; }
-    }
-
     // snapshot for render interpolation
     const old = snake.map((s) => ({ x: s.x, y: s.y }));
 
-    // push head; pop tail unless growing
-    snake.unshift({ x: nx, y: ny });
-    if (eating) {
+    // Movement, wall/self collision and tail-chase legality all live in
+    // logic.js (L.step) so the node suite tests the exact rules the game runs.
+    const r = L.step(snake, dir, food);
+    if (r.died) { die(); return; }
+    snake = r.snake;
+
+    if (r.ate) {
       // base points + a small bonus that scales with the speed at bite time
-      const speedBonus = Math.round((tps() - BASE_TPS) * 3);
-      score += 10 + speedBonus;
+      score += L.biteScore(foodEaten);
       foodEaten++;
       eatFlash = 1;
       sfxEat(snake.length);
       spawnParticles(food.x, food.y, 12, "255, 171, 94");
       spawnFood();
-    } else {
-      snake.pop();
     }
 
     // each drawn segment slides from where THAT index was last tick
@@ -525,6 +473,30 @@
 
     render(Math.min(accumulator / tickMs(), 1), now);
     requestAnimationFrame(frame);
+  }
+
+  // ---- guarded test handle -------------------------------------------------
+  // Only exposed when the page is loaded with ?wyrmtest in the query string;
+  // the committed browser test suite uses it to set up deterministic boards.
+  if (/[?&]wyrmtest/.test(window.location.search)) {
+    window.__wyrm = {
+      get state() { return state; },
+      get snake() { return snake.map((s) => ({ x: s.x, y: s.y })); },
+      get food() { return { x: food.x, y: food.y }; },
+      get score() { return score; },
+      get best() { return best; },
+      get foodEaten() { return foodEaten; },
+      get dir() { return { x: dir.x, y: dir.y }; },
+      get dirQueue() { return dirQueue.slice(); },
+      setFood(x, y) { food = { x: x, y: y }; },
+      setSnake(cells) {
+        snake = cells.map((c) => ({ x: c.x, y: c.y }));
+        prevSnake = snake.map((s) => ({ x: s.x, y: s.y }));
+        updateHud();
+      },
+      setDir(name) { dir = DIRS[name]; dirQueue = []; },
+      forceSpawnFood() { spawnFood(); },
+    };
   }
 
   // ---- boot ---------------------------------------------------------------
