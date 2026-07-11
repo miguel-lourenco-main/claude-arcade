@@ -169,4 +169,12 @@ window.GAMES = [
       "Plant magical flora across a 5-lane grove to stop the shambling blights: " +
       "collect dew, manage seed cooldowns, and survive five levels to the FINAL SURGE.",
   },
+  {
+    slug: "fernfoot",
+    title: "Fernfoot",
+    genre: "Platformer",
+    description:
+      "Dash, leap and stomp through six handcrafted glades and ruin caverns — " +
+      "collect sparks, crack hidden caches, and race your best to each waystone.",
+  },
 ];

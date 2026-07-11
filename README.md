@@ -45,6 +45,7 @@ directly via `file://` only works for the arcade shell itself.)
 | [Palisade](games/palisade/) | Strategy / tower defense | Waypoint-path TD: 4 towers with upgrades, first/last/nearest/strongest targeting, 20 scripted waves, 3 maps. |
 | [Slipstream](games/slipstream/) | Arcade / racer | Pseudo-3D segment racer: accumulated-curve projection, centrifugal pull, traffic, checkpoint timer, 5 stages. |
 | [Rootguard](games/rootguard/) | Strategy / lane defense | Lane defense: dew economy, seed-card cooldowns, 6 plants vs 5 blight types, per-lane root surges, 5 levels. |
+| [Fernfoot](games/fernfoot/) | Platformer | Momentum platformer: variable jump, coyote time, jump buffering, stomps, power-ups, 6 levels with secrets. |
 
 ## Structure
 
