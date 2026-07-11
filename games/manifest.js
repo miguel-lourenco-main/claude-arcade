@@ -65,4 +65,12 @@ window.GAMES = [
       "Pilot a lone ship through a wrapping field of splitting rock shards — pure " +
       "inertia, four bullets, and saucers that learn your name. Glowing vector lines.",
   },
+  {
+    slug: "crateshift",
+    title: "Crateshift",
+    genre: "Puzzle / Box-pusher",
+    description:
+      "Night shift at the dockyard: shove every crate onto its glowing pad. One " +
+      "push at a time, no pulling — a crate in a corner is a crate lost. 21 shifts.",
+  },
 ];

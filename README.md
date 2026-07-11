@@ -32,6 +32,7 @@ directly via `file://` only works for the arcade shell itself.)
 | [Mothlight](games/mothlight/) | Arcade / one-button | One-button flight: impulse flaps, forgiving hitbox, parallax night, reachability-clamped gaps. |
 | [Softfall](games/softfall/) | Arcade / physics | Lander: nose-vector thrust, strict touchdown gate, midpoint-displacement terrain, multiplier pads. |
 | [Shardfield](games/shardfield/) | Arcade / space | Inertial vector shooter: frictionless glide, 4-bullet cap, splitting shards, two saucer types, wrap-seam rendering. |
+| [Crateshift](games/crateshift/) | Puzzle / box-pusher | 21 original solver-verified crate puzzles: push-only movement, full undo, corner-deadlock hints, star ratings. |
 
 ## Structure
 
