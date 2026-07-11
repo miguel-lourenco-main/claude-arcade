@@ -43,7 +43,11 @@ drawn line by line on a canvas, and every sound is synthesized in Web Audio.
 
 - `index.html` — shell: HUD, canvas stage, overlay, controls footer.
 - `style.css` — dark arcade chrome, electric-cyan accent.
-- `game.js` — a single IIFE:
+- `logic.js` — tuning constants and pure simulation logic (torus math, shard
+  and bullet factories, wave / heartbeat / safe-zone rules). Dual-environment:
+  `window.ShardfieldLogic` in the browser, `module.exports` in node, so the
+  test suite exercises exactly the code the game runs.
+- `game.js` — a single IIFE (state, input, Web Audio, rendering, main loop):
   - Fixed-timestep simulation (`DT = 1/60`, accumulator pattern) with
     interpolated rendering; every entity keeps previous-tick position/angle
     and the renderer lerps by the accumulator remainder. Wrap teleports adjust
@@ -59,4 +63,12 @@ drawn line by line on a canvas, and every sound is synthesized in Web Audio.
   - Persistence: `localStorage` under `arcade.shardfield.best` and
     `arcade.shardfield.sound`.
 
-No dependencies, no build step, no external assets.
+No dependencies, no build step, no external assets. Works opened directly
+from disk (`file://`) — classic scripts only.
+
+## Tests
+
+- `test/logic.test.js` — node-runnable pure-logic tests over `logic.js`.
+- `test/browser.test.mjs` — headless-Chrome CDP suite; drives every README
+  feature with real key events over both http:// and file://.
+- `test/README.md` — what each test covers.

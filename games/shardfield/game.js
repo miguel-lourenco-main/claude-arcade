@@ -6,52 +6,23 @@
  */
 (() => {
 
-// ---------------------------------------------------------------- constants
+// -------------------------------------------------- constants + pure logic
+// All tuning constants and pure simulation functions live in logic.js
+// (window.ShardfieldLogic), which is dual-environment so the node test
+// suite exercises exactly the code the game runs.
 
-const W = 960, H = 720;
-const DT = 1 / 60;                       // fixed simulation step, seconds
+const L = window.ShardfieldLogic;
+const {
+  W, H, DT,
+  SHIP, MUZZLE, BULLET_LIFE, MAX_BULLETS,
+  SIZES, SAUCER, SAUCER_SHOT_LIFE,
+  SAFE_RADIUS, EXTRA_LIFE_EVERY, START_LIVES,
+  rand, irand, clamp, lerp, dist2, torusDelta, wrapEntity,
+  makeShard, makeBullet,
+  smallSaucerProb, smallSaucerAimError, waveShardCount, heartbeatInterval,
+} = L;
+
 const STORE = 'arcade.shardfield.';
-
-const SHIP = {
-  rot: 4.1,          // rad/s
-  thrust: 315,       // px/s^2 along the nose
-  maxSpeed: 460,     // px/s velocity cap
-  r: 11,             // collision radius
-};
-
-const MUZZLE = 560;                            // bullet speed added to ship velocity
-const BULLET_LIFE = 0.92 * W / MUZZLE;         // just under one screen-crossing
-const MAX_BULLETS = 4;
-
-// shard sizes: 3 large -> 2 medium -> 1 small -> gone
-const SIZES = {
-  3: { R: 44, vmin: 42,  vmax: 95,  pts: 20,  weight: 4 },
-  2: { R: 25, vmin: 88,  vmax: 165, pts: 50,  weight: 2 },
-  1: { R: 13, vmin: 145, vmax: 240, pts: 100, weight: 1 },
-};
-
-const SAUCER = {
-  big:   { r: 17, pts: 200,  fireEvery: 1.05, speed: 95,  shotSpeed: 350 },
-  small: { r: 10, pts: 1000, fireEvery: 0.95, speed: 128, shotSpeed: 405 },
-};
-const SAUCER_SHOT_LIFE = 1.35;
-
-const SAFE_RADIUS = 150;       // spawn-safe zone around center
-const EXTRA_LIFE_EVERY = 10000;
-const START_LIVES = 3;
-
-// ------------------------------------------------------------------ helpers
-
-const rand = (a, b) => a + Math.random() * (b - a);
-const irand = (a, b) => Math.floor(rand(a, b + 1));
-const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
-const lerp = (a, b, t) => a + (b - a) * t;
-const dist2 = (ax, ay, bx, by) => {
-  // toroidal shortest distance squared
-  let dx = Math.abs(ax - bx); if (dx > W / 2) dx = W - dx;
-  let dy = Math.abs(ay - by); if (dy > H / 2) dy = H - dy;
-  return dx * dx + dy * dy;
-};
 
 // --------------------------------------------------------------------- DOM
 
@@ -293,31 +264,8 @@ const FLAME_SEGS = [
   [[-7.2, -4], [-15, 0]],
 ];
 
-function makeShard(x, y, size, parentSpeedBoost = 0) {
-  const cfg = SIZES[size];
-  const ang = rand(0, Math.PI * 2);
-  const spd = rand(cfg.vmin, cfg.vmax) + parentSpeedBoost;
-  const n = irand(9, 12);
-  const verts = [];
-  for (let i = 0; i < n; i++) {
-    const t = (i / n) * Math.PI * 2;
-    const r = cfg.R * rand(0.62, 1.12);
-    verts.push([Math.cos(t) * r, Math.sin(t) * r]);
-  }
-  const a0 = rand(0, Math.PI * 2);
-  return {
-    x, y, px: x, py: y,
-    vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd,
-    a: a0, pa: a0,
-    spin: rand(-1.3, 1.3),
-    size, verts,
-    cr: cfg.R * 0.82,          // collision radius
-  };
-}
-
 function makeSaucer() {
-  const pSmall = score < 3000 ? 0.12 : Math.min(0.9, 0.2 + score / 25000);
-  const kind = Math.random() < pSmall ? 'small' : 'big';
+  const kind = Math.random() < smallSaucerProb(score) ? 'small' : 'big';
   const cfg = SAUCER[kind];
   const fromLeft = Math.random() < 0.5;
   const x0 = fromLeft ? -cfg.r : W + cfg.r;
@@ -390,7 +338,7 @@ function currentWeight() {
 
 function spawnWave() {
   wave++;
-  const n = Math.min(4 + (wave - 1) * 2, 12);
+  const n = waveShardCount(wave);
   const ax = ship ? ship.x : W / 2;
   const ay = ship ? ship.y : H / 2;
   for (let i = 0; i < n; i++) {
@@ -449,14 +397,7 @@ function killShip() {
 }
 
 function centerSafe() {
-  for (const s of shards) {
-    if (dist2(s.x, s.y, W / 2, H / 2) < (SAFE_RADIUS + s.cr) ** 2) return false;
-  }
-  if (saucer && dist2(saucer.x, saucer.y, W / 2, H / 2) < (SAFE_RADIUS + 60) ** 2) return false;
-  for (const b of ebullets) {
-    if (dist2(b.x, b.y, W / 2, H / 2) < (SAFE_RADIUS * 0.85) ** 2) return false;
-  }
-  return true;
+  return L.isCenterSafe(shards, saucer, ebullets);
 }
 
 function startGame() {
@@ -575,13 +516,6 @@ window.addEventListener('blur', () => {
 
 // -------------------------------------------------------------- simulation
 
-function wrapEntity(e) {
-  if (e.x < 0) { e.x += W; e.px += W; }
-  else if (e.x >= W) { e.x -= W; e.px -= W; }
-  if (e.y < 0) { e.y += H; e.py += H; }
-  else if (e.y >= H) { e.y -= H; e.py -= H; }
-}
-
 function savePrev() {
   if (ship) { ship.px = ship.x; ship.py = ship.y; ship.pa = ship.a; }
   for (const s of shards) { s.px = s.x; s.py = s.y; s.pa = s.a; }
@@ -618,15 +552,8 @@ function tickShip() {
   if (fireQueued) {
     fireQueued = false;
     if (bullets.length < MAX_BULLETS) {
-      const cos = Math.cos(sh.a), sin = Math.sin(sh.a);
-      bullets.push({
-        x: sh.x + cos * 16, y: sh.y + sin * 16,
-        px: sh.x + cos * 16, py: sh.y + sin * 16,
-        // bullets inherit ship velocity plus fixed muzzle speed
-        vx: sh.vx + cos * MUZZLE,
-        vy: sh.vy + sin * MUZZLE,
-        t: BULLET_LIFE,
-      });
+      // bullets inherit ship velocity plus fixed muzzle speed
+      bullets.push(makeBullet(sh));
       AC.fire();
     }
   }
@@ -666,10 +593,9 @@ function tickSaucer() {
       ang = rand(0, Math.PI * 2);
     } else {
       // the small saucer aims at the ship; its aim error shrinks as score rises
-      const err = Math.max(0.05, 0.55 - 0.5 * Math.min(1, score / 35000));
+      const err = smallSaucerAimError(score);
       // aim across the torus: shortest wrapped delta
-      let dx = ship.x - sc.x; if (dx > W / 2) dx -= W; else if (dx < -W / 2) dx += W;
-      let dy = ship.y - sc.y; if (dy > H / 2) dy -= H; else if (dy < -H / 2) dy += H;
+      const [dx, dy] = torusDelta(sc.x, sc.y, ship.x, ship.y);
       ang = Math.atan2(dy, dx) + rand(-err, err);
     }
     ebullets.push({
@@ -839,10 +765,7 @@ function tick() {
 
   // the two-tone heartbeat accelerates as the field thins
   if (shards.length > 0 && ship) {
-    const frac = currentWeight() / waveWeight;
-    let interval = 0.3 + 0.75 * clamp(frac, 0, 1);
-    interval -= Math.min(0.12, waveTime * 0.004);
-    interval = clamp(interval, 0.24, 1.05);
+    const interval = heartbeatInterval(currentWeight() / waveWeight, waveTime);
     beatTimer -= DT;
     if (beatTimer <= 0) {
       AC.beat(beatHi);
@@ -1049,6 +972,44 @@ function frame(now) {
     acc -= DT;
   }
   render(acc / DT);
+}
+
+// -------------------------------------------------------------- test handle
+// Guarded debug handle for the automated browser suite (?test only).
+// Read-mostly: getters over live state plus a few hooks the tests need to
+// stage deterministic scenarios. Not reachable in normal play.
+
+if (new URLSearchParams(location.search).has('test')) {
+  window.__shardfield = {
+    get state() { return state; },
+    get paused() { return paused; },
+    get score() { return score; },
+    get best() { return best; },
+    get lives() { return lives; },
+    get wave() { return wave; },
+    get ship() { return ship; },
+    get shards() { return shards; },
+    get bullets() { return bullets; },
+    get ebullets() { return ebullets; },
+    get debris() { return debris; },
+    get saucer() { return saucer; },
+    get respawnTimer() { return respawnTimer; },
+    AC, L,
+    addScore, splitShard, killShip, killSaucer, centerSafe,
+    setLives(n) { lives = n; syncHud(); },
+    setSaucerTimer(t) { saucerTimer = t; },
+    pushShard(s) { shards.push(s); },
+    clearShards() { shards = []; },
+    spawnSaucer(kind) {
+      saucer = makeSaucer();
+      if (kind && saucer.kind !== kind) {
+        saucer.kind = kind;
+        saucer.cfg = SAUCER[kind];
+        saucer.vx = Math.sign(saucer.vx) * saucer.cfg.speed;
+      }
+      return saucer;
+    },
+  };
 }
 
 // ------------------------------------------------------------------- start
