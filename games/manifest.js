@@ -129,4 +129,12 @@ window.GAMES = [
       "Full legal chess against a three-strength AI or a friend — castling, en " +
       "passant, promotions, every draw rule, and an engine that punishes loose tactics.",
   },
+  {
+    slug: "delve",
+    title: "Delve",
+    genre: "RPG / Roguelike",
+    description:
+      "Nine procedural floors beneath the Upturn stand between you and the First " +
+      "Pearl. Torchlight, bump combat, and a save that dies with you.",
+  },
 ];

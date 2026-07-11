@@ -1,0 +1,9 @@
+{
+  "name": "delve",
+  "private": true,
+  "type": "module",
+  "description": "Turn-based roguelike for the Claude Arcade. No dependencies; package.json exists only so node treats the src modules as ESM for headless tests.",
+  "scripts": {
+    "test": "node test/test.js"
+  }
+}
