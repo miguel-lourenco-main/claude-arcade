@@ -33,6 +33,10 @@ level's score target before the moves run out.
 - `index.html` — shell: HUD (level / moves / score / best), target progress
   bar, canvas stage, overlay, controls footer.
 - `style.css` — dark arcade theme, amethyst accent.
+- `logic.js` — the pure rules (run detection, valid-move search, board
+  generation, clear resolution + special forging, gravity compaction,
+  reshuffle). Dual-environment: `window.GemgroveLogic` in the browser,
+  `module.exports` under node — see `test/`.
 - `game.js` — everything else, one IIFE:
   - **Fixed timestep** (1/60s accumulator) drives all animation/logic;
     rendering interpolates between the previous and current tick.
