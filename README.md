@@ -29,6 +29,7 @@ directly via `file://` only works for the arcade shell itself.)
 | [Fuse](games/fuse/) | Puzzle / sliding | Slide-and-merge doubling tiles: merge-locking, animated slides, one-step undo, state survives reload. |
 | [Dowser](games/dowser/) | Puzzle / logic | Minesweeper rebuilt: safe first dig, flood fill, chording, three presets, best times. |
 | [Brickstorm](games/brickstorm/) | Arcade / paddle | Brick breaker: positional paddle bounce, speed ramps, side-resolved collisions, power-ups, procedural levels. |
+| [Mothlight](games/mothlight/) | Arcade / one-button | One-button flight: impulse flaps, forgiving hitbox, parallax night, reachability-clamped gaps. |
 
 ## Structure
 

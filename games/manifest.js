@@ -41,4 +41,12 @@ window.GAMES = [
       "A paddle, a ball, and a wall that deserves it — smash procedural brick " +
       "patterns, catch falling power capsules, and hang on as the ball ramps faster.",
   },
+  {
+    slug: "mothlight",
+    title: "Mothlight",
+    genre: "Arcade / One-button",
+    description:
+      "You are a moth drawn down a lantern-lit hollow at night — flap to stay " +
+      "aloft and weave through the gaps between hanging lantern-chains.",
+  },
 ];

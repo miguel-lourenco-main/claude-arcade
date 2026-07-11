@@ -1,0 +1,69 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; }
+body {
+  background: #0d0f12;
+  color: #cdd3da;
+  font-family: ui-monospace, "Cascadia Code", Menlo, Consolas, monospace;
+  user-select: none;
+  -webkit-user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+#frame {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-height: 100vh;
+  padding: 10px 0;
+}
+
+#game {
+  display: block;
+  background: #0a0b14;
+  border: 1px solid #23262d;
+  border-radius: 6px;
+  box-shadow: 0 0 40px rgba(255, 190, 90, 0.06);
+  max-width: calc(100vw - 20px);
+  max-height: calc(100vh - 90px);
+  height: auto;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+#chrome {
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+}
+#chrome .back {
+  color: #7ee787;
+  text-decoration: none;
+}
+#chrome .back:hover { text-decoration: underline; }
+#audio-toggle {
+  background: none;
+  border: 1px solid #2c313a;
+  border-radius: 4px;
+  color: #9aa3ad;
+  font: inherit;
+  font-size: 11px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+#audio-toggle:hover { border-color: #ffc266; color: #ffc266; }
+
+#footer {
+  display: flex;
+  gap: 18px;
+  font-size: 11px;
+  color: #6b7280;
+}
+#footer b { color: #ffc266; font-weight: 600; }
