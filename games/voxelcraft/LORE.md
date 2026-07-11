@@ -217,10 +217,13 @@ specific item vocabulary.
   **Flint Thread** (a digger half again as eager), the **Knotwood
   Thread** (wear that lands half as often — named for the wood that
   refuses to split), the **Ward Thread** (a worn piece that argues a
-  little harder), and the **Dusk Thread** (a pearl's dark woven into an
-  edge: three deeper still, and the struck carry the Dimmed whim). One
-  thread per item, and it never comes out — weaving is a promise, not a
-  coat of paint.
+  little harder), the **Dusk Thread** (a pearl's dark woven into an
+  edge: three deeper still, and the struck carry the Dimmed whim), and
+  the **Tide Thread** (two shards of nacre through a pair of treads:
+  the sea carries the wearer — swimming is swift and the Mire Sod
+  forgets to grab, the bog being, after all, just shallow sea that
+  dried). One thread per item, and it never comes out — weaving is a
+  promise, not a coat of paint.
 - **The Whims** — the Upturn's moods, worn briefly. A broth or a bad bite
   can leave one on you for a minute: **Fleetfoot** (the Sunwisp lightness
   takes to your feet), **Emberglow** (a warm ember heals you and asks

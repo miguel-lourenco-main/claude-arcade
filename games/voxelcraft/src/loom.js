@@ -11,7 +11,7 @@
 
 import {
   BLOCKS, IRON_INGOT, COAL_ORE, MOSS_CLUMP, STARGLASS, DUSK_PEARL,
-  QUILL, BOGBEAN_POD, WANDERWING,
+  QUILL, BOGBEAN_POD, WANDERWING, NACRE,
 } from "./blocks.js";
 
 export const THREADS = {
@@ -51,6 +51,15 @@ export const THREADS = {
     fits: (def) => !!def.tool && def.tool.kind === "blade",
     levels: 6,
     mats: [[DUSK_PEARL, 1]],
+  },
+  // woven from the far sea's own coin — treads only. The effect hooks live
+  // in player.js (swim pace, the Mire Sod stride), read via tideCarries.
+  tide: {
+    name: "Tide Thread",
+    blurb: "the sea carries you — swim swift, wade the mire free",
+    fits: (def) => !!def.armor && def.armor.kind === "treads",
+    levels: 3,
+    mats: [[NACRE, 2]],
   },
 };
 
@@ -132,4 +141,10 @@ export function threadName(stack) {
 // tools (main.js onToolUse) and armor (player.js _absorb) alike.
 export function wearSkips(stack) {
   return !!stack && stack.mod === "knot" && Math.random() < 0.5;
+}
+
+// the Tide Thread's carry: do THESE worn treads know the water?
+// player.js asks with the treads wear slot's stack.
+export function tideCarries(stack) {
+  return !!stack && stack.mod === "tide";
 }

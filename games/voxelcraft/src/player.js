@@ -5,7 +5,7 @@ import {
   BLOCKS, isSolid, WATER, LAVA, isFluid, CACTUS, LADDER, ICE, SNOW_LAYER,
   MUD, armorProtection,
 } from "./blocks.js";
-import { wearSkips } from "./loom.js";
+import { wearSkips, tideCarries } from "./loom.js";
 
 const HALF_W = 0.3;
 const PLAYER_HEIGHT = 1.8;
@@ -163,6 +163,12 @@ export class Player {
     this._cactusTimer = 0;
     this._voidTimer = 0;
     this._starveTimer = 0;
+  }
+
+  // the Tide Thread (loom.js): do the worn treads know the water? Swim pace
+  // and the Mire Sod stride both ask. WEAR_KINDS order puts treads last.
+  _tideThread() {
+    return tideCarries(this.wear && this.wear[3]);
   }
 
   // the Nacre Crown's gift (armor.tide): the wearer's lungs remember the
@@ -502,6 +508,7 @@ export class Player {
     else if (this.inWater) {
       speed = wantSprint && sprintInput ? SWIM_SPRINT_SPEED : SWIM_SPEED;
       if (this.inLava) speed *= 0.55; // the melt is thicker than any river
+      else if (this._tideThread()) speed *= 1.5; // the sea carries you
     }
     else if (sneaking) speed = SNEAK_SPEED;
     else if (wantSprint && sprintInput) speed = SPRINT_SPEED;
@@ -615,7 +622,7 @@ export class Player {
         const feet = this.world.getBlock(fx, Math.floor(this.pos.y + 0.05), fz);
         if (below === ICE) traction = 0.5;
         else if (below === SNOW_LAYER || feet === SNOW_LAYER) stride = 0.9;
-        else if (below === MUD) stride = 0.75;
+        else if (below === MUD && !this._tideThread()) stride = 0.75;
       }
       const accel = (this.onGround ? (hasInput ? ACCEL_GROUND : FRICTION_GROUND) * traction
         : ACCEL_AIR) * dt;
