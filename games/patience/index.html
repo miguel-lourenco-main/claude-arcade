@@ -48,6 +48,10 @@
     <span id="stats-line"></span>
   </footer>
 
-  <script type="module" src="src/main.js"></script>
+  <!-- classic scripts in dependency order so the game works over file:// -->
+  <script src="src/cards.js"></script>
+  <script src="src/game.js"></script>
+  <script src="src/audio.js"></script>
+  <script src="src/main.js"></script>
 </body>
 </html>

@@ -1,6 +1,10 @@
 // audio.js — tiny Web Audio synth. Context is only created after a user gesture.
+// Classic script: attaches its API to window.Patience (file:// friendly).
 
-export class Sfx {
+(function () {
+'use strict';
+
+class Sfx {
   constructor(enabled) {
     this.enabled = enabled;
     this.ctx = null;
@@ -85,3 +89,7 @@ export class Sfx {
     notes.forEach((f, i) => this._tone(f, 0.22, 'triangle', 0.16, i * 0.09));
   }
 }
+
+window.Patience = window.Patience || {};
+window.Patience.Sfx = Sfx;
+})();

@@ -1,8 +1,10 @@
 // main.js — layout, input, rendering, fixed-timestep animation, win cascade.
+// Classic script: reads its dependencies from window.Patience (file:// friendly).
 
-import { Game } from './game.js';
-import { CardArt, drawSuit } from './cards.js';
-import { Sfx } from './audio.js';
+(function () {
+'use strict';
+
+const { Game, CardArt, drawSuit, Sfx } = window.Patience;
 
 const SET_KEY = 'arcade.patience.settings';
 const STAT_KEY = 'arcade.patience.stats';
@@ -475,7 +477,10 @@ canvas.addEventListener('pointerdown', (e) => {
   const hit = hitTest(p.x, p.y);
   if (!hit || hit.type === 'dead') return;
   e.preventDefault();
-  canvas.setPointerCapture(e.pointerId);
+  // setPointerCapture throws NotFoundError for pointers the browser doesn't
+  // consider active (synthetic PointerEvents, some odd touch edge cases).
+  // Capture is a nicety, not a requirement — never let it kill the handler.
+  try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* no active pointer */ }
 
   if (hit.type === 'stock') { doDraw(); return; }
 
@@ -847,3 +852,4 @@ requestAnimationFrame(frame);
 Object.defineProperty(window, '__patience', {
   get: () => ({ game, L, drag, flights, winState, colX, pilePositions, stockRect, wasteTopRect, foundRect }),
 });
+})();

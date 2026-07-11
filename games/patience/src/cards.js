@@ -1,13 +1,17 @@
 // cards.js — deck, seeded shuffle, and procedural card artwork.
 // Suits: 0 = spades, 1 = hearts, 2 = diamonds, 3 = clubs.
+// Classic script: attaches its API to window.Patience (file:// friendly).
 
-export const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
-export const SUIT_CHAR = ['♠', '♥', '♦', '♣'];
-export const isRed = (s) => s === 1 || s === 2;
+(function () {
+'use strict';
+
+const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+const SUIT_CHAR = ['♠', '♥', '♦', '♣'];
+const isRed = (s) => s === 1 || s === 2;
 
 // --- seeded PRNG (mulberry32) + Fisher-Yates ---
 
-export function mulberry32(seed) {
+function mulberry32(seed) {
   let a = seed >>> 0;
   return function () {
     a |= 0;
@@ -18,7 +22,7 @@ export function mulberry32(seed) {
   };
 }
 
-export function shuffledDeck(seed) {
+function shuffledDeck(seed) {
   const rnd = mulberry32(seed);
   const deck = [];
   for (let s = 0; s < 4; s++) {
@@ -44,7 +48,7 @@ const BACK_ACCENT = '#7ee0b0';
 
 // --- suit glyph paths (drawn with current fillStyle) ---
 
-export function drawSuit(ctx, s, cx, cy, size) {
+function drawSuit(ctx, s, cx, cy, size) {
   const k = size;
   ctx.beginPath();
   if (s === 2) { // diamond
@@ -203,7 +207,7 @@ function drawCourt(ctx, w, h, r, s, ink) {
 
 // --- card art cache ---
 
-export class CardArt {
+class CardArt {
   constructor() {
     this.w = 0; this.h = 0; this.dpr = 1;
     this.faces = new Map();
@@ -339,3 +343,13 @@ export class CardArt {
     ctx.globalAlpha = 1;
   }
 }
+
+const NS = (window.Patience = window.Patience || {});
+NS.RANKS = RANKS;
+NS.SUIT_CHAR = SUIT_CHAR;
+NS.isRed = isRed;
+NS.mulberry32 = mulberry32;
+NS.shuffledDeck = shuffledDeck;
+NS.drawSuit = drawSuit;
+NS.CardArt = CardArt;
+})();

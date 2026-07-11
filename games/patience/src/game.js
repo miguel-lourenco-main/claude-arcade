@@ -1,8 +1,12 @@
 // game.js — Klondike rules, state, and full undo history.
+// Classic script: attaches its API to window.Patience (file:// friendly).
 
-import { shuffledDeck, isRed } from './cards.js';
+(function () {
+'use strict';
 
-export class Game {
+const { shuffledDeck, isRed } = window.Patience;
+
+class Game {
   constructor(seed, draw3) {
     this.seed = seed >>> 0;
     this.draw3 = !!draw3;
@@ -149,3 +153,6 @@ export class Game {
     return best;
   }
 }
+
+window.Patience.Game = Game;
+})();
