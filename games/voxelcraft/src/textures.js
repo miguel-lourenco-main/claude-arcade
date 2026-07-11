@@ -194,6 +194,8 @@ export const TILE = {
   // the Undertow's fight: what it drops, and what calls it up
   TIDEHEART: 143,
   PEARL_CHIME: 144,
+  // the heart run molten: the pane the dark won't argue with
+  HEARTGLASS: 145,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -2298,6 +2300,20 @@ painters[TILE.TIDEHEART] = (p) => {
   }
   for (let x = 5; x <= 10; x++) p.px(x, 8, 148, 214, 208); // the pulse band
   p.px(7, 6, 190, 236, 230); p.px(9, 10, 170, 224, 218);   // the beat
+};
+
+painters[TILE.HEARTGLASS] = (p) => {
+  // heartglass: starglass's clear pane recipe, warmed teal — rimmed pale,
+  // crossed by a slow pulse-band, with the heart's beat caught mid-swirl
+  p.clear();
+  for (let i = 0; i < TILE_PX; i++) {
+    p.px(i, 0, 214, 240, 236); p.px(i, 15, 214, 240, 236);
+    p.px(0, i, 214, 240, 236); p.px(15, i, 214, 240, 236);
+  }
+  for (let i = 2; i < 10; i++) p.px(i, 13 - i, 170, 226, 218, 190);
+  for (let i = 7; i < 13; i++) p.px(i, 19 - i, 148, 214, 208, 150);
+  p.px(5, 5, 226, 248, 244, 220); p.px(10, 9, 226, 248, 244, 220);
+  p.px(7, 12, 190, 236, 230, 180);
 };
 
 painters[TILE.PEARL_CHIME] = (p) => {

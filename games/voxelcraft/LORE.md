@@ -203,6 +203,12 @@ specific item vocabulary.
   which the Wanderlings agree is very rude and very like a sea. What it
   finally lets go of is the **Tideheart**: the piece of the drowned sea
   that kept beating, and proof the floor shook first.
+- **Heartglass** — the Tideheart run molten in the kiln: a warm teal pane
+  with the beat still caught in it. It burns as bright as any torch, but
+  the dark gives it a WIDE berth — twice a torch's watch — because the
+  dark remembers what the heart belonged to, and it isn't going back to
+  ask. One pane over the door holds a homestead the way a wall of
+  torches does; the Prowl itself won't seat anything inside its light.
 - **The Tuftling** — a small tufty burrower of the meadows, mostly tail
   and opinion, and mad for Silverfin. Offer it one and it might decide
   you are its person (it keeps the fish either way; it is not a

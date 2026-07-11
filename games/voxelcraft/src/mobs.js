@@ -7,7 +7,7 @@ import * as THREE from "three";
 import {
   BLOCKS, GRASS, SAND, MUD, WATER, LAVA, isFluid, COAL_ORE, TORCH,
   SNUFFET_LOIN, MOSS_CLUMP, KELP_GLAND, DUSK_PEARL, STARSTONE, AIR,
-  LEAVES, LEAVES_COLD, isSolid, PEARLSAND, NACRE, TIDEHEART,
+  LEAVES, LEAVES_COLD, isSolid, PEARLSAND, NACRE, TIDEHEART, HEARTGLASS,
 } from "./blocks.js";
 import { mulberry32 } from "./noise.js";
 
@@ -916,27 +916,35 @@ export class Mobs {
   // a mushroom is not a campfire.
   _nearTorch(world, x, y, z) {
     const cx = Math.floor(x) >> 4, cz = Math.floor(z) >> 4;
-    const r2 = TORCH_SAFE_DIST * TORCH_SAFE_DIST;
-    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+    // Heartglass watches DOUBLE the torch's distance (the pane the dark
+    // won't argue with), which reaches into a second ring of chunks — the
+    // outer ring is scanned for heartglass ONLY, so the everyday 3x3 cost
+    // is unchanged when nobody has slain an Undertow yet
+    for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) {
+      const outer = Math.abs(dx) === 2 || Math.abs(dz) === 2;
       const c = world.getChunk(cx + dx, cz + dz);
       if (!c || c.emitters.size === 0) continue;
       for (const [idx, level] of c.emitters) {
+        const lx = idx % 16, ly = (idx / 256) | 0, lz = ((idx / 16) | 0) % 16;
+        // only full-strength emitters can be heartglass — one cheap array
+        // read tells them apart from torches
+        const heart = level >= 14 && c.get(lx, ly, lz) === HEARTGLASS;
+        if (outer && !heart) continue;
         // the safety radius scales with the emitter's strength: proper
         // lights (torch 14, starstone/Emberwash 13, starglass 11) keep the
         // full watch; DIM growth — a gleam moss tuft (7), a Wispcap (8) —
         // only guards its own small pool of light, so the deep stays
         // dangerous between the tufts (a mushroom is not a campfire)
-        const safe = level >= 11 ? TORCH_SAFE_DIST : TORCH_SAFE_DIST * (level / 14);
+        const safe = heart ? TORCH_SAFE_DIST * 2
+          : level >= 11 ? TORCH_SAFE_DIST : TORCH_SAFE_DIST * (level / 14);
         const s2 = safe * safe;
         // y first: one compare rejects a surface spawn 30 blocks above the
         // Emberwash without paying the full distance math per pool cell
-        const ly = (idx / 256) | 0;
         const dy2 = (ly - y) * (ly - y);
         if (dy2 >= s2) continue;
-        const lx = idx % 16, lz = ((idx / 16) | 0) % 16;
         const ex = c.cx * 16 + lx, ez = c.cz * 16 + lz;
         const d2 = (ex - x) ** 2 + dy2 + (ez - z) ** 2;
-        if (d2 < Math.min(r2, s2)) return true;
+        if (d2 < s2) return true;
       }
     }
     return false;

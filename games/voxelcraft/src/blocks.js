@@ -318,6 +318,10 @@ export const TIDE_BROTH = 163;
 // standing in a pearl-bed (consumed by the ringing).
 export const TIDEHEART = 164;
 export const PEARL_CHIME = 165;
+// HEARTGLASS: the Tideheart run molten — a pane whose light the dark
+// won't argue with (mobs.js gives it DOUBLE the torch's spawn-guard
+// radius; one pane holds a homestead the way a wall of torches does).
+export const HEARTGLASS = 166;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -925,6 +929,17 @@ BLOCKS[PEARL_CHIME] = def("Pearl Chime", {
   hardness: 0.05,
   placeable: false,
   sound: "glass",
+});
+// Heartglass: starglass's mesh rules exactly (cutout pane, drops itself),
+// full torch brightness — and mobs.js watches DOUBLE the distance for it
+BLOCKS[HEARTGLASS] = def("Heartglass", {
+  tiles: cube(TILE.HEARTGLASS),
+  hardness: 0.6,
+  opaque: false,
+  bucket: "cutout",
+  cullSame: true,
+  sound: "glass",
+  lightEmit: 14,
 });
 
 // the Loomstone: a pearl bedded in stone; the light pools in the basin.
