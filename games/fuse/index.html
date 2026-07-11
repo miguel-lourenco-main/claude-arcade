@@ -51,6 +51,9 @@
     </footer>
   </main>
 
-  <script type="module" src="src/main.js"></script>
+  <!-- Classic scripts in dependency order — ES modules are blocked on file:// -->
+  <script src="src/logic.js"></script>
+  <script src="src/audio.js"></script>
+  <script src="src/main.js"></script>
 </body>
 </html>
