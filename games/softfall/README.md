@@ -28,9 +28,13 @@ fuel. Glowing strokes on dark, everything canvas-drawn, every sound synthesized.
 
 ## Architecture
 
-- `index.html` — canvas + start overlay + footer hints; no build step, plain script tag.
+- `index.html` — canvas + start overlay + footer hints; no build step, plain script tags
+  (works from `file://`).
 - `style.css` — arcade-shell dark theme (`#0d0f12`), cyan accent, monospace chrome.
-- `src/main.js` — the whole game in one IIFE:
+- `src/logic.js` — the pure game logic (constants, terrain generation, ship physics,
+  contact/landing rules, scoring/refuel math). Dual-environment: `window.SoftfallLogic`
+  in the browser, `module.exports` in node for the test suite.
+- `src/main.js` — everything else in one IIFE:
   - **Fixed timestep**: 120 Hz accumulator; rendering interpolates the ship between ticks
     (wrap-aware lerp), so physics is identical at any refresh rate.
   - **Physics**: per tick `vy += g·dt`; while thrusting `v += (sin a, −cos a)·T·dt` and
@@ -51,3 +55,6 @@ fuel. Glowing strokes on dark, everything canvas-drawn, every sound synthesized.
     falling sweep. Toggle persists under `arcade.softfall.audio`.
   - A tiny `window.__softfall` handle exposes read-only state for the headless test
     harness (terrain invariants + an autopilot that verifies landings are achievable).
+- `test/` — committed suite: `logic.test.js` (node, pure logic) and `browser.test.mjs`
+  (headless-Chrome CDP, drives every feature above over both `http://` and `file://`).
+  See `test/README.md`.
