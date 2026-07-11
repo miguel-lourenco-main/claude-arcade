@@ -165,7 +165,16 @@ export class Player {
     this._starveTimer = 0;
   }
 
-  get maxAir() { return AIR_SECONDS; }
+  // the Nacre Crown's gift (armor.tide): the wearer's lungs remember the
+  // sea, and the air meter doubles. A getter, so the HUD, the drown timer,
+  // and the refill clamp all agree the moment the crown goes on or off.
+  get maxAir() {
+    for (const s of this.wear || []) {
+      const a = s && BLOCKS[s.id] && BLOCKS[s.id].armor;
+      if (a && a.tide) return AIR_SECONDS * 2;
+    }
+    return AIR_SECONDS;
+  }
 
   // a whim takes hold: refreshed to the longer of current/new, never stacked.
   // Kelpguard is also the cure — applying it washes the Mire-rot out.
@@ -448,7 +457,7 @@ export class Player {
       this._peakY = this.pos.y;
       this._sinceDamage += dt;
       if (!this.eyeInWater) { // catching breath on the bench
-        this.air = Math.min(AIR_SECONDS, this.air + dt * 4);
+        this.air = Math.min(this.maxAir, this.air + dt * 4);
       }
       return;
     }

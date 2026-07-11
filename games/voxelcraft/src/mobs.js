@@ -7,7 +7,7 @@ import * as THREE from "three";
 import {
   BLOCKS, GRASS, SAND, MUD, WATER, LAVA, isFluid, COAL_ORE, TORCH,
   SNUFFET_LOIN, MOSS_CLUMP, KELP_GLAND, DUSK_PEARL, STARSTONE, AIR,
-  LEAVES, LEAVES_COLD, isSolid,
+  LEAVES, LEAVES_COLD, isSolid, PEARLSAND, NACRE,
 } from "./blocks.js";
 import { mulberry32 } from "./noise.js";
 
@@ -91,6 +91,18 @@ export const SPECIES = {
     deathLine: "The Unshaken comes apart into ordinary night.",
     splitLine: "The shadow splits!",
     goneLine: "The shadow settles back into the ground.",
+  },
+  // the Shellback: the keeper of the pearl-beds (see LORE.md). To a passing
+  // Wanderling it reads as one more nacre-crusted boulder on the bed floor —
+  // until the treasure moves. Ambush like the Stalkid (motionless until
+  // something steps close, then all shoulders), heavy on its feet, near-
+  // unmoved by knockback, and the only thing in either sky that sheds NACRE.
+  // Habitat "undersky" matches neither day- nor night-cleanup rule, and the
+  // spawn director only deals it where the far country's floor shows.
+  shellback: {
+    name: "Shellback", hp: 24, speed: 1.7, behavior: "ambush", habitat: "undersky",
+    cap: 2, halfW: 0.55, height: 0.9, damage: 5, aggro: 3.2, attackRange: 1.6,
+    knockResist: 0.9, drops: [[NACRE, 2]], sound: "clicks", gleam: 12,
   },
   // the Peddler: a wandering trader Wanderling, hunched under an enormous
   // patchwork backpack. Day-only (gone by dusk, the way the Murkling is gone
@@ -188,6 +200,15 @@ export class Mobs {
     // Prickleback: cactus-green slab with sand belly
     const prBody = this._mat(paint(0xd41, [74, 128, 58], 10));
     const prSpine = this._mat(paint(0xd42, [206, 196, 150], 8));
+    // Shellback: slate hide under a nacre-crusted shell — the crust catches
+    // pink and green, exactly the pearl-bed floor it pretends to be part of
+    const shBody = this._mat(paint(0x5b01, [88, 92, 104], 9));
+    const shShell = this._mat(paint(0x5b02, [176, 180, 194], 11, (ctx, rand) => {
+      for (let i = 0; i < 10; i++) {
+        ctx.fillStyle = rand() < 0.5 ? "rgb(214,190,200)" : "rgb(188,210,198)";
+        ctx.fillRect((rand() * 16) | 0, (rand() * 16) | 0, 1, 1);
+      }
+    }));
     // Mirewalker: kelp-dark dredger of the flooded ruins
     const miBody = this._mat(paint(0xe51, [44, 62, 48], 8, (ctx, rand) => {
       for (let x = 0; x < 16; x += 3) {
@@ -434,6 +455,32 @@ export class Mobs {
         for (const [lx, lz] of [[-0.3, 0.35], [0.3, 0.35], [-0.3, -0.35], [0.3, -0.35]]) {
           const leg = box(0.16, 0.18, 0.16, prBody);
           leg.position.set(lx, 0.09, lz);
+          g.add(leg); legs.push(leg);
+        }
+        return { group: g, legs };
+      },
+      // the Shellback: a low broad dome over stubby feet — parked, it reads
+      // as a boulder (the ambush AI keeps it motionless until the pounce)
+      shellback: () => {
+        const g = new THREE.Group();
+        const body = box(1.0, 0.5, 1.1, shBody);
+        body.position.y = 0.35;
+        g.add(body);
+        // the shell: two stepped nacre tiers doming the back
+        const shellLow = box(1.1, 0.3, 1.2, shShell);
+        shellLow.position.y = 0.62;
+        g.add(shellLow);
+        const shellHigh = box(0.8, 0.24, 0.9, shShell);
+        shellHigh.position.y = 0.86;
+        g.add(shellHigh);
+        // a heavy brow peeking out the front of the dome
+        const brow = box(0.5, 0.18, 0.22, shBody);
+        brow.position.set(0, 0.5, 0.6);
+        g.add(brow);
+        const legs = [];
+        for (const [lx, lz] of [[-0.4, 0.4], [0.4, 0.4], [-0.4, -0.4], [0.4, -0.4]]) {
+          const leg = box(0.18, 0.2, 0.18, shBody);
+          leg.position.set(lx, 0.1, lz);
           g.add(leg); legs.push(leg);
         }
         return { group: g, legs };
@@ -898,6 +945,12 @@ export class Mobs {
     }
     if (night && isSolid(topId)) candidates.push("murkling");
     if (biome === "desert" && topId === SAND) candidates.push("prickleback");
+    // the pearl-beds' keeper: only where the far country's floor shows, and
+    // only toward a bed's heart (pearlBedAt exists only on that terrain)
+    if (topId === PEARLSAND && terrain.pearlBedAt &&
+        terrain.pearlBedAt(x, z) > 0.35) {
+      candidates.push("shellback");
+    }
     if (topId === SAND || topId === GRASS || topId === MUD) {
       // shoreline: standing water within 3 blocks (the Mirelands' Mire Sod
       // counts as shore ground — the bog is Mirewalker country)
@@ -939,9 +992,15 @@ export class Mobs {
     // creatures of the old sky (murkling/stalkid) pass the full darkness
     // gate — light at the CELL, not just the hour; other hostiles (the
     // Mirewalker walks in daylight) only respect torch pools, as before
+    // the Shellback is exempt from the light veto: it LIVES in the light —
+    // the pearl-beds it keeps are studded with lit starstone, and a keeper
+    // the glow chased off would keep nothing
     if (pick === "murkling" || pick === "stalkid") {
       if (!this.canHostileSpawnAt(world, x, spawnY, z, night)) return;
-    } else if (hostile && this._nearTorch(world, x + 0.5, spawnY, z + 0.5)) return;
+    } else if (hostile && pick !== "shellback" &&
+               this._nearTorch(world, x + 0.5, spawnY, z + 0.5)) {
+      return;
+    }
 
     this.spawnAt(x + 0.5, spawnY + 0.01, z + 0.5, pick);
   }

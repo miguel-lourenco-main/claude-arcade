@@ -185,6 +185,9 @@ export const TILE = {
   // drowned floor, and the petrified kelp still holding its bead of light.
   PEARLSAND: 137,
   STARKELP: 138,
+  // what the Shellback sheds, and what the near country makes of it
+  NACRE: 139,
+  CROWN_NACRE: 140,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -1604,6 +1607,8 @@ const ARMOR_PALETTES = {
   bark: { hi: [150, 116, 72], mid: [118, 90, 54], lo: [82, 62, 38] },
   iron: TOOL_PALETTES.iron,
   gloam: TOOL_PALETTES.gloam,
+  // shell-ware: the Nacre Crown's pearly plate (one-off — crown only)
+  nacre: { hi: [232, 236, 244], mid: [204, 206, 222], lo: [160, 164, 186] },
 };
 const TRIM_MUSTARD = [214, 176, 74];
 
@@ -1681,6 +1686,7 @@ painters[TILE.JERKIN_IRON] = armorPainter("jerkin", ARMOR_PALETTES.iron);
 painters[TILE.LEGGINGS_IRON] = armorPainter("leggings", ARMOR_PALETTES.iron);
 painters[TILE.TREADS_IRON] = armorPainter("treads", ARMOR_PALETTES.iron);
 painters[TILE.CROWN_GLOAM] = armorPainter("crown", ARMOR_PALETTES.gloam);
+painters[TILE.CROWN_NACRE] = armorPainter("crown", ARMOR_PALETTES.nacre);
 painters[TILE.JERKIN_GLOAM] = armorPainter("jerkin", ARMOR_PALETTES.gloam);
 painters[TILE.LEGGINGS_GLOAM] = armorPainter("leggings", ARMOR_PALETTES.gloam);
 painters[TILE.TREADS_GLOAM] = armorPainter("treads", ARMOR_PALETTES.gloam);
@@ -2237,6 +2243,23 @@ painters[TILE.STARKELP] = (p) => {
     p.px(bx, by, 224, 240, 226);
     p.px(bx, by - 1, 168, 204, 182);
   }
+};
+
+painters[TILE.NACRE] = (p) => {
+  // a curved shard of shell: pearly layers banded across the chip, with
+  // the two-tone shimmer pearlsand borrows — pink one way, green the other
+  p.clear();
+  for (let y = 4; y <= 12; y++) {
+    const half = Math.round(5 - Math.abs(y - 8) * 0.55); // a lens shape
+    for (let x = 8 - half; x <= 7 + half; x++) {
+      const band = (y - 4) % 3;
+      const c = band === 0 ? [226, 228, 238] : band === 1 ? [204, 206, 222] : [186, 190, 210];
+      const d = (p.rand() * 2 - 1) * 6;
+      p.px(x, y, c[0] + d, c[1] + d, c[2] + d);
+    }
+  }
+  p.px(6, 6, 232, 206, 214); p.px(10, 10, 208, 228, 216); // the shimmer
+  p.px(5, 9, 244, 246, 250); // one bright catch of light
 };
 
 export function buildAtlas(seed = 1337) {

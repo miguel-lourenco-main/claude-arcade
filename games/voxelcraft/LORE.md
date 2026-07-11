@@ -296,6 +296,21 @@ specific item vocabulary.
   drowned light pooled and sank in. The dunes dip, the Starkelp crowds up
   thick, and lit starstone studs the floor itself — treasure lying in the
   open, which any Wanderling will tell you is the most suspicious kind.
+- **The Shellback** — what tends the pearl-beds, and the answer to why the
+  treasure lies in the open. A low broad dome of slate hide under a
+  nacre-crusted shell, parked among the boulders of a bed floor and
+  indistinguishable from them until a hand-foot reaches for a seam. It
+  does not chase; it does not need to — it is already exactly where you
+  want to be. Heavy as an argument, barely moved by a shove, and polite
+  in the Upturn's particular way: it announces itself only once, all
+  shoulders. Its shell sheds **Nacre**, which is the whole reason anyone
+  files the report.
+- **Nacre** — the drowned sea's mother-of-pearl, shed in curved shards off
+  a Shellback's shell and found nowhere else in either sky. The near
+  country's smiths set it over a gloam band as the **Nacre Crown**: a
+  crown that argues like gloamgold and carries the old sea in it — the
+  wearer's lungs remember water, and a held breath lasts twice as long.
+  Divers swear by it. The Shellbacks, presumably, resent this.
 - **The Delvings-Under** — the Steads-Before didn't just farm; they dug.
   Timbered galleries chasing sky-iron down into the old-sky dark, rung
   shafts up to little head-frames that have mostly given up standing

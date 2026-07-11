@@ -22,8 +22,11 @@ export function makeUnderskyGenerator(seed) {
 
   // 0..1: how deep into a pearl-bed this column sits. The beds are wide,
   // sparse basins — most of the country is 0.
+  // saturation at 0.4 keeps proper (fully-sunk) beds reachable from any
+  // arrival: the fbm only grazes higher peaks in some regions, and a far
+  // country whose treasure never quite surfaces reads as a bug, not a hunt
   const pearlBedAt = (x, z) =>
-    smoothstep(0.26, 0.5, beds.fbm2(x * 0.004 + 900, z * 0.004 - 900, 3));
+    smoothstep(0.2, 0.4, beds.fbm2(x * 0.004 + 900, z * 0.004 - 900, 3));
 
   // gentle dune swells ~18..28, pressed down up to 5 into a bed's basin.
   // No sea, no mountains — the old floor never had weather ambitious

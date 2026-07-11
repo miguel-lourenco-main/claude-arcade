@@ -300,6 +300,12 @@ export const PORTAL_FILM = 157;
 // in a satchel like anything else.
 export const PEARLSAND = 158;
 export const STARKELP = 159;
+// NACRE is what the Shellback's shell sheds (see LORE.md / mobs.js) — the
+// far country's only export worth the trip; NACRE_CROWN is what the near
+// country makes of it: a crown-slot piece at gloamgold protection whose
+// wearer's lungs remember the sea (player.js doubles the air meter).
+export const NACRE = 160;
+export const NACRE_CROWN = 161;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -1187,6 +1193,36 @@ BLOCKS[STARKELP] = def("Starkelp", {
   opaque: false,
   sound: "plant",
   lightEmit: 6,
+});
+
+// Nacre: a carried material like the Dusk Pearl — nothing sheds it but a
+// Shellback's shell, and (for now) nothing consumes it but the crown
+BLOCKS[NACRE] = def("Nacre", {
+  tiles: cube(TILE.NACRE),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  hardness: 0.05,
+  placeable: false,
+  sound: "stone",
+});
+// the Nacre Crown: a one-off top tier for one slot, like the Wanderwing is
+// for the jerkin — gloam-crown protection plus `armor.tide`, which player.js
+// reads as a doubled air meter. Tier "nacre" has no plate overlay in
+// player-model.js (the Wanderwing precedent: unknown tiers simply don't
+// render), so the crown shows on the meter, not the model.
+BLOCKS[NACRE_CROWN] = def("Nacre Crown", {
+  tiles: cube(TILE.CROWN_NACRE),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  hardness: 0.05,
+  placeable: false,
+  sound: "stone",
+  maxStack: 1,
+  armor: { kind: "crown", tier: "nacre", prot: 0.14, maxDur: 384, tide: true },
 });
 
 // --- the Pearlfall's gifts ------------------------------------------------------
