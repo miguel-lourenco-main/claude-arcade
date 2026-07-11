@@ -1,4 +1,6 @@
-// Gloamkeep — map data + parser. Pure module (no DOM), drivable from node.
+// Gloamkeep — map data + parser. Pure logic (no DOM), drivable from node.
+// Classic script (no ES modules, so the game works from file://): the API is
+// attached to the page-global `Gloamkeep` namespace.
 //
 // Legend:
 //   '#' stone wall      '%' mossy wall      '&' banner wall
@@ -10,7 +12,11 @@
 //   items:   '+' health '(' is unused; 'a' ammo  '1'/'2'/'3' keys  '*' ember shard
 //   't' torch (decor sprite, floor cell near a wall)
 
-export const TILE = {
+(function () {
+'use strict';
+const G = globalThis.Gloamkeep = globalThis.Gloamkeep || {};
+
+const TILE = {
   EMPTY: 0,
   STONE: 1,
   MOSS: 2,
@@ -45,7 +51,7 @@ const ITEM_CHARS = {
   '*': 'shard',
 };
 
-export const MAPS = [
+const MAPS = [
   {
     name: 'The Undercroft',
     spawnAngle: 0, // facing +x (east)
@@ -140,7 +146,7 @@ export const MAPS = [
 ];
 
 // Parse a raw map definition into a level structure.
-export function parseMap(def) {
+function parseMap(def) {
   const rows = def.rows;
   const h = rows.length;
   const w = rows[0].length;
@@ -216,7 +222,7 @@ export function parseMap(def) {
 
 // Progressive reachability: BFS from spawn; locked doors open once the
 // matching key item has been reached. Secret push-walls count as solid.
-export function validateReachability(level) {
+function validateReachability(level) {
   const { w, h, grid, doorIdx, doors } = level;
   const keys = [false, false, false];
   const problems = [];
@@ -324,7 +330,7 @@ export function validateReachability(level) {
   return problems;
 }
 
-export function dumpMap(def) {
+function dumpMap(def) {
   // debugging aid: print with a column ruler
   const w = Math.max(...def.rows.map((r) => r.length));
   let out = '    ' + Array.from({ length: w }, (_, i) => i % 10).join('') + '\n';
@@ -333,3 +339,6 @@ export function dumpMap(def) {
   });
   return out;
 }
+
+Object.assign(G, { TILE, MAPS, parseMap, validateReachability, dumpMap });
+})();

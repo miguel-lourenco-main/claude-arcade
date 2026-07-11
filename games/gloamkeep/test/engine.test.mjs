@@ -1,9 +1,14 @@
 // Headless engine tests for Gloamkeep. Run: node games/gloamkeep/test/engine.test.mjs
-import { MAPS, parseMap, validateReachability, dumpMap, TILE } from '../src/maps.js';
-import {
+// The src files are classic scripts (file:// friendly) that attach their API to
+// the global `Gloamkeep` namespace; importing them for side effects loads it.
+import '../src/maps.js';
+import '../src/game.js';
+
+const {
+  MAPS, parseMap, validateReachability, dumpMap, TILE,
   createGame, tick, makeInput, castRay, DT, hasLineOfSight,
   damageEnemy, damagePlayer, ENEMY_DEFS, LEVEL_COUNT,
-} from '../src/game.js';
+} = globalThis.Gloamkeep;
 
 let failures = 0;
 function ok(cond, msg) {

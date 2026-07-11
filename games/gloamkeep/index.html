@@ -104,6 +104,12 @@
     </div>
   </div>
 
-  <script type="module" src="src/main.js"></script>
+  <!-- classic scripts in dependency order (ES modules are blocked on file://) -->
+  <script src="src/maps.js"></script>
+  <script src="src/game.js"></script>
+  <script src="src/textures.js"></script>
+  <script src="src/render.js"></script>
+  <script src="src/audio.js"></script>
+  <script src="src/main.js"></script>
 </body>
 </html>

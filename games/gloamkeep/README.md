@@ -38,7 +38,10 @@ ranged bolt). 2–3 animation frames each, plus a death frame.
 
 ## Architecture
 
-Vanilla ES modules, zero dependencies, no build step.
+Vanilla JS, zero dependencies, no build step. The files are classic scripts
+(not ES modules, which Chrome blocks on `file://`) loaded in dependency
+order; each attaches its API to the page-global `Gloamkeep` namespace, so
+double-clicking `index.html` just works.
 
 - `src/maps.js` — three handcrafted ASCII grid maps + parser + reachability
   validator (progressive BFS that respects key/door gating; secrets checked
@@ -71,15 +74,14 @@ Vanilla ES modules, zero dependencies, no build step.
   accumulator loop, HUD, overlays and flow (title / pause / level tally /
   death / victory), persistence.
 
-## Headless tests
+## Tests
 
-The logic core runs in Node with no DOM:
+The logic core runs in Node with no DOM, and a headless-Chrome suite drives
+the real page (over both `http://` and `file://`) through every feature
+above — see `test/README.md`:
 
 ```
-node test/engine.test.mjs
+node test/logic.test.js       # core rules, plain asserts
+node test/engine.test.mjs     # deep engine suite + perf smoke
+node test/browser.test.mjs    # headless Chrome, real buttons and keys
 ```
-
-covering map validity/reachability, raycast geometry, door and push-wall
-behaviour, sliding collision, hitscan/combat, AI alerting and chasing,
-pickups, the death/complete flows, determinism, and a raycast performance
-smoke test.

@@ -2,16 +2,20 @@
 // Renders into a 480-wide framebuffer (Uint32, ABGR) and upscales with crisp
 // pixels. The per-column wall loop and sprite loops are allocation-free.
 
-import { TILE } from './maps.js';
-import { castRay, ENEMY_DEFS } from './game.js';
+// Classic script on the `Gloamkeep` namespace; load after maps.js + game.js.
 
-export const IW = 480;               // internal resolution
-export const IH = 300;
+(function () {
+'use strict';
+const G = globalThis.Gloamkeep = globalThis.Gloamkeep || {};
+const { TILE, castRay, ENEMY_DEFS } = G;
+
+const IW = 480;               // internal resolution
+const IH = 300;
 const FOV = (66 * Math.PI) / 180;
 const TAN_HALF = Math.tan(FOV / 2);
 const PROJ = (IW / 2) / TAN_HALF;    // projection plane distance in pixels
 
-export function createRenderer(displayCanvas, minimapCanvas, assets) {
+function createRenderer(displayCanvas, minimapCanvas, assets) {
   const inner = document.createElement('canvas');
   inner.width = IW; inner.height = IH;
   const ictx = inner.getContext('2d');
@@ -351,3 +355,6 @@ export function createRenderer(displayCanvas, minimapCanvas, assets) {
 
   return { render };
 }
+
+Object.assign(G, { IW, IH, createRenderer });
+})();

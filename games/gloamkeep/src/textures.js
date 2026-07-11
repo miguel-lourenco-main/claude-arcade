@@ -2,10 +2,14 @@
 // Everything is drawn once at boot into offscreen canvases, then extracted as
 // Uint32Array pixel data (ABGR, little-endian) for the software renderer.
 
-import { TILE } from './maps.js';
-import { makeRng } from './game.js';
+// Classic script on the `Gloamkeep` namespace; load after maps.js + game.js.
 
-export const TEX_SIZE = 64;
+(function () {
+'use strict';
+const G = globalThis.Gloamkeep = globalThis.Gloamkeep || {};
+const { TILE, makeRng } = G;
+
+const TEX_SIZE = 64;
 
 function makeCanvas(w, h) {
   const c = document.createElement('canvas');
@@ -671,7 +675,7 @@ function weaponCanvas(flash) {
 
 // --- public ------------------------------------------------------------------
 
-export function makeAssets() {
+function makeAssets() {
   const walls = [];
   walls[TILE.STONE] = stoneTex();
   walls[TILE.MOSS] = mossTex();
@@ -708,3 +712,6 @@ export function makeAssets() {
     weaponFlash: weaponCanvas(true),
   };
 }
+
+Object.assign(G, { TEX_SIZE, makeAssets });
+})();

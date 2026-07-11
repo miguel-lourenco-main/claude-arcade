@@ -1,22 +1,24 @@
 // Gloamkeep — pure game logic. No DOM, no audio: drivable headlessly from node.
 // Fixed-timestep: call tick(state, input, DT) with DT = 1/60.
+// Classic script on the `Gloamkeep` namespace; load after maps.js.
 
-import { TILE, MAPS, parseMap } from './maps.js';
+(function () {
+'use strict';
+const G = globalThis.Gloamkeep = globalThis.Gloamkeep || {};
+const { TILE, MAPS, parseMap } = G;
 
-export { TILE };
+const DT = 1 / 60;
+const PLAYER_RADIUS = 0.3;
+const MAX_HP = 100;
+const MAX_AMMO = 99;
+const FIRE_COOLDOWN = 0.34;
+const WEAPON_RANGE = 24;
+const DOOR_SPEED = 1 / 0.8;   // full open in 0.8s
+const DOOR_HOLD = 4;          // seconds before auto-close
+const PUSH_SPEED = 0.9;       // tiles/s
+const KEY_NAMES = ['crimson', 'viridian', 'gold'];
 
-export const DT = 1 / 60;
-export const PLAYER_RADIUS = 0.3;
-export const MAX_HP = 100;
-export const MAX_AMMO = 99;
-export const FIRE_COOLDOWN = 0.34;
-export const WEAPON_RANGE = 24;
-export const DOOR_SPEED = 1 / 0.8;   // full open in 0.8s
-export const DOOR_HOLD = 4;          // seconds before auto-close
-export const PUSH_SPEED = 0.9;       // tiles/s
-export const KEY_NAMES = ['crimson', 'viridian', 'gold'];
-
-export const ENEMY_DEFS = {
+const ENEMY_DEFS = {
   gloam:   { hp: 30,  speed: 1.7,  melee: [7, 13],  ranged: false, points: 100, radius: 0.30, sightR: 12, attackRange: 1.05, meleeCd: 1.15, windup: 0.32, patrol: true,  scale: 0.85 },
   stalker: { hp: 18,  speed: 2.7,  melee: [5, 9],   ranged: false, points: 150, radius: 0.26, sightR: 13, attackRange: 0.95, meleeCd: 0.85, windup: 0.24, patrol: true,  scale: 0.72 },
   husk:    { hp: 42,  speed: 1.15, melee: [4, 7],   ranged: true,  boltDmg: [9, 15],  boltCd: 1.9, boltRange: 10, points: 200, radius: 0.32, sightR: 14, attackRange: 1.0, meleeCd: 1.3, windup: 0.42, patrol: false, scale: 0.95 },
@@ -24,7 +26,7 @@ export const ENEMY_DEFS = {
 };
 
 // deterministic RNG (mulberry32)
-export function makeRng(seed) {
+function makeRng(seed) {
   let a = seed >>> 0;
   return function () {
     a |= 0; a = (a + 0x6d2b79f5) | 0;
@@ -34,7 +36,7 @@ export function makeRng(seed) {
   };
 }
 
-export function createGame(levelIndex, carry, seed) {
+function createGame(levelIndex, carry, seed) {
   const level = parseMap(MAPS[levelIndex]);
   const rng = makeRng(seed === undefined ? 0x610a317 : seed);
   const state = {
@@ -108,7 +110,7 @@ function emit(state, type, data) {
   state.events.push(data ? { type, ...data } : { type });
 }
 
-export function say(state, text, t) {
+function say(state, text, t) {
   state.message = text;
   state.messageTimer = t || 2.6;
 }
@@ -117,7 +119,7 @@ export function say(state, text, t) {
 // Solidity / collision
 // ---------------------------------------------------------------------------
 
-export function cellSolid(state, cx, cy) {
+function cellSolid(state, cx, cy) {
   const m = state.map;
   if (cx < 0 || cy < 0 || cx >= m.w || cy >= m.h) return true;
   const t = m.grid[cy * m.w + cx];
@@ -136,7 +138,7 @@ function circleBoxOverlap(x, y, r, bx, by) {
   return dx * dx + dy * dy < r * r;
 }
 
-export function circleBlocked(state, x, y, r) {
+function circleBlocked(state, x, y, r) {
   const minX = Math.floor(x - r), maxX = Math.floor(x + r);
   const minY = Math.floor(y - r), maxY = Math.floor(y + r);
   for (let cy = minY; cy <= maxY; cy++) {
@@ -155,7 +157,7 @@ export function circleBlocked(state, x, y, r) {
 }
 
 // Per-axis move so the mover slides along walls.
-export function moveWithCollision(state, ent, dx, dy) {
+function moveWithCollision(state, ent, dx, dy) {
   const r = ent.radius;
   if (dx !== 0 && !circleBlocked(state, ent.x + dx, ent.y, r)) ent.x += dx;
   if (dy !== 0 && !circleBlocked(state, ent.x, ent.y + dy, r)) ent.y += dy;
@@ -166,7 +168,7 @@ export function moveWithCollision(state, ent, dx, dy) {
 // dirX/dirY must be normalized. Fills `out`, allocation-free.
 // ---------------------------------------------------------------------------
 
-export function castRay(state, ox, oy, dirX, dirY, out, maxDist) {
+function castRay(state, ox, oy, dirX, dirY, out, maxDist) {
   const m = state.map;
   const MAXD = maxDist || 40;
   let mapX = Math.floor(ox), mapY = Math.floor(oy);
@@ -282,7 +284,7 @@ function pushwallAt(state, x, y) {
 }
 
 const losOut = { hit: false, dist: 0, side: 0, tex: 0, texU: 0 };
-export function hasLineOfSight(state, x0, y0, x1, y1) {
+function hasLineOfSight(state, x0, y0, x1, y1) {
   const dx = x1 - x0, dy = y1 - y0;
   const dist = Math.hypot(dx, dy);
   if (dist < 0.001) return true;
@@ -294,7 +296,7 @@ export function hasLineOfSight(state, x0, y0, x1, y1) {
 // Doors & push-walls
 // ---------------------------------------------------------------------------
 
-export function tryOpenDoor(state, door, byPlayer) {
+function tryOpenDoor(state, door, byPlayer) {
   if (door.state === 1 || door.state === 2) return true;
   if (door.locked) {
     if (!byPlayer) return false;
@@ -544,7 +546,7 @@ function updatePlayer(state, input, dt) {
   }
 }
 
-export function damagePlayer(state, dmg, srcX, srcY) {
+function damagePlayer(state, dmg, srcX, srcY) {
   const p = state.player;
   if (!p.alive || state.status !== 'playing') return;
   p.hp -= dmg;
@@ -569,7 +571,7 @@ export function damagePlayer(state, dmg, srcX, srcY) {
 // Enemies
 // ---------------------------------------------------------------------------
 
-export function damageEnemy(state, e, dmg) {
+function damageEnemy(state, e, dmg) {
   if (e.state === 'dead') return;
   e.hp -= dmg;
   e.hitFlash = 0.12;
@@ -832,7 +834,7 @@ function updateBolts(state, dt) {
 // Tick
 // ---------------------------------------------------------------------------
 
-export function tick(state, input, dt) {
+function tick(state, input, dt) {
   if (state.status !== 'playing') return;
   state.time += dt;
   if (state.messageTimer > 0) {
@@ -852,8 +854,17 @@ export function tick(state, input, dt) {
   for (const it of state.items) it.bobT += dt;
 }
 
-export function makeInput() {
+function makeInput() {
   return { forward: 0, strafe: 0, turnDir: 0, lookDelta: 0, fire: false, usePressed: false };
 }
 
-export const LEVEL_COUNT = MAPS.length;
+const LEVEL_COUNT = MAPS.length;
+
+Object.assign(G, {
+  DT, PLAYER_RADIUS, MAX_HP, MAX_AMMO, FIRE_COOLDOWN, WEAPON_RANGE,
+  DOOR_SPEED, DOOR_HOLD, PUSH_SPEED, KEY_NAMES, ENEMY_DEFS, LEVEL_COUNT,
+  makeRng, createGame, say, cellSolid, circleBlocked, moveWithCollision,
+  castRay, hasLineOfSight, tryOpenDoor, damagePlayer, damageEnemy,
+  tick, makeInput,
+});
+})();

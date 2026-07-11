@@ -1,9 +1,11 @@
 // Gloamkeep — browser glue: input, fixed-timestep loop, HUD, overlays, saves.
+// Classic script on the `Gloamkeep` namespace; load last.
 
-import { createGame, tick, makeInput, DT, LEVEL_COUNT, MAX_HP } from './game.js';
-import { makeAssets } from './textures.js';
-import { createRenderer } from './render.js';
-import { createAudio } from './audio.js';
+(function () {
+'use strict';
+const G = globalThis.Gloamkeep = globalThis.Gloamkeep || {};
+const { createGame, tick, makeInput, DT, LEVEL_COUNT, MAX_HP,
+        makeAssets, createRenderer, createAudio } = G;
 
 const LS_HIGH = 'arcade.gloamkeep.high';
 const LS_SOUND = 'arcade.gloamkeep.sound';
@@ -28,6 +30,16 @@ audio.setEnabled(localStorage.getItem(LS_SOUND) !== 'off');
 // ---------------------------------------------------------------------------
 // Input
 // ---------------------------------------------------------------------------
+
+// Pointer lock is best-effort: from file:// (or headless) some Chrome configs
+// refuse it — swallow the error and rely on the arrow-key turn fallback.
+function lockPointer() {
+  if (!screen.requestPointerLock) return;
+  try {
+    const r = screen.requestPointerLock();
+    if (r && typeof r.catch === 'function') r.catch(() => {});
+  } catch (err) { /* pointer lock unavailable; keyboard look still works */ }
+}
 
 const keys = new Set();
 let lookDelta = 0;
@@ -70,7 +82,7 @@ window.addEventListener('keyup', (e) => keys.delete(e.code));
 screen.addEventListener('mousedown', (e) => {
   if (phase === 'playing') {
     if (document.pointerLockElement !== screen) {
-      screen.requestPointerLock();
+      lockPointer();
     }
     if (e.button === 0) firing = true;
   }
@@ -110,7 +122,7 @@ function startLevel(idx, carry) {
   updateHud(true);
   $('hud').classList.remove('hidden');
   minimap.classList.toggle('hidden', !minimapOn);
-  screen.requestPointerLock();
+  lockPointer();
 }
 
 function startRun() {
@@ -143,7 +155,7 @@ function resume() {
   if (phase !== 'paused') return;
   phase = 'playing';
   hideOverlays();
-  screen.requestPointerLock();
+  lockPointer();
 }
 
 function onLevelComplete() {
@@ -322,3 +334,4 @@ function frame(now) {
   if (game) renderer.render(game, fx, elapsed);
 }
 requestAnimationFrame(frame);
+})();

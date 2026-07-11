@@ -1,7 +1,12 @@
 // Gloamkeep — Web Audio synth SFX. No samples; everything is oscillators and
 // filtered noise. The AudioContext is only created after a user gesture.
+// Classic script on the `Gloamkeep` namespace.
 
-export function createAudio() {
+(function () {
+'use strict';
+const G = globalThis.Gloamkeep = globalThis.Gloamkeep || {};
+
+function createAudio() {
   let ctx = null;
   let master = null;
   let noiseBuf = null;
@@ -213,3 +218,6 @@ export function createAudio() {
   };
   return api;
 }
+
+Object.assign(G, { createAudio });
+})();
