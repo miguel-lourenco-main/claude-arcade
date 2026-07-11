@@ -31,6 +31,7 @@ directly via `file://` only works for the arcade shell itself.)
 | [Brickstorm](games/brickstorm/) | Arcade / paddle | Brick breaker: positional paddle bounce, speed ramps, side-resolved collisions, power-ups, procedural levels. |
 | [Mothlight](games/mothlight/) | Arcade / one-button | One-button flight: impulse flaps, forgiving hitbox, parallax night, reachability-clamped gaps. |
 | [Softfall](games/softfall/) | Arcade / physics | Lander: nose-vector thrust, strict touchdown gate, midpoint-displacement terrain, multiplier pads. |
+| [Shardfield](games/shardfield/) | Arcade / space | Inertial vector shooter: frictionless glide, 4-bullet cap, splitting shards, two saucer types, wrap-seam rendering. |
 
 ## Structure
 

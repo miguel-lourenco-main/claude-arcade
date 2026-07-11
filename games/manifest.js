@@ -57,4 +57,12 @@ window.GAMES = [
       "Ride gravity down and feather the throttle: land on flat pads carved into " +
       "jagged vector terrain. Smaller pads pay more — every touchdown refuels less.",
   },
+  {
+    slug: "shardfield",
+    title: "Shardfield",
+    genre: "Arcade / Space",
+    description:
+      "Pilot a lone ship through a wrapping field of splitting rock shards — pure " +
+      "inertia, four bullets, and saucers that learn your name. Glowing vector lines.",
+  },
 ];
