@@ -262,6 +262,26 @@ specific item vocabulary.
   hand back **Bogbeans**; a meal root and two bogbeans simmered together
   make **Wanderer's Pottage**, the dish every satchel dreams about on
   the fourth night out.
+- **The Cinder Door** — Cinderglass is the Emberwash slaked: fire that was
+  made to forget itself. Stand a ring of it upright — two to four hand-spans
+  wide, three or four tall, the corners optional (a door is about the hole,
+  not the trim) — and give it back a full Sky-Iron Pail of the Emberwash,
+  and the glass remembers. Not being molten; being a DOOR. The fire spreads
+  flat across the opening like a skin of sunset and stays, and stepping in
+  and standing a polite moment carries you through to the far side of the
+  flip's fold. Break any stone of the ring and the whole film lets go with
+  a sigh — a door is one thing, not a grid of little fires. The Upturn is
+  courteous about arrivals: if the far country never got its half built,
+  one is standing there waiting anyway.
+- **The Undersky** — where a Cinder Door opens to: the other side of the
+  turning-over, the drowned old floor the night sky has been showing
+  everyone all along. Permanent dusk — there is no sun to raise, and the
+  pearls hang close enough to read by. Pearl-pale dunes over slate, the old
+  floor flecked with starstone where the drowned light pooled, and the dark
+  walks whenever it pleases (there is no dawn to send it home). Wanderlings
+  who cross say the quiet has a texture. What else is down there — what
+  tends the pearl-beds, and what it guards — the delvers are still arguing
+  about, mostly from a distance.
 - **The Delvings-Under** — the Steads-Before didn't just farm; they dug.
   Timbered galleries chasing sky-iron down into the old-sky dark, rung
   shafts up to little head-frames that have mostly given up standing

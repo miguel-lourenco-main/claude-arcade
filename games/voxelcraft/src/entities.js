@@ -157,4 +157,23 @@ export class ItemDrops {
   clear() {
     while (this.drops.length) this._remove(0);
   }
+
+  // a Cinder Door crossing: the live drops belong to the world being left —
+  // fold them out of the scene, meshes and timers intact, and hand the array
+  // to the caller (each dimension keeps its own stash). restore() is the
+  // return trip: the same drops rejoin the scene exactly as they were.
+  stash() {
+    const stashed = this.drops;
+    for (const d of stashed) this.scene.remove(d.mesh);
+    this.drops = [];
+    return stashed;
+  }
+
+  restore(stashed) {
+    if (!Array.isArray(stashed)) return;
+    for (const d of stashed) {
+      this.scene.add(d.mesh);
+      this.drops.push(d);
+    }
+  }
 }

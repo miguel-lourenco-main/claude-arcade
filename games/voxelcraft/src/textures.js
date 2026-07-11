@@ -178,6 +178,9 @@ export const TILE = {
   ROCKET_SUN: 133,
   ROCKET_EMBER: 134,
   ROCKET_GLEAM: 135,
+  // the Cinder Door's film (see LORE.md): the fire a Cinderglass ring
+  // remembers, standing open — an ember-to-plum sheet with bright seams.
+  CINDER_FILM: 136,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -2164,6 +2167,38 @@ const rocketPainter = (band) => (p) => {
 painters[TILE.ROCKET_SUN] = rocketPainter([236, 190, 66]);
 painters[TILE.ROCKET_EMBER] = rocketPainter([214, 74, 56]);
 painters[TILE.ROCKET_GLEAM] = rocketPainter([120, 214, 174]);
+
+painters[TILE.CINDER_FILM] = (p) => {
+  // the Cinder Door's film: the Emberwash's fire given back to the glass.
+  // An ember-orange heart cooling to deep plum at the rim, crossed by the
+  // same bright seams the molten pools wear, with a few nacre sparks — the
+  // old sky showing through the open door. Dithered dark pixels keep it
+  // reading as a sheet of light, not a wall.
+  p.noiseFill([44, 22, 52], 8);
+  for (let y = 0; y < TILE_PX; y++) {
+    for (let x = 0; x < TILE_PX; x++) {
+      // radial heat: bright at the center, plum toward the rim
+      const dx = x - 7.5, dy = y - 7.5;
+      const heat = Math.max(0, 1 - Math.sqrt(dx * dx + dy * dy) / 9);
+      if (p.rand() < 0.28) continue; // the dither — dark cells stay plum
+      const d = (p.rand() * 2 - 1) * 12;
+      p.px(x, y,
+        60 + heat * 150 + d,
+        26 + heat * 74 + d * 0.6,
+        58 + heat * 8 + d * 0.4);
+    }
+  }
+  // bright seams wandering the sheet, like the Emberwash's crust cracks
+  for (let s = 0; s < 3; s++) {
+    let x = 2 + ((p.rand() * 12) | 0);
+    for (let y = 1; y < 15; y++) {
+      p.px(x, y, 236, 148, 84);
+      if (p.rand() < 0.5) x = Math.max(1, Math.min(14, x + (p.rand() < 0.5 ? -1 : 1)));
+    }
+  }
+  // nacre sparks — the drowned stars on the far side
+  p.px(4, 3, 226, 230, 246); p.px(12, 6, 238, 240, 252); p.px(6, 12, 226, 230, 246);
+};
 
 export function buildAtlas(seed = 1337) {
   const size = ATLAS_TILES * TILE_PX;

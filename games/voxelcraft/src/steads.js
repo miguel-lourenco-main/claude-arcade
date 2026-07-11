@@ -428,4 +428,21 @@ export class Steads {
       for (const r of rec.residents) { r.trades = 0; r.tradeDay = -1; }
     }
   }
+
+  // fold EVERY live resident back into its stead record at once — the
+  // deactivate branch of update, applied unconditionally. A Cinder Door
+  // crossing calls this before the world swaps out from under the manager:
+  // steadfolk keep to their patch of the Upturn, they don't cross skies.
+  foldAll(world) {
+    for (const [key, act] of this.active) {
+      const rec = world.steads.get(key);
+      for (const e of act.entries) {
+        if (rec && rec.residents[e.resIdx] && this.mobs.mobs.includes(e.mob)) {
+          rec.residents[e.resIdx].hp = e.mob.hp;
+        }
+        this.mobs.removeMob(e.mob);
+      }
+      this.active.delete(key);
+    }
+  }
 }

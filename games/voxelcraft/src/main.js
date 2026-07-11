@@ -40,8 +40,11 @@ import {
   IRON_INGOT as IRON_INGOT_ID, GLOAM_INGOT as GLOAM_INGOT_ID,
   STARGLASS as STARGLASS_ID, QUILL as QUILL_ID,
   MURK_LANTERN as MURK_LANTERN_ID, LOOMSTONE as LOOMSTONE_ID,
+  PORTAL_FILM as PORTAL_FILM_ID,
 } from "./blocks.js";
 import { makeGenerator, findSpawn, findBiomeLocation } from "./terrain.js";
+import { makeUnderskyGenerator, underskySpawn } from "./undersky.js";
+import { detectFrame, collapseOrphanFilm, findArrival } from "./portal.js";
 import { findNearestRuin, ruinForChunk } from "./ruins.js";
 import { findNearestDelve, delveForChunk } from "./delvings.js";
 import {
@@ -77,10 +80,36 @@ const seed = save ? save.seed : (Math.random() * 0xffffffff) >>> 0;
 const atlas = buildAtlas(1337); // fixed texture seed: consistent look across worlds
 const materials = buildMaterials(atlas.texture, buildWaterTexture(1337));
 
-const world = new World(seed);
+// `world`/`terrain` are LET on purpose: they are the current dimension's
+// bindings, and every closure in this file reads through them — a Cinder
+// Door crossing re-points both (swapDimension) and the whole file follows.
+let world = new World(seed);
 const generator = makeGenerator(seed);
 world.generator = generator;
-const terrain = generator.terrain;
+let terrain = generator.terrain;
+
+// the Undersky (see undersky.js / LORE.md): its own World instance carries
+// its own edit overlay, chests, kilns, and signs — the save partitions the
+// two skies into separate additive fields (edits vs editsU and friends)
+const uWorld = new World(seed);
+uWorld.generator = makeUnderskyGenerator(seed);
+
+// the dimension registry: everything a crossing swaps or stashes. Boats,
+// carts, and ground drops never cross — each sky keeps its own in *Data/
+// dropStash while the live instances host the current dimension's.
+const dims = {
+  overworld: {
+    id: "overworld", world, terrain,
+    spawnPoint: null, // set after findSpawn below
+    dropStash: [], boatsData: null, cartsData: null,
+  },
+  undersky: {
+    id: "undersky", world: uWorld, terrain: uWorld.generator.terrain,
+    spawnPoint: underskySpawn(uWorld.generator.terrain),
+    dropStash: [], boatsData: null, cartsData: null,
+  },
+};
+let dim = dims.overworld;
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 600);
@@ -96,6 +125,7 @@ renderer.info.autoReset = false;
 document.getElementById("app").appendChild(renderer.domElement);
 
 const spawnPoint = findSpawn(terrain);
+dims.overworld.spawnPoint = spawnPoint;
 const player = new Player(world);
 const validPos = (p) => p && [p.x, p.y, p.z].every(Number.isFinite) && p.y > 0 && p.y < HEIGHT + 60;
 if (save && validPos(save.player)) {
@@ -253,8 +283,19 @@ const carts = new Carts(scene, {
 });
 if (save && save.chests) world.loadChests(save.chests);
 if (save && save.kilns) world.loadKilns(save.kilns); // additive v2 field
-if (save && Array.isArray(save.boats)) boats.load(save.boats); // additive v2 field
-if (save && Array.isArray(save.carts)) carts.load(save.carts); // additive v2 field
+// each sky keeps its own fleet: stash both sides in the registry, and the
+// boot-dimension block (below, once every world consumer exists) hands the
+// booting sky's fleet to the live instances
+dims.overworld.boatsData = save && Array.isArray(save.boats) ? save.boats : [];
+dims.overworld.cartsData = save && Array.isArray(save.carts) ? save.carts : [];
+dims.undersky.boatsData = save && Array.isArray(save.boatsU) ? save.boatsU : [];
+dims.undersky.cartsData = save && Array.isArray(save.cartsU) ? save.cartsU : [];
+// the Undersky's own world-state (all additive: absent = a fresh far side).
+// Same validated loaders, run against the second World instance.
+if (save && save.editsU) uWorld.loadEdits(save.editsU);
+if (save && save.chestsU) uWorld.loadChests(save.chestsU);
+if (save && save.kilnsU) uWorld.loadKilns(save.kilnsU);
+if (save && save.signsU) uWorld.loadSigns(save.signsU);
 // additive v2 field: the bonded companions (bondlings) — species, pos, hp,
 // sitting, scarf seed. Older saves simply have no scarves tied anywhere.
 if (save && Array.isArray(save.bondlings)) mobs.loadBondlings(save.bondlings);
@@ -380,6 +421,10 @@ function lightAwareRemesh(chunks, lightTouched, at = null) {
 }
 
 function updateSaplings() {
+  // overworld-only: the map keys are bare coordinates, and growTree writes
+  // through the live world binding — firing under the other sky would grow
+  // an overworld tree into the Undersky's cells
+  if (dim.id !== "overworld") return;
   for (const [key, due] of saplings) {
     if (growthSeconds < due) continue;
     const [x, y, z] = key.split(",").map(Number);
@@ -415,6 +460,7 @@ function registerCrop(x, y, z, delay = 45 + Math.random() * 30) {
 }
 
 function updateCrops() {
+  if (dim.id !== "overworld") return; // same contract as updateSaplings
   for (const [key, due] of crops) {
     if (growthSeconds < due) continue;
     const [x, y, z] = key.split(",").map(Number);
@@ -518,6 +564,11 @@ if (save && Array.isArray(save.music)) {
 }
 
 function teleportTo(kind) {
+  // every destination on the list is an overworld place; the finders hash
+  // the overworld terrain and must never run against the Undersky's
+  if (dim.id !== "overworld") {
+    return { ok: false, message: "No such places under this sky." };
+  }
   let dest;
   if (kind === "spawn") {
     dest = spawnPoint;
@@ -608,6 +659,13 @@ const hud = new Hud(atlas.canvas, {
     return player.mode;
   },
   onRespawn: () => {
+    // death sends you home: swap FIRST, so resolveRespawn's ensureChunk
+    // checks the cot against the overworld world (the anchor's sky)
+    if (dim.id !== "overworld") {
+      swapDimension("overworld", { toPos: {
+        x: player.pos.x, y: player.pos.y, z: player.pos.z,
+      } });
+    }
     player.respawn(resolveRespawn());
     adjustToClearGround(player.pos);
     player.resetFall();
@@ -718,6 +776,12 @@ const sleepFadeEl = document.getElementById("sleep-fade");
 
 function sleepInCot(x, y, z) {
   if (sleeping || player.dead) return;
+  // no dawn to skip to under a fixed dusk — and the respawn anchor stays an
+  // overworld promise (resolveRespawn only ever checks the overworld cot)
+  if (dim.id !== "overworld") {
+    hud.announce("This sky has no morning to skip to.", 2600);
+    return;
+  }
   if (sky.lightLevel >= NIGHT_LIGHT) {
     hud.announce("The cot disapproves of daytime napping.", 2600);
     return;
@@ -780,19 +844,32 @@ const interaction = new Interaction(world, player, scene, hud, {
     // its true shape; neighbors follow a laid, broken, or popped rail) —
     // cheap when no rails are near, and the extra chunks remesh in one pass
     let all = chunks;
+    let filmCollapsed = false;
     if (info) {
       const railChunks = reshapeRails(world, info.x, info.y, info.z);
       if (railChunks.length > 0) all = [...new Set([...chunks, ...railChunks])];
+      // a Cinder Door proves its ring after ANY edit beside it: a broken
+      // frame folds the whole film sheet (portal.js), which is always a
+      // light-touching change — the film glows
+      const fold = collapseOrphanFilm(world, info.x, info.y, info.z);
+      if (fold.chunks.length > 0) all = [...new Set([...all, ...fold.chunks])];
+      if (fold.collapsed) { filmCollapsed = true; sfx.portalFold(); }
     }
-    lightAwareRemesh(all, lightTouched, info);
-    // sapling lifecycle
+    lightAwareRemesh(all, lightTouched || filmCollapsed, info);
+    // sapling lifecycle (registration is overworld-only: the maps are keyed
+    // by bare coordinates, so an Undersky planting would collide with — and
+    // grow into — the overworld cell at the same address)
     if (info) {
-      if (info.placed === SAPLING) registerSapling(info.x, info.y, info.z);
+      if (info.placed === SAPLING && dim.id === "overworld") {
+        registerSapling(info.x, info.y, info.z);
+      }
       if (info.broken === SAPLING) saplings.delete(`${info.x},${info.y},${info.z}`);
       if (info.popped === SAPLING) saplings.delete(`${info.x},${info.y + 1},${info.z}`);
       // crop lifecycle: planting a seed writes its sprout; breaking or
       // popping (soil dug out underneath) any growing stage cancels its timer
-      if (SPROUT_IDS.has(info.placed)) registerCrop(info.x, info.y, info.z);
+      if (SPROUT_IDS.has(info.placed) && dim.id === "overworld") {
+        registerCrop(info.x, info.y, info.z);
+      }
       if (isCrop(info.broken)) crops.delete(`${info.x},${info.y},${info.z}`);
       if (isCrop(info.popped)) crops.delete(`${info.x},${info.y + 1},${info.z}`);
       // breaking a Notice Post takes its writing with it (the board mesh
@@ -1127,6 +1204,12 @@ const interaction = new Interaction(world, player, scene, hud, {
   },
   onSplash: () => sfx.splash(),
   onSizzle: () => sfx.sizzle(),
+  // a Cinder Door taking its fire (interact.js validated the ring and spent
+  // the pail already — this is the flourish)
+  onPortalIgnite: () => {
+    sfx.portalIgnite();
+    hud.announce("The ring remembers being a door.", 3200);
+  },
   crackTextures: buildCrackTextures(1337),
   avgColor: atlas.avgColor,
 });
@@ -1230,14 +1313,143 @@ mobs.onSteadKnock = () => sfx.creature("knock");
 const steads = new Steads(terrain, mobs, interaction.particles);
 let steadDay = sky.day; // last day a stead warmth-reset ran for
 
-const stopAutosave = startAutosave(() => writeSave(world, player, sky, hud, inventory, {
+// --- the Cinder Door: crossing between the skies -----------------------------
+
+let portalT = 0;        // seconds stood in the film so far
+let portalCooldown = 0; // re-trigger guard after an arrival
+let crossing = false;   // mid-fade — the world is about to move
+
+// the swap itself, synchronous: fold what belongs to the origin sky, dispose
+// its meshes (data stays loaded — dirty for the return trip), re-point the
+// world bindings, and place the player. Streaming re-primes itself the same
+// way a teleport does: physics gates on playerChunkReady until the ground
+// around the arrival exists.
+function swapDimension(toId, { toPos = null } = {}) {
+  const from = dim, to = dims[toId];
+  if (!to || from === to) return;
+
+  // 1. fold/park everything that belongs to the origin sky
+  if (from.id === "overworld") steads.foldAll(from.world);
+  if (fishing.active) fishing.reel(player); // reeling is free by contract
+  kegs.clear();
+  stones.clear();
+  fireworks.clear();
+  // companions cross (unparked, so they never wait under an absent sky);
+  // every other mob stays behind and folds with its world
+  const companions = [];
+  for (const m of [...mobs.mobs]) {
+    if (m.bonded || m.tamed) {
+      if (m.sitting) m.sitting = false;
+      if (m.mode === "stay") m.mode = "follow";
+      companions.push(m);
+    } else {
+      mobs.removeMob(m);
+    }
+  }
+  from.dropStash = drops.stash();
+  from.boatsData = boats.serialize();
+  boats.clear(player);
+  from.cartsData = carts.serialize();
+  carts.clear(player);
+
+  // 2. the origin's meshes leave the scene; dirty marks the data for the
+  // return trip (disposeChunkMeshes never sets it — verified, it only nulls)
+  for (const c of from.world.chunks.values()) {
+    disposeChunkMeshes(c, scene);
+    c.dirty = true;
+  }
+
+  // 3. re-point the current-dimension bindings: the let bindings carry every
+  // closure in this file; the four constructor captures are plain fields
+  dim = to;
+  world = to.world;
+  terrain = to.terrain;
+  player.world = world;
+  interaction.world = world;
+  rainFx.world = world;
+  signBoards.world = world; // its sync() swaps the boards naturally
+  sky.setRealm(to.id);
+
+  // 4. restart streaming around wherever the player lands
+  genQueue = [];
+  lastPlayerChunk = null;
+
+  // 5. place the player: a caller-supplied spot (respawn), or the far side
+  // of the door — an existing film cell near the mapped point, else a
+  // freshly raised return frame (portal.js ensures the chunks first)
+  let arrive = toPos;
+  if (!arrive) {
+    const a = findArrival(world, terrain, player.pos.x, player.pos.y, player.pos.z);
+    if (a.chunks.length > 0) lightAwareRemesh(a.chunks, true); // new film glows
+    arrive = a.pos;
+  }
+  Object.assign(player.pos, arrive);
+  player.vel.x = player.vel.y = player.vel.z = 0;
+  player.resetFall();
+  portalCooldown = 2.5;
+  portalT = 0;
+
+  // 6. the destination's own stock comes back out of its stash
+  drops.restore(to.dropStash);
+  to.dropStash = [];
+  boats.load(to.boatsData || []);
+  to.boatsData = null;
+  carts.load(to.cartsData || []);
+  to.cartsData = null;
+  for (const m of companions) mobs._teleportToPlayer(world, m, player);
+}
+
+// the crossing ceremony: the sleep-fade curtain, the drone, the swap under
+// cover of dark, and a line for the far side
+function beginCrossing(toId) {
+  if (crossing) return;
+  crossing = true;
+  sfx.portalCross();
+  sleepFadeEl.style.opacity = "1";
+  setTimeout(() => {
+    swapDimension(toId);
+    sleepFadeEl.style.opacity = "0";
+    hud.announce(toId === "undersky"
+      ? "You step through. The old sky holds its breath."
+      : "You step back out under the true sun.", 3200);
+    setTimeout(() => { crossing = false; }, 800); // let the fade-in finish
+  }, 700);
+}
+
+// boot straight into the sky the save was written under (additive field:
+// absent = overworld). This runs AFTER every world consumer exists, so the
+// re-point below reaches all four constructor captures; the saved player
+// position is already far-side coordinates and streams normally.
+if (save && save.dim === "undersky") {
+  dim = dims.undersky;
+  world = dim.world;
+  terrain = dim.terrain;
+  player.world = world;
+  interaction.world = world;
+  rainFx.world = world;
+  signBoards.world = world;
+  sky.setRealm("undersky");
+}
+// hand the booting sky's fleet to the live instances; the other side's
+// stays stashed in the registry until a crossing restores it
+boats.load(dim.boatsData || []);
+dim.boatsData = null;
+carts.load(dim.cartsData || []);
+dim.cartsData = null;
+
+// the save's `world` is ALWAYS the overworld instance — never the live
+// binding, or a save written under the Undersky would pour its edits into
+// the overworld's fields. The far side rides its own *U extras below.
+const stopAutosave = startAutosave(() => writeSave(dims.overworld.world, player, sky, hud, inventory, {
   saplings: [...saplings].map(([key, due]) => {
     const [x, y, z] = key.split(",").map(Number);
     return [x, y, z, Math.max(1, due - growthSeconds)];
   }),
   crops: [...crops].map(([key, due]) => {
     const [x, y, z] = key.split(",").map(Number);
-    const id = world.getBlock(x, y, z);
+    // crops are overworld-only, so read their stage off the overworld world
+    // (the live binding may be pointing under the other sky)
+    const id = dims.overworld.world.getBlock(x, y, z);
     const stages = cropStagesFor(id);
     const stage = stages ? Math.max(0, stages.indexOf(id)) : 0;
     return [x, y, z, stage, Math.max(1, due - growthSeconds)];
@@ -1245,8 +1457,19 @@ const stopAutosave = startAutosave(() => writeSave(world, player, sky, hud, inve
   overflowStacks: pendingOverflow.map(stackToSave),
   // additive: the 4 wear slots incl. dur + thread ([id, count, dur?, mod?] or 0)
   wear: wearSlots.map(stackToSave),
-  boats: boats.serialize(), // additive: deployed skiffs [[x,y,z,yaw]...]
-  carts: carts.serialize(), // additive: deployed trundles [[x,y,z,yaw]...]
+  // each sky keeps its own fleet: the live instances hold the CURRENT
+  // dimension's, the registry stash holds the other's
+  boats: dim.id === "overworld" ? boats.serialize() : (dims.overworld.boatsData || []),
+  carts: dim.id === "overworld" ? carts.serialize() : (dims.overworld.cartsData || []),
+  boatsU: dim.id === "undersky" ? boats.serialize() : (dims.undersky.boatsData || []),
+  cartsU: dim.id === "undersky" ? carts.serialize() : (dims.undersky.cartsData || []),
+  // which sky this save was written under (absent = overworld), plus the
+  // Undersky's own world-state through the second World instance
+  dim: dim.id === "undersky" ? "undersky" : undefined,
+  editsU: uWorld.serializeEdits(),
+  chestsU: uWorld.serializeChests(),
+  kilnsU: uWorld.serializeKilns(),
+  signsU: uWorld.serializeSigns(),
   // additive: the bondlings [[species,x,y,z,hp,sitting,scarfSeed]...]
   bondlings: mobs.serializeBondlings(),
   weather: [
@@ -1640,18 +1863,38 @@ function tick(now) {
       return accepted; // a full inventory keeps the rest on the ground
     });
     mobs.update(frameDt, { world, player, terrain, night: sky.lightLevel < 0.45, tod: sky.time });
-    // the Living Stead's residents: spawn/despawn near the player, roof smoke.
-    // A crossed dawn re-deals cold trade boards across every seeded stead.
-    if (sky.day !== steadDay) { steadDay = sky.day; steads.resetWarmth(world); }
-    steads.update(frameDt, world, player);
-    prowl.update(frameDt, sky); // reads the same night gate the mobs got
+    // the overworld's own institutions sleep while the player is under the
+    // other sky: steads/prowl/meteors captured the overworld world+terrain
+    // at construction and must never run against the Undersky's
+    if (dim.id === "overworld") {
+      // the Living Stead's residents: spawn/despawn near the player, roof
+      // smoke. A crossed dawn re-deals cold boards across every seeded stead.
+      if (sky.day !== steadDay) { steadDay = sky.day; steads.resetWarmth(world); }
+      steads.update(frameDt, world, player);
+      prowl.update(frameDt, sky); // reads the same night gate the mobs got
+      meteors.update(frameDt, sky, camera);
+    }
     boats.update(frameDt, world, player);
     carts.update(frameDt, world, player);
     kegs.update(frameDt, world, player);
     stones.update(frameDt, world);
     fireworks.update(frameDt, world);
     fishing.update(frameDt, world, player);
-    meteors.update(frameDt, sky, camera);
+    // the Cinder Door: a second standing in the film carries you through.
+    // Riding is exempt (a Trundle may roll its track through a doorway), and
+    // the arrival's own film waits out the cooldown before it can pull back.
+    if (portalCooldown > 0) portalCooldown -= frameDt;
+    const feetId = world.getBlock(Math.floor(player.pos.x),
+      Math.floor(player.pos.y + 0.1), Math.floor(player.pos.z));
+    if (feetId === PORTAL_FILM_ID && !player.riding && !player.dead &&
+        !crossing && portalCooldown <= 0) {
+      portalT += frameDt;
+      if (portalT >= 1) {
+        beginCrossing(dim.id === "overworld" ? "undersky" : "overworld");
+      }
+    } else if (!crossing) {
+      portalT = 0;
+    }
     worldSeconds += frameDt;
     growthSeconds += frameDt * (1 + sky.rain); // rain doubles sapling growth
     if (worldSeconds >= nextSaplingCheck) {
@@ -1702,7 +1945,7 @@ function tick(now) {
   // void safety net (creative only — in survival the void deals damage and
   // the death screen handles it)
   if (player.pos.y < -16 && player.mode !== "survival") {
-    Object.assign(player.pos, spawnPoint);
+    Object.assign(player.pos, dim.spawnPoint); // each sky nets to its own ground
     player.vel.x = player.vel.y = player.vel.z = 0;
     player.flying = false;
     adjustToClearGround(player.pos);
@@ -1767,10 +2010,11 @@ function tick(now) {
       heldWay.hand.rotation.y = -sky.time * Math.PI * 2;
     }
   }
-  // widgets show on hotbar presence; the chart reveals only while play runs
+  // widgets show on hotbar presence; the chart reveals only while play runs —
+  // and only under the overworld sky (one leaf must never ink two worlds)
   wayfinder.update(frameDt, {
     inventory, hud, player, sky, world,
-    playing: playerChunkReady && inputActive(),
+    playing: playerChunkReady && inputActive() && dim.id === "overworld",
   });
 
   // sprint FOV kick (+8°, applies to sprint-flight too): eased both ways
@@ -1896,5 +2140,15 @@ if (NO_LOCK) {
     // Wanderwing straight into a wear slot and see the model dress + spread
     refreshArmor: () => refreshArmor(),
     setThirdPerson: (on) => { if (!!on !== thirdPerson) toggleThirdPerson(); },
+    // the Cinder Door: which sky we're under, the live world binding (the
+    // static `world` above is the overworld snapshot), the frame oracle
+    // (railShape's idiom), and the swap itself for teleport-style tests
+    dimId: () => dim.id,
+    getWorld: () => world,
+    detectFrame: (x, y, z) => detectFrame(world, x, y, z),
+    swapDimension: (toId) => swapDimension(toId),
+    getPortalT: () => portalT,
+    getPortalCooldown: () => portalCooldown,
+    teleportTo, // so tests can assert the under-sky refusal
   };
 }

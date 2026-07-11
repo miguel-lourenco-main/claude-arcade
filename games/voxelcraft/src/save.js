@@ -106,6 +106,22 @@ export function writeSave(world, player, sky, hud, inventory, extra = {}) {
       overflowStacks: extra.overflowStacks || [],
       selected: hud.selected,
       edits: world.serializeEdits(),
+      // additive: which sky the save was written under — absent (older saves
+      // and every overworld save) boots the overworld. NOTE the `world`
+      // argument above is ALWAYS the overworld instance (main.js passes it
+      // explicitly); the Undersky's state rides the *U fields below.
+      dim: extra.dim,
+      // additive: the Undersky's own edit overlay + stations + boards, the
+      // same shapes as edits/chests/kilns/signs run through a second World
+      // instance — absent in older saves, whose far side is simply untouched
+      editsU: extra.editsU || [],
+      chestsU: extra.chestsU || [],
+      kilnsU: extra.kilnsU || [],
+      signsU: extra.signsU || [],
+      // additive: each sky keeps its own fleet (skiffs and trundles never
+      // cross a Cinder Door) — absent in older saves: nothing afloat there
+      boatsU: extra.boatsU || [],
+      cartsU: extra.cartsU || [],
     }));
   } catch (e) {
     if (!warnedQuota) {

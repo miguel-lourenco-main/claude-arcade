@@ -288,6 +288,11 @@ export const WANDERWING = 153;
 export const ROCKET_SUN = 154;   // Sunwisp Rocket — a gold willow droop
 export const ROCKET_EMBER = 155; // Emberbell Rocket — a red sphere puff
 export const ROCKET_GLEAM = 156; // Gleam Rocket — a nacre-green ring
+// the Cinder Door (see LORE.md): the film that fills an ignited Cinderglass
+// ring — the door standing open. Never crafted, never mined, never dropped:
+// interact.js writes it when a full Ember Pail gives a whole frame its fire
+// back, and portal.js collapses it the moment the ring stops being whole.
+export const PORTAL_FILM = 157;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -1135,6 +1140,24 @@ const rocket = (name, tile, color, shape) => def(name, {
 BLOCKS[ROCKET_SUN] = rocket("Sunwisp Rocket", TILE.ROCKET_SUN, 0xffcf4a, "willow");
 BLOCKS[ROCKET_EMBER] = rocket("Emberbell Rocket", TILE.ROCKET_EMBER, 0xff5238, "sphere");
 BLOCKS[ROCKET_GLEAM] = rocket("Gleam Rocket", TILE.ROCKET_GLEAM, 0x84e8bc, "ring");
+
+// the Cinder Door's film: a world block the player walks INTO (non-solid) to
+// cross. Glass-family mesh rules (cutout + cullSame so a wide door draws no
+// inner faces), unbreakable by hand (hardness Infinity — it lives and dies
+// with its frame, via portal.js), sheds a warm ember glow (11 also keeps
+// hostiles off the doorstep, like starglass), and stays out of the palette.
+BLOCKS[PORTAL_FILM] = def("Cinder Door", {
+  tiles: cube(TILE.CINDER_FILM),
+  hardness: Infinity,
+  drops: null,
+  solid: false,
+  opaque: false,
+  bucket: "cutout",
+  cullSame: true,
+  lightEmit: 11,
+  hidden: true,
+  sound: "glass",
+});
 
 // --- the Pearlfall's gifts ------------------------------------------------------
 // Starstone: a landed pearl of the old sky, dense and still glowing. It only

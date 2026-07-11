@@ -496,6 +496,12 @@ export class Carts {
     this.carts.splice(i, 1);
   }
 
+  // a Cinder Door crossing: every tub leaves the scene (the caller
+  // serialized this dimension's fleet first; load() rebuilds the other's)
+  clear(player) {
+    while (this.carts.length) this._removeAt(0, player);
+  }
+
   // --- persistence: an additive save field, positions + headings ---------------
 
   serialize() {
