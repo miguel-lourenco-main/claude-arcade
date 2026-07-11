@@ -1,11 +1,21 @@
-// Headless tests for the Delve core. Run with: node test/test.js
-// No DOM, no dependencies — drives src/core/* directly.
-import { RNG } from '../src/core/rng.js';
-import { T, MAP_W, MAP_H, idx, generateFloor, bfs } from '../src/core/dungeon.js';
-import { computeFOV, hasLOS } from '../src/core/fov.js';
-import { astar, greedyStep } from '../src/core/path.js';
-import { DEPTH_MAX, monsterPool } from '../src/core/data.js';
-import { Game, FOV_RADIUS } from '../src/core/game.js';
+// Headless tests for the Delve core. Run with: node test/logic.test.js
+// No DOM, no dependencies — loads the classic scripts (which attach to
+// globalThis.Delve) and drives the core directly.
+require('../src/core/rng.js');
+require('../src/core/dungeon.js');
+require('../src/core/fov.js');
+require('../src/core/path.js');
+require('../src/core/data.js');
+require('../src/core/game.js');
+
+const {
+  RNG,
+  T, MAP_W, MAP_H, idx, generateFloor, bfs,
+  computeFOV, hasLOS,
+  astar, greedyStep,
+  DEPTH_MAX, monsterPool,
+  Game, FOV_RADIUS,
+} = globalThis.Delve;
 
 let pass = 0, fail = 0;
 function ok(cond, name) {

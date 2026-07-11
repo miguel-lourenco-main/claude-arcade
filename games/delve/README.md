@@ -51,8 +51,11 @@ lifetime records persist under `arcade.delve.audio` / `arcade.delve.best`.
 
 ## Architecture
 
-Vanilla ES modules, no build step. The core is completely DOM-free and is
-driven headlessly by the test suite:
+Vanilla JS, no build step. Every file is a classic script (an IIFE attaching
+its exports to the page-global `Delve` namespace) loaded with plain
+`<script>` tags in dependency order, so the game works when `index.html` is
+opened directly via `file://` — no server needed. The core is completely
+DOM-free and is driven headlessly by the test suite:
 
     src/core/rng.js      seedable, serializable PRNG (mulberry32)
     src/core/dungeon.js  floor generation + BFS flood fill
@@ -70,14 +73,22 @@ short hit/projectile effects. Saves serialize the full game (all visited
 floors, entities, map memory, message tail and the RNG state), so a resumed
 run continues with the exact same dice.
 
-`package.json` exists only so node treats the modules as ESM for testing.
+`package.json` exists only to hold the test scripts; there are no
+dependencies.
 
 ## Tests
 
-    node test/test.js
+    node test/logic.test.js      # core rules, headless, no browser
+    node test/browser.test.mjs   # headless Chrome over http:// AND file://
 
-69 assertions: generation connectivity across 100 seeds, shadowcasting shadow
-shapes, A* validity, exact energy-scheduling ratios, combat/XP/level-ups,
-flee/ranged/noise AI behaviors, the three FOV states, byte-identical
-save/load round-trips with identical futures, floor persistence on revisit,
-and a god-mode bot that descends all nine floors and wins by taking the Pearl.
+`logic.test.js` — 69 assertions: generation connectivity across 100 seeds,
+shadowcasting shadow shapes, A* validity, exact energy-scheduling ratios,
+combat/XP/level-ups, flee/ranged/noise AI behaviors, the three FOV states,
+byte-identical save/load round-trips with identical futures, floor
+persistence on revisit, and a god-mode bot that descends all nine floors and
+wins by taking the Pearl.
+
+`browser.test.mjs` — spawns its own static server and drives real headless
+Chrome (raw CDP, no npm deps) through every control listed above, twice:
+once over http:// and once over file://, asserting zero console errors on
+both. See `test/README.md` for the per-test breakdown.
