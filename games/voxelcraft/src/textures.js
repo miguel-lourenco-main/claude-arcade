@@ -167,7 +167,7 @@ export const TILE = {
   PAIL_WATER: 129,
   PAIL_EMBER: 130,
   // Cinderglass: what the Emberwash becomes when its fire is finally slaked —
-  // a dense black volcanic glass. Portal-grade stock for a wave still to come.
+  // a dense black volcanic glass — the Cinder Door's frame stock.
   CINDERGLASS: 131,
   // the Wanderwing (see LORE.md): a folded patchwork wing-cape icon — leaf-
   // green membrane panels stitched over quill ribs, a mustard collar lashing.

@@ -188,8 +188,8 @@ export const GLOAM_LEGGINGS = 114;
 export const GLOAM_TREADS = 115;
 // the Mirelands (see LORE.md): the bog country. MUD is Mire Sod — wet
 // ground that drags the stride; REEDS are Marsh Reeds, which rarely hand
-// over BOGBEAN_POD (the bog's seed pouch — planting arrives with the
-// bogbean farming wave, so for now it's a curiosity worth keeping).
+// over BOGBEAN_POD (the bog's seed pouch — plant it in Turned Earth and
+// it twines up the BOGBEAN_* ladder below).
 export const MUD = 116;
 export const REEDS = 117;
 export const BOGBEAN_POD = 118;
@@ -271,8 +271,9 @@ export const EMBER_PAIL = 151;
 // Cinderglass: the Emberwash slaked. When Water meets the Emberwash (a pail
 // pour, or either fluid placed against the other) the molten cell hardens to
 // this dense black volcanic glass — very hard, drops itself, and asks for a
-// Sky-Iron Cracker (iron pick, tier 3) or better. Portal-grade stock for a
-// wave still to come.
+// Sky-Iron Cracker (iron pick, tier 3) or better. The Cinder Door's frame
+// stock: a standing ring of it, given its fire back, opens on the Undersky
+// (portal.js / PORTAL_FILM below).
 export const CINDERGLASS = 152;
 // the Wanderwing (see LORE.md): a patchwork wing-cape woven at the Loomstone.
 // It takes the JERKIN wear slot — the classic trade, no chest armor while you
