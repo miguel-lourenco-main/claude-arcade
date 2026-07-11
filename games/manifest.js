@@ -145,4 +145,12 @@ window.GAMES = [
       "Carry an emberlock through three torch-lit floors of a haunted keep where " +
       "gloams roam — find the sigil-keys, shove suspicious walls, reach the way-sigil.",
   },
+  {
+    slug: "palisade",
+    title: "Palisade",
+    genre: "Strategy / Tower defense",
+    description:
+      "Creeps march the fixed trail toward your gate — buy, upgrade, and sell four " +
+      "tower types to hold all 20 waves across three maps.",
+  },
 ];

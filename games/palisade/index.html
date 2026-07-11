@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Palisade</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>PALISADE</h1>
+    <span id="map-label"></span>
+    <a href="../../index.html" class="back">← Arcade</a>
+  </header>
+
+  <main>
+    <div id="game-wrap">
+      <canvas id="game"></canvas>
+
+      <div id="overlay" class="hidden">
+        <div id="ov-start" class="panel">
+          <h2>PALISADE</h2>
+          <p class="sub">the creeps are coming — hold the line</p>
+          <div id="map-cards"></div>
+          <div class="ctrl-lines">
+            <div><b>click</b> place / select · <b>1-4</b> pick tower · <b>right-click / Esc</b> cancel</div>
+            <div><b>Space</b> call wave early (+gold) · <b>U</b> upgrade · <b>X</b> sell · <b>T</b> targeting</div>
+            <div><b>F</b> fast-forward · <b>P</b> pause · <b>M</b> sound · <b>R</b> restart</div>
+          </div>
+        </div>
+
+        <div id="ov-end" class="panel hidden">
+          <h2 id="end-title"></h2>
+          <p id="end-detail" class="sub"></p>
+          <p id="end-score"></p>
+          <div class="row">
+            <button id="end-restart">restart <kbd>R</kbd></button>
+            <button id="end-menu" class="secondary">map select</button>
+          </div>
+        </div>
+
+        <div id="ov-pause" class="panel hidden">
+          <h2>PAUSED</h2>
+          <button id="resume">resume <kbd>P</kbd></button>
+        </div>
+      </div>
+    </div>
+
+    <aside id="sidebar">
+      <div id="stats">
+        <div class="stat"><span class="lbl">gold</span><span id="stat-gold" class="gold">0</span></div>
+        <div class="stat"><span class="lbl">lives</span><span id="stat-lives" class="lives">20</span></div>
+        <div class="stat"><span class="lbl">wave</span><span id="stat-wave">1/20</span></div>
+        <div class="stat"><span class="lbl">score</span><span id="stat-score">0</span></div>
+      </div>
+
+      <div id="wave-panel">
+        <div id="wave-preview"></div>
+        <div id="wave-timer"><div id="wave-timer-fill"></div></div>
+        <div id="wave-status"></div>
+        <button id="call-wave">call wave <kbd>Space</kbd></button>
+      </div>
+
+      <div id="shop"></div>
+
+      <div id="inspector" class="hidden">
+        <div id="insp-name"></div>
+        <div id="insp-stats"></div>
+        <button id="insp-target"></button>
+        <button id="insp-upgrade"></button>
+        <button id="insp-sell" class="danger"></button>
+      </div>
+
+      <div id="toggles">
+        <button id="btn-speed">▶ 1×</button>
+        <button id="btn-pause">❚❚ pause</button>
+        <button id="btn-audio">♪ on</button>
+        <button id="btn-menu" class="secondary">maps</button>
+      </div>
+    </aside>
+  </main>
+
+  <footer>
+    <b>click</b> place/select · <b>1-4</b> towers · <b>Space</b> call wave · <b>T</b> targeting · <b>U</b> upgrade · <b>X</b> sell · <b>F</b> 2× · <b>P</b> pause · <b>M</b> sound · <b>R</b> restart
+  </footer>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
