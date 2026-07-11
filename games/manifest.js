@@ -121,4 +121,12 @@ window.GAMES = [
       "Light every lantern in a night-time maze while four smoke-wisp gloams with " +
       "distinct hunting personalities close in — kindle a brazier to banish them.",
   },
+  {
+    slug: "chess",
+    title: "Chess",
+    genre: "Board / Strategy",
+    description:
+      "Full legal chess against a three-strength AI or a friend — castling, en " +
+      "passant, promotions, every draw rule, and an engine that punishes loose tactics.",
+  },
 ];

@@ -39,6 +39,7 @@ directly via `file://` only works for the arcade shell itself.)
 | [Reversi](games/reversi/) | Board / strategy | Disc-flipping strategy vs 3 AI tiers (greedy, positional, alpha-beta + endgame solve in a worker) or hotseat. |
 | [Quarry](games/quarry/) | Puzzle / falling-block | Pentomino faller (12 five-cell stones, 12×24 pit): lock delay, original kicks, bag randomizer, DAS, ghost piece. |
 | [Lamplighter](games/lamplighter/) | Arcade / maze | Maze-chase: light lanterns while 4 gloams with distinct pursuit AIs hunt you; braziers flip the chase; procedural mazes. |
+| [Chess](games/chess/) | Board / strategy | Full rules + perft-verified engine: negamax, quiescence, TT/killers, 3 strengths in a Web Worker, SAN list, FEN I/O. |
 
 ## Structure
 

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chess</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="page">
+    <header>
+      <a class="back" href="../../index.html">&larr; Arcade</a>
+      <h1>CHE<span>SS</span></h1>
+      <div class="spacer"></div>
+    </header>
+
+    <main id="layout">
+      <section id="board-zone">
+        <div id="statusbar">
+          <div id="status">Set up a game</div>
+          <div id="thinking" class="hidden"><span class="dot"></span><span id="thinking-text">thinking</span></div>
+        </div>
+
+        <div id="board-wrap">
+          <canvas id="board"></canvas>
+
+          <div id="promo" class="overlay hidden">
+            <div class="panel promo-panel">
+              <h2>Promote to</h2>
+              <div id="promo-choices"></div>
+            </div>
+          </div>
+
+          <div id="gameover" class="overlay hidden">
+            <div class="panel">
+              <h2 id="go-title">Game over</h2>
+              <p id="go-reason"></p>
+              <div class="row">
+                <button id="go-rematch">Rematch</button>
+                <button id="go-setup" class="secondary">Change setup</button>
+              </div>
+              <p class="hint">Enter &mdash; instant rematch</p>
+            </div>
+          </div>
+
+          <div id="setup" class="overlay">
+            <div class="panel">
+              <h2>New game</h2>
+              <div class="opt">
+                <span>Opponent</span>
+                <div class="seg" id="seg-mode">
+                  <button data-v="ai">Computer</button>
+                  <button data-v="2p">Two players</button>
+                </div>
+              </div>
+              <div class="opt" id="opt-side">
+                <span>Play as</span>
+                <div class="seg" id="seg-side">
+                  <button data-v="w">White</button>
+                  <button data-v="b">Black</button>
+                  <button data-v="r">Random</button>
+                </div>
+              </div>
+              <div class="opt" id="opt-level">
+                <span>Strength</span>
+                <div class="seg" id="seg-level">
+                  <button data-v="1">Casual</button>
+                  <button data-v="2">Club</button>
+                  <button data-v="3">Strong</button>
+                </div>
+              </div>
+              <div class="row">
+                <button id="btn-start">Start game</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="toolbar">
+          <button id="btn-new" title="New game (N)">New</button>
+          <button id="btn-undo" title="Undo (U)">Undo</button>
+          <button id="btn-flip" title="Flip board (F)">Flip</button>
+          <button id="btn-fen" title="FEN import/export">FEN</button>
+          <button id="btn-sound" title="Toggle sound (S)">Sound: on</button>
+        </div>
+
+        <div id="fen-panel" class="hidden">
+          <input id="fen-input" type="text" spellcheck="false" aria-label="FEN string">
+          <button id="fen-copy" class="secondary">Copy</button>
+          <button id="fen-load" class="secondary">Load</button>
+          <span id="fen-msg"></span>
+        </div>
+      </section>
+
+      <aside id="side">
+        <h3>Moves</h3>
+        <ol id="movelist"></ol>
+        <div id="captured">
+          <div id="captured-white" class="captured-row"></div>
+          <div id="captured-black" class="captured-row"></div>
+        </div>
+      </aside>
+    </main>
+
+    <footer>
+      <span><b>click / drag</b> move</span>
+      <span><b>U</b> undo</span>
+      <span><b>F</b> flip</span>
+      <span><b>N</b> new game</span>
+      <span><b>S</b> sound</span>
+      <span><b>Enter</b> rematch</span>
+    </footer>
+  </div>
+
+  <script src="src/engine.js"></script>
+  <script src="src/pieces.js"></script>
+  <script src="src/audio.js"></script>
+  <script src="src/ui.js"></script>
+</body>
+</html>
