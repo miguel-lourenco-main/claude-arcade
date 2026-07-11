@@ -41,6 +41,7 @@ directly via `file://` only works for the arcade shell itself.)
 | [Lamplighter](games/lamplighter/) | Arcade / maze | Maze-chase: light lanterns while 4 gloams with distinct pursuit AIs hunt you; braziers flip the chase; procedural mazes. |
 | [Chess](games/chess/) | Board / strategy | Full rules + perft-verified engine: negamax, quiescence, TT/killers, 3 strengths in a Web Worker, SAN list, FEN I/O. |
 | [Delve](games/delve/) | RPG / roguelike | Turn-based roguelike: shadowcasting FOV, energy scheduler, persistent floors, permadeath saves, 9 depths to the artifact. |
+| [Gloamkeep](games/gloamkeep/) | FPS / raycaster | Software raycaster: DDA columns, textured walls, z-buffered sprites, sliding doors, secret push-walls, 3 floors. |
 
 ## Structure
 

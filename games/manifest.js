@@ -137,4 +137,12 @@ window.GAMES = [
       "Nine procedural floors beneath the Upturn stand between you and the First " +
       "Pearl. Torchlight, bump combat, and a save that dies with you.",
   },
+  {
+    slug: "gloamkeep",
+    title: "Gloamkeep",
+    genre: "FPS / Raycaster",
+    description:
+      "Carry an emberlock through three torch-lit floors of a haunted keep where " +
+      "gloams roam — find the sigil-keys, shove suspicious walls, reach the way-sigil.",
+  },
 ];

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gloamkeep</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="screen"></canvas>
+  <div id="vignette"></div>
+  <canvas id="minimap" class="hidden"></canvas>
+
+  <div id="hud" class="hidden">
+    <div id="hud-level"></div>
+    <div id="hud-message"></div>
+    <div id="hud-bar">
+      <div class="hud-group">
+        <span class="hud-label">vigor</span>
+        <div id="hud-hp-track"><div id="hud-hp-fill"></div></div>
+        <span id="hud-hp-num" class="hud-big">100</span>
+      </div>
+      <div class="hud-group">
+        <span class="hud-label">shots</span>
+        <span id="hud-ammo-num" class="hud-big">24</span>
+      </div>
+      <div class="hud-group" id="hud-keys">
+        <span class="hud-label">sigils</span>
+        <span id="key-1" class="keygem">◆</span>
+        <span id="key-2" class="keygem">◆</span>
+        <span id="key-3" class="keygem">◆</span>
+      </div>
+      <div class="hud-group">
+        <span class="hud-label">score</span>
+        <span id="hud-score" class="hud-big">0</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="overlay-start" class="overlay">
+    <div class="panel">
+      <h1>GLOAMKEEP</h1>
+      <p class="sub">the torches are lit. the gloams are loose. find the way-sigils and descend.</p>
+      <button id="btn-start" class="primary">Enter the keep</button>
+      <div class="controls">
+        <div><b>WASD</b> move &amp; strafe · <b>mouse</b> look (<b>←/→</b> to turn without it)</div>
+        <div><b>LMB / Space</b> fire the emberlock · <b>E</b> use doors, push suspicious walls, take the exit</div>
+        <div><b>M</b> minimap · <b>N</b> sound · <b>P / Esc</b> pause</div>
+      </div>
+      <p class="hint">shots are loud — the keep listens. sealed doors want their matching sigil-key.</p>
+      <div id="start-high" class="score-line"></div>
+      <div class="row">
+        <button class="sound-toggle secondary"></button>
+        <a href="../../index.html" class="back">← Arcade</a>
+      </div>
+    </div>
+  </div>
+
+  <div id="overlay-pause" class="overlay hidden">
+    <div class="panel">
+      <h2>held breath</h2>
+      <p class="sub">the keep waits.</p>
+      <button id="btn-resume" class="primary">Resume</button>
+      <div class="row">
+        <button class="sound-toggle secondary"></button>
+        <a href="../../index.html" class="back">← Arcade</a>
+      </div>
+    </div>
+  </div>
+
+  <div id="overlay-complete" class="overlay hidden">
+    <div class="panel">
+      <h2 id="complete-name"></h2>
+      <table class="tally">
+        <tr><td>gloams put down</td><td id="tally-kills"></td></tr>
+        <tr><td>ember shards</td><td id="tally-shards"></td></tr>
+        <tr><td>secrets found</td><td id="tally-secrets"></td></tr>
+        <tr><td>score</td><td id="tally-score"></td></tr>
+      </table>
+      <button id="btn-next" class="primary">Continue <span class="dim">(Enter)</span></button>
+      <p class="hint"><span id="next-label"></span></p>
+    </div>
+  </div>
+
+  <div id="overlay-dead" class="overlay hidden">
+    <div class="panel">
+      <h2 class="demise">the gloam takes you</h2>
+      <div id="dead-score" class="score-line"></div>
+      <div id="dead-high" class="score-line dim"></div>
+      <button id="btn-retry" class="primary">Rise again <span class="dim">(R)</span></button>
+      <div class="row"><a href="../../index.html" class="back">← Arcade</a></div>
+    </div>
+  </div>
+
+  <div id="overlay-won" class="overlay hidden">
+    <div class="panel">
+      <h2 class="won">the keep falls quiet</h2>
+      <p class="sub">three floors cleansed. the last way-sigil closes behind you.</p>
+      <div id="won-score" class="score-line"></div>
+      <div id="won-high" class="score-line dim"></div>
+      <button id="btn-again" class="primary">Back to the gate <span class="dim">(Enter)</span></button>
+      <div class="row"><a href="../../index.html" class="back">← Arcade</a></div>
+    </div>
+  </div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
