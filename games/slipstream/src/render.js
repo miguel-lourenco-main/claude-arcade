@@ -3,11 +3,18 @@
 // (dx += seg.curve; x += dx), project both edges with scale = camDepth/z,
 // draw trapezoids back to front, then sprites/cars in painter's order.
 
-import { SEG_LEN, ROAD_WIDTH, DRAW_DIST, segAt } from './track.js';
-import { CAM_HEIGHT, CAM_DEPTH, PLAYER_Z, MAX_SPEED, GEARS, SPIN_TIME } from './sim.js';
+// Classic script (file://-safe): reads/attaches via the Slipstream
+// namespace. Load after track.js and sim.js.
 
-export const W = 640;
-export const H = 400;
+(function () {
+'use strict';
+const NS = typeof globalThis !== 'undefined' ? globalThis : window;
+const Slipstream = NS.Slipstream = NS.Slipstream || {};
+const { SEG_LEN, ROAD_WIDTH, DRAW_DIST, segAt,
+        CAM_HEIGHT, CAM_DEPTH, PLAYER_Z, MAX_SPEED, GEARS, SPIN_TIME } = Slipstream;
+
+const W = 640;
+const H = 400;
 const HW = W / 2;
 const HH = H / 2;
 
@@ -73,7 +80,7 @@ function fogAmount(n) {
   return 1 - Math.exp(-(t * t) * FOG_DENSITY * 2.2);
 }
 
-export class Renderer {
+class Renderer {
   constructor(canvas, sprites) {
     this.canvas = canvas;
     canvas.width = W; canvas.height = H;
@@ -530,3 +537,6 @@ function poly(ctx, x1, y1, x2, y2, x3, y3, x4, y4) {
   ctx.closePath();
   ctx.fill();
 }
+
+Object.assign(Slipstream, { Renderer, W, H });
+})();

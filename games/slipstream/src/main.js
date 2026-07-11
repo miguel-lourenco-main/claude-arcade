@@ -1,11 +1,19 @@
 // Slipstream — shell: input, game modes, fixed-timestep loop,
 // overlays, persistence, audio wiring.
+// Classic script (file://-safe): reads everything from the Slipstream
+// namespace. Load last, after all the other src scripts.
 
-import { buildTrack } from './track.js';
-import { createState, step, autopilot, MAX_SPEED, SPIN_TIME } from './sim.js';
-import { Renderer, W, H } from './render.js';
-import { makeSprites } from './sprites.js';
-import { AudioSys } from './audio.js';
+(function () {
+'use strict';
+const NS = typeof globalThis !== 'undefined' ? globalThis : window;
+const Slipstream = NS.Slipstream = NS.Slipstream || {};
+const {
+  buildTrack,
+  createState, step, autopilot, MAX_SPEED, SPIN_TIME,
+  Renderer,
+  makeSprites,
+  AudioSys,
+} = Slipstream;
 
 const STEP = 1 / 60;
 const LS_BEST = 'arcade.slipstream.best';
@@ -263,5 +271,16 @@ function toggleSound() {
 audioBtn.addEventListener('click', () => { audio.ensure(); toggleSound(); });
 canvas.addEventListener('pointerdown', () => audio.ensure());
 
+// Read-mostly seam for the headless browser tests: exposes live game
+// state so assertions can observe mode/sim without reaching into the IIFE.
+Slipstream.debug = {
+  get sim() { return sim; },
+  get mode() { return mode; },
+  get renderer() { return renderer; },
+  get best() { return best; },
+  get audio() { return audio; },
+};
+
 startAttract();
 requestAnimationFrame(frame);
+})();

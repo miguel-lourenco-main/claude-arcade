@@ -1,12 +1,19 @@
 // Slipstream — track construction.
-// Pure module (node-safe): builds the segment list, stages, roadside
+// Pure (node-safe): builds the segment list, stages, roadside
 // sprite placements and traffic seeds for the point-to-point course.
+// Classic script: attaches its API to the Slipstream namespace so the
+// game works when index.html is opened directly via file://.
 
-export const SEG_LEN = 200;     // world units per road segment
-export const ROAD_WIDTH = 1000; // road HALF-width in world units
-export const RUMBLE = 3;        // segments per rumble-stripe band
-export const DRAW_DIST = 300;   // segments walked per rendered frame
-export const RUNOUT = 420;      // straight segments after the finish gate
+(function () {
+'use strict';
+const NS = typeof globalThis !== 'undefined' ? globalThis : window;
+const Slipstream = NS.Slipstream = NS.Slipstream || {};
+
+const SEG_LEN = 200;     // world units per road segment
+const ROAD_WIDTH = 1000; // road HALF-width in world units
+const RUMBLE = 3;        // segments per rumble-stripe band
+const DRAW_DIST = 300;   // segments walked per rendered frame
+const RUNOUT = 420;      // straight segments after the finish gate
 
 const ease = {
   in: (a, b, p) => a + (b - a) * p * p,
@@ -34,7 +41,7 @@ const STAGE_FLORA = [
   ['tree', 'tower', 'pine', 'bush', 'tree'],         // 4 Duskway
 ];
 
-export function buildTrack(seed = 20260711) {
+function buildTrack(seed = 20260711) {
   const rng = mulberry32(seed);
   const segments = [];
   const stages = [];
@@ -216,8 +223,11 @@ export function buildTrack(seed = 20260711) {
 }
 
 // Segment under world-z, clamped to the track (point-to-point, no wrap).
-export function segAt(track, z) {
+function segAt(track, z) {
   const i = Math.floor(z / SEG_LEN);
   const segs = track.segments;
   return segs[Math.max(0, Math.min(segs.length - 1, i))];
 }
+
+Object.assign(Slipstream, { SEG_LEN, ROAD_WIDTH, RUMBLE, DRAW_DIST, RUNOUT, buildTrack, segAt });
+})();

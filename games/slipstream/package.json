@@ -1,5 +1,4 @@
 {
   "name": "slipstream",
-  "private": true,
-  "type": "module"
+  "private": true
 }

@@ -40,35 +40,47 @@ external dependencies, no build step.
 ## Architecture
 
 ```
-index.html          shell (canvas + DOM overlays, house chrome)
-style.css           dark arcade styling, letterboxed 640x400 canvas
-src/track.js        PURE: segment list (curve + elevation per 200-unit
-                    segment), stage recipes, sprite placement, traffic seeds
-src/sim.js          PURE: fixed-timestep physics — handling, centrifugal
-                    pull, off-road, traffic AI/collision, checkpoints,
-                    scoring; emits typed events per step; also the
-                    autopilot used by attract mode and the tests
-src/render.js       segment-projection renderer: per-frame road walk from
-                    the interpolated camera (dx += curve; x += dx),
-                    back-to-front trapezoids, fog, painter's-order sprites,
-                    parallax ridges, particles, in-canvas HUD
-src/sprites.js      procedural sprite sheet (flora, signs, gates, cars)
-src/audio.js        Web Audio synth: speed-tracking engine hum + wind +
-                    skid loops, one-shot blips (gesture-gated, toggleable)
-src/main.js         game modes (attract/countdown/race/over/results),
-                    accumulator loop, input, persistence
-test/headless.mjs   node-driven engine tests (no DOM): physics, centrifugal
-                    direction/scaling, off-road, gears, collision, passes,
-                    checkpoints, clock, and a full autopilot race
+index.html            shell (canvas + DOM overlays, house chrome)
+style.css             dark arcade styling, letterboxed 640x400 canvas
+src/track.js          PURE: segment list (curve + elevation per 200-unit
+                      segment), stage recipes, sprite placement, traffic seeds
+src/sim.js            PURE: fixed-timestep physics — handling, centrifugal
+                      pull, off-road, traffic AI/collision, checkpoints,
+                      scoring; emits typed events per step; also the
+                      autopilot used by attract mode and the tests
+src/render.js         segment-projection renderer: per-frame road walk from
+                      the interpolated camera (dx += curve; x += dx),
+                      back-to-front trapezoids, fog, painter's-order sprites,
+                      parallax ridges, particles, in-canvas HUD
+src/sprites.js        procedural sprite sheet (flora, signs, gates, cars)
+src/audio.js          Web Audio synth: speed-tracking engine hum + wind +
+                      skid loops, one-shot blips (gesture-gated, toggleable)
+src/main.js           game modes (attract/countdown/race/over/results),
+                      accumulator loop, input, persistence
+test/logic.test.js    core-rule tests (plain node asserts, no DOM)
+test/headless.mjs     node-driven engine tests (no DOM): physics, centrifugal
+                      direction/scaling, off-road, gears, collision, passes,
+                      checkpoints, clock, and a full autopilot race
+test/browser.test.mjs headless-Chrome feature test: loads the game over a
+                      local http server AND via file://, drives every
+                      user-facing feature with real keys/clicks
 ```
+
+The source files are classic scripts (no ES modules), loaded by
+`index.html` in dependency order onto a single `Slipstream` namespace —
+so the game works when index.html is opened directly via `file://`.
+The pure modules attach to `globalThis`, which is how the node tests
+load them too.
 
 The simulation runs at a fixed 60 Hz via an accumulator; rendering
 interpolates position/lateral/speed between ticks and re-walks the road
 every frame from the interpolated camera. Track geometry is deterministic
 (seeded PRNG), so the course is a fixed, learnable design.
 
-Run the engine tests with:
+Run the tests with:
 
 ```
-node test/headless.mjs
+node games/slipstream/test/logic.test.js
+node games/slipstream/test/headless.mjs
+node games/slipstream/test/browser.test.mjs   # needs /usr/bin/google-chrome
 ```

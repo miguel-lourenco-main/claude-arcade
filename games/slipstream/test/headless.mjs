@@ -1,11 +1,16 @@
 // Slipstream — headless engine tests. Run: node test/headless.mjs
 // Drives the pure track/sim modules from node; no DOM required.
 
-import { buildTrack, SEG_LEN, segAt } from '../src/track.js';
-import {
+// The src files are classic scripts (file://-safe): importing them for
+// their side effects populates the globalThis.Slipstream namespace.
+import '../src/track.js';
+import '../src/sim.js';
+
+const {
+  buildTrack, SEG_LEN, segAt,
   createState, step, autopilot,
   MAX_SPEED, OFFROAD_LIMIT, PLAYER_Z, SPIN_TIME,
-} from '../src/sim.js';
+} = globalThis.Slipstream;
 
 let failures = 0;
 function check(name, cond, extra = '') {

@@ -4,9 +4,16 @@
 // checkpoints and the countdown. AudioContext starts only after a
 // user gesture; the whole graph hangs off one toggleable master gain.
 
-import { GEARS } from './sim.js';
+// Classic script (file://-safe): reads/attaches via the Slipstream
+// namespace. Load after sim.js.
 
-export class AudioSys {
+(function () {
+'use strict';
+const NS = typeof globalThis !== 'undefined' ? globalThis : window;
+const Slipstream = NS.Slipstream = NS.Slipstream || {};
+const { GEARS } = Slipstream;
+
+class AudioSys {
   constructor() {
     this.ctx = null;
     this.enabled = true;
@@ -168,3 +175,6 @@ export class AudioSys {
     notes.forEach((f, i) => setTimeout(() => this.blip(f, 0.16, 'square', 0.15), i * 110));
   }
 }
+
+Object.assign(Slipstream, { AudioSys });
+})();

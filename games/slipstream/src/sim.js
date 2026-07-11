@@ -1,26 +1,32 @@
 // Slipstream — fixed-timestep race simulation.
-// Pure module (node-safe): no DOM, no canvas, no audio. Emits events
+// Pure (node-safe): no DOM, no canvas, no audio. Emits events
 // per step so the shell can drive sound/particles/UI from them.
+// Classic script: reads/attaches via the Slipstream namespace
+// (file://-safe — no ES modules). Load after track.js.
 
-import { SEG_LEN, ROAD_WIDTH, DRAW_DIST, segAt } from './track.js';
+(function () {
+'use strict';
+const NS = typeof globalThis !== 'undefined' ? globalThis : window;
+const Slipstream = NS.Slipstream = NS.Slipstream || {};
+const { SEG_LEN, DRAW_DIST, segAt } = Slipstream;
 
-export const MAX_SPEED = SEG_LEN * 60;        // one segment per tick at 60 Hz
-export const ACCEL = MAX_SPEED / 5;
-export const BRAKE = -MAX_SPEED;
-export const COAST = -MAX_SPEED / 5;
-export const OFFROAD_DECEL = -MAX_SPEED / 1.4;
-export const OFFROAD_LIMIT = MAX_SPEED / 4;
-export const CENTRIFUGAL = 0.29;              // outward pull = speed x curve
-export const CAM_HEIGHT = 1000;
-export const FOV = 100;
-export const CAM_DEPTH = 1 / Math.tan((FOV / 2) * Math.PI / 180);
-export const PLAYER_Z = CAM_HEIGHT * CAM_DEPTH;
-export const PLAYER_W = 0.34;                 // widths in road-halfwidth units
-export const CAR_W = 0.34;
-export const SPIN_TIME = 1.15;                // seconds of spin-out after a crash
-export const GEARS = [0, 0.16, 0.34, 0.53, 0.72, 0.88]; // ratio lower bounds
+const MAX_SPEED = SEG_LEN * 60;        // one segment per tick at 60 Hz
+const ACCEL = MAX_SPEED / 5;
+const BRAKE = -MAX_SPEED;
+const COAST = -MAX_SPEED / 5;
+const OFFROAD_DECEL = -MAX_SPEED / 1.4;
+const OFFROAD_LIMIT = MAX_SPEED / 4;
+const CENTRIFUGAL = 0.29;              // outward pull = speed x curve
+const CAM_HEIGHT = 1000;
+const FOV = 100;
+const CAM_DEPTH = 1 / Math.tan((FOV / 2) * Math.PI / 180);
+const PLAYER_Z = CAM_HEIGHT * CAM_DEPTH;
+const PLAYER_W = 0.34;                 // widths in road-halfwidth units
+const CAR_W = 0.34;
+const SPIN_TIME = 1.15;                // seconds of spin-out after a crash
+const GEARS = [0, 0.16, 0.34, 0.53, 0.72, 0.88]; // ratio lower bounds
 
-export function createState(track) {
+function createState(track) {
   return {
     track,
     phase: 'racing',          // racing | gameover | finished
@@ -86,7 +92,7 @@ function carSteer(s, car, pz) {
   return 0;
 }
 
-export function step(s, input, dt) {
+function step(s, input, dt) {
   s.events.length = 0;
   s.prev.position = s.position;
   s.prev.playerX = s.playerX;
@@ -230,7 +236,7 @@ export function step(s, input, dt) {
 
 // Demo driver for the attract mode (and the headless feasibility test):
 // hugs the inside of upcoming bends, brakes into corners, dodges traffic.
-export function autopilot(s) {
+function autopilot(s) {
   const track = s.track;
   const pz = s.position + PLAYER_Z;
   const seg = segAt(track, pz);
@@ -260,3 +266,10 @@ export function autopilot(s) {
     brake: s.speed > targetSpeed + MAX_SPEED * 0.04,
   };
 }
+
+Object.assign(Slipstream, {
+  MAX_SPEED, ACCEL, BRAKE, COAST, OFFROAD_DECEL, OFFROAD_LIMIT, CENTRIFUGAL,
+  CAM_HEIGHT, FOV, CAM_DEPTH, PLAYER_Z, PLAYER_W, CAR_W, SPIN_TIME, GEARS,
+  createState, step, autopilot,
+});
+})();

@@ -1,6 +1,12 @@
 // Slipstream — procedural sprites. Everything is drawn onto small
 // offscreen canvases at init; the renderer upscales them with
 // image-smoothing off for the chunky arcade look.
+// Classic script (file://-safe): attaches to the Slipstream namespace.
+
+(function () {
+'use strict';
+const NS = typeof globalThis !== 'undefined' ? globalThis : window;
+const Slipstream = NS.Slipstream = NS.Slipstream || {};
 
 function canvas(w, h) {
   const c = document.createElement('canvas');
@@ -189,7 +195,7 @@ const TRAFFIC_LIVERY = [
   ['#6a7684', '#232830', '#cfe4f2'],
 ];
 
-export function makeSprites() {
+function makeSprites() {
   const s = {
     pine: pine(), tree: tree(), palm: palm(), cactus: cactus(),
     rock: rock(), bush: bush(), pole: pole(), tower: tower(),
@@ -202,3 +208,6 @@ export function makeSprites() {
   };
   return s;
 }
+
+Object.assign(Slipstream, { makeSprites });
+})();
