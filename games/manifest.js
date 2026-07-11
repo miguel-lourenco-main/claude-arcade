@@ -73,4 +73,12 @@ window.GAMES = [
       "Night shift at the dockyard: shove every crate onto its glowing pad. One " +
       "push at a time, no pulling — a crate in a corner is a crate lost. 21 shifts.",
   },
+  {
+    slug: "gemgrove",
+    title: "Gemgrove",
+    genre: "Puzzle / Match-3",
+    description:
+      "Swap neighbouring gems to line up three or more, ride the cascades, and " +
+      "forge cross and burst gems to beat each level's target before moves run out.",
+  },
 ];
