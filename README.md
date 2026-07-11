@@ -25,6 +25,7 @@ directly via `file://` only works for the arcade shell itself.)
 | Game | Genre | Notes |
 | --- | --- | --- |
 | [Voxelcraft](games/voxelcraft/) | Sandbox / voxel | A voxel sandbox in the Upturn: infinite procedural terrain, biomes, caves, trees, day/night, block building, saving. Three.js via CDN. |
+| [Wyrm](games/wyrm/) | Arcade / grid | Snake rebuilt: buffered turns, tail-vacate movement, speed ramp, interpolated glow rendering. |
 
 ## Structure
 
