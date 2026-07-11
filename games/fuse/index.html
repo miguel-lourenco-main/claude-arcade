@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fuse</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="wrap">
+    <header>
+      <a class="back" href="../../index.html">&larr; Arcade</a>
+      <div class="scores">
+        <div class="scorebox">
+          <span class="label">Score</span>
+          <span id="score">0</span>
+          <span id="score-float"></span>
+        </div>
+        <div class="scorebox">
+          <span class="label">Best</span>
+          <span id="best">0</span>
+        </div>
+      </div>
+    </header>
+
+    <div class="titlebar">
+      <h1>FUSE</h1>
+      <div class="btns">
+        <button id="undo" title="Undo one move (Z)">&#x238C; undo</button>
+        <button id="new" title="New game (R)">new</button>
+        <button id="sound" title="Toggle sound (M)">&#9834;</button>
+      </div>
+    </div>
+    <p class="tag">slide the grid &middot; equal tiles fuse and double &middot; reach 2048</p>
+
+    <div id="board">
+      <div id="cells"></div>
+      <div id="tiles"></div>
+      <div id="overlay" class="hidden">
+        <h2 id="overlay-msg"></h2>
+        <div class="overlay-btns">
+          <button id="keep-going" class="hidden">Keep going</button>
+          <button id="try-again">Try again</button>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <b>&larr;&uarr;&darr;&rarr; / WASD</b> slide &middot; <b>swipe</b> on touch &middot;
+      <b>Z</b> undo &middot; <b>R</b> restart &middot; <b>M</b> sound
+    </footer>
+  </main>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

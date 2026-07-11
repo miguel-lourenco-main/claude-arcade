@@ -17,4 +17,12 @@ window.GAMES = [
       "Steer a glowing wyrm around a dark grid, devouring embers to grow longer " +
       "and faster — one wrong turn into a wall or your own body ends the run.",
   },
+  {
+    slug: "fuse",
+    title: "Fuse",
+    genre: "Puzzle / Sliding",
+    description:
+      "Slide the 4×4 grid and fuse equal tiles into their doubled value along a " +
+      "cold-to-hot ember palette. Reach the burning-gold 2048 tile — then keep going.",
+  },
 ];
