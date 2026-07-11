@@ -66,6 +66,7 @@ const overlayTitle = document.getElementById('overlay-title');
 const overlaySub = document.getElementById('overlay-sub');
 const overlayScore = document.getElementById('overlay-score');
 const audioBtn = document.getElementById('audio-toggle');
+const resetBtn = document.getElementById('reset-btn');
 
 // -------------------------------------------------------------------- audio
 
@@ -544,6 +545,7 @@ addEventListener('keydown', (e) => {
     if (restartGuard <= 0) startGame();
     return;
   }
+  if (e.key.toLowerCase() === 'r') { startGame(); return; } // instant reset, best kept
   if (e.key.toLowerCase() === 'p') {
     paused = !paused;
     if (paused) showOverlay('PAUSED', 'press P to resume', '', false);
@@ -567,6 +569,14 @@ addEventListener('blur', () => {
 });
 
 audioBtn.addEventListener('click', () => { ensureAudio(); if (actx && actx.state === 'suspended') actx.resume(); setAudio(!audioOn); });
+
+resetBtn.addEventListener('click', () => {
+  ensureAudio();
+  if (actx && actx.state === 'suspended') actx.resume();
+  resetBtn.blur(); // so Space keeps firing the cannon, not the button
+  if (state === 'attract') return; // nothing to reset yet
+  startGame();
+});
 
 // ------------------------------------------------------------------- update
 
@@ -932,12 +942,13 @@ function render() {
 
 let last = performance.now();
 let acc = 0;
+let testFrozen = false; // test harness can halt real-time logic (render continues)
 
 function frame(now) {
   acc += Math.min(now - last, 250); // clamp long tab-away gaps
   last = now;
   while (acc >= TICK * 1000) {
-    update();
+    if (!testFrozen) update();
     acc -= TICK * 1000;
   }
   render();
@@ -952,9 +963,17 @@ requestAnimationFrame(frame);
 // inert unless a test harness sets window.__BULWARK_TEST before loading
 if (window.__BULWARK_TEST) {
   window.__bulwark = {
-    snap: () => ({ state, wave, lives, score, fleetDir, playerX, paused,
-                   bullet, bombs, saucer, invaders, shields }),
+    snap: () => ({ state, wave, lives, score, hiscore, fleetDir, dropPass,
+                   playerX, paused, invaded, audioOn, alive: aliveCount(),
+                   bullet, bombs, saucer, invaders, shields, popups }),
     setPlayerX: (x) => { playerX = x; },
+    setBullet: (b) => { bullet = b; },
+    setSaucer: (s) => { saucer = s; },
+    rushSaucer: () => { saucerTimer = 1; },
+    addScore: (n) => addScore(n),
+    start: () => startGame(),
+    tick: (n) => { const k = n || 1; for (let i = 0; i < k; i++) update(); },
+    freeze: (v) => { testFrozen = !!v; },
   };
 }
 

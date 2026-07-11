@@ -50,7 +50,8 @@ body {
 }
 .back:hover { color: var(--accent); }
 
-#audio-toggle {
+#audio-toggle,
+#reset-btn {
   background: none;
   border: 1px solid var(--line);
   border-radius: 4px;
@@ -60,7 +61,8 @@ body {
   padding: 3px 8px;
   cursor: pointer;
 }
-#audio-toggle:hover { color: var(--text); border-color: var(--dim); }
+#audio-toggle:hover,
+#reset-btn:hover { color: var(--text); border-color: var(--dim); }
 
 #hud {
   display: flex;

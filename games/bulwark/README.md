@@ -15,6 +15,7 @@ Web Audio-synthesized, no assets, no dependencies, no build step.
 | ← → or A D | move the cannon |
 | Space (or ↑) | fire — one bolt on screen at a time |
 | P | pause / resume |
+| R (or the header reset button) | restart instantly — fresh score/lives/wave, best kept |
 | M | sound on/off |
 | any key | restart after game over |
 
@@ -63,5 +64,18 @@ The interesting bits:
   the header button) toggles it, persisted.
 - **Storage** — `arcade.bulwark.hiscore`, `arcade.bulwark.audio`.
 - **Testing hook** — when a harness sets `window.__BULWARK_TEST` before the
-  script loads, `window.__bulwark` exposes a state snapshot used by the
-  headless mechanics test suite (inert in normal play).
+  script loads, `window.__bulwark` exposes a state snapshot plus deterministic
+  drivers (`tick`, `freeze`, …) used by the test suite (inert in normal play).
+
+## Tests
+
+Committed under `test/`:
+
+- `node games/bulwark/test/logic.test.js` — runs the real `game.js` inside a
+  stubbed DOM and checks the mechanics: fleet march/drop/reverse, thinning
+  speedup, one-bullet limit, shield erosion, bombs, saucer, lives, game over,
+  wave advance, reset, high score, audio toggle.
+- `node games/bulwark/test/browser.test.mjs` — spawns headless Chrome, loads
+  the game over a local http server AND via `file://`, asserts a clean
+  console on both, and drives every user-facing feature with real key and
+  button input.
