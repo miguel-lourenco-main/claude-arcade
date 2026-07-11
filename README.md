@@ -10,15 +10,26 @@ generated) — no third-party game assets.
 
 ## Run it
 
-Any static file server works:
+Just open `index.html` in a browser — every game works straight from the file
+tree (classic scripts, no modules). A static server works too, and is the one
+way to play Voxelcraft (the only game still built on ES modules):
 
 ```sh
 python3 -m http.server 8000
 # then open http://localhost:8000
 ```
 
-(A server is needed because the games use ES modules; opening `index.html`
-directly via `file://` only works for the arcade shell itself.)
+## Test it
+
+Every game ships a test suite in `games/<slug>/test/`: node-runnable logic
+tests plus a headless-Chrome suite that plays the real UI over both `http://`
+and `file://`.
+
+```sh
+node run-tests.mjs            # everything (needs google-chrome)
+node run-tests.mjs --logic    # fast: logic/engine tests only
+node run-tests.mjs wyrm fuse  # only the named games
+```
 
 ## Games
 
