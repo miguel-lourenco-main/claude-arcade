@@ -30,6 +30,7 @@ directly via `file://` only works for the arcade shell itself.)
 | [Dowser](games/dowser/) | Puzzle / logic | Minesweeper rebuilt: safe first dig, flood fill, chording, three presets, best times. |
 | [Brickstorm](games/brickstorm/) | Arcade / paddle | Brick breaker: positional paddle bounce, speed ramps, side-resolved collisions, power-ups, procedural levels. |
 | [Mothlight](games/mothlight/) | Arcade / one-button | One-button flight: impulse flaps, forgiving hitbox, parallax night, reachability-clamped gaps. |
+| [Softfall](games/softfall/) | Arcade / physics | Lander: nose-vector thrust, strict touchdown gate, midpoint-displacement terrain, multiplier pads. |
 
 ## Structure
 

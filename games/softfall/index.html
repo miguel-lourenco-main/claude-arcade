@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Softfall</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <a href="../../index.html" id="back">&larr; Arcade</a>
+
+  <div id="overlay">
+    <div id="panel">
+      <h1>SOFTFALL</h1>
+      <p class="sub">thrust &middot; gravity &middot; touch down gently</p>
+      <button id="start">Start descent</button>
+      <div id="controls">
+        <div><b>&larr;/&rarr;</b> or <b>A/D</b> rotate &middot; <b>&uarr;/W/Space</b> thrust</div>
+        <div><b>P</b> pause &middot; <b>M</b> sound &middot; <b>R</b> restart</div>
+        <div class="rules">Land on a flat pad with both feet. Keep it slow, keep it upright (&plusmn;8&deg;). Smaller pads pay more. Each touchdown refuels you &mdash; a little less every time.</div>
+      </div>
+      <div class="row">
+        <button id="audio-toggle" class="secondary"></button>
+        <span id="best"></span>
+      </div>
+    </div>
+  </div>
+
+  <footer id="hint">&larr;/&rarr; rotate &middot; &uarr;/space thrust &middot; P pause &middot; M sound &middot; R restart</footer>
+
+  <script src="src/main.js" defer></script>
+</body>
+</html>

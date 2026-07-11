@@ -49,4 +49,12 @@ window.GAMES = [
       "You are a moth drawn down a lantern-lit hollow at night — flap to stay " +
       "aloft and weave through the gaps between hanging lantern-chains.",
   },
+  {
+    slug: "softfall",
+    title: "Softfall",
+    genre: "Arcade / Physics",
+    description:
+      "Ride gravity down and feather the throttle: land on flat pads carved into " +
+      "jagged vector terrain. Smaller pads pay more — every touchdown refuels less.",
+  },
 ];
