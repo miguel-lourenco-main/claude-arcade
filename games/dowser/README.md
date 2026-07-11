@@ -33,14 +33,20 @@ many hollows touch it; plant markers where the rod trembles.
 
 - `index.html` — page shell, HUD, intro overlay.
 - `style.css` — dark arcade theme, amber accent.
-- `src/main.js` — everything game: board state in flat `Uint8Array`s
-  (hazard / adjacency count / revealed / flagged), BFS flood fill, chording,
-  procedural canvas rendering (sod tiles, numbers, pennant markers, cracked
-  hollows drawn with 2D primitives — no image assets), input (mouse +
-  long-press touch), fixed-timestep clock (1/30 s accumulator; the render loop
-  only reads state).
+- `src/core.js` — the pure rules: board state in flat `Uint8Array`s
+  (hazard / adjacency count / revealed / flagged), post-first-dig seeding,
+  BFS flood fill, chording, win check. No DOM — it also loads in Node for
+  the logic tests.
+- `src/main.js` — everything on screen: procedural canvas rendering (sod
+  tiles, numbers, pennant markers, cracked hollows drawn with 2D primitives —
+  no image assets), input (mouse + long-press touch), HUD, fixed-timestep
+  clock (1/30 s accumulator; the render loop only reads state).
 - `src/audio.js` — tiny Web Audio synth (oscillator blips + filtered noise
   bursts). The AudioContext is created only after a user gesture; the sound
   toggle persists.
+- `test/` — Node logic tests plus a headless-Chrome feature suite (see
+  `test/README.md`).
 
+All three scripts are classic (non-module) scripts sharing the `window.Dowser`
+namespace, so the game runs when `index.html` is opened directly via `file://`.
 No dependencies, no build step, all assets procedural.
