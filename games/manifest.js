@@ -177,4 +177,12 @@ window.GAMES = [
       "Dash, leap and stomp through six handcrafted glades and ruin caverns — " +
       "collect sparks, crack hidden caches, and race your best to each waystone.",
   },
+  {
+    slug: "dustkart",
+    title: "Dustkart",
+    genre: "Racing / Kart",
+    description:
+      "Race six burrowfolk over 3 laps of pseudo-3D circuits: drift for spark-tier " +
+      "boosts, nail the launch window, and fight back with items on three tracks.",
+  },
 ];
