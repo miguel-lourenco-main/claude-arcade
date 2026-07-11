@@ -12,6 +12,7 @@ import {
   MEAL_ROOT, BAKED_ROOT, SILVERFIN, SEARED_SILVERFIN, COAL_ORE, LOG, PLANKS,
   STARSTONE, STARGLASS, GLOAM_ORE, GLOAM_INGOT,
   POPPY, DANDELION, EMBER_BROTH, SUNWISP_BROTH, KELP_GLAND, KELPSALVE,
+  STARKELP, TIDE_BROTH,
 } from "./blocks.js";
 import { MAX_STACK } from "./inventory.js";
 
@@ -36,6 +37,9 @@ export const SMELTS = {
   [POPPY]: EMBER_BROTH,
   [DANDELION]: SUNWISP_BROTH,
   [KELP_GLAND]: KELPSALVE,
+  // starkelp simmered whole, beads and all: the Tidebreath (pressed flat
+  // instead, it's the Kelp Crisp — a field recipe, craft.js)
+  [STARKELP]: TIDE_BROTH,
 };
 
 // seconds of heat per unit of fuel

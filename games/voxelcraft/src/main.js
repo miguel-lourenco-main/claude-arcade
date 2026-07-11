@@ -737,6 +737,7 @@ const EFFECT_NOTES = {
   mirerot: "The mire-rot takes hold.",
   kelpguard: "Cool kelp-salve steadies your skin.",
   dimmed: "The dark leans on you.",
+  tidebreath: "Your lungs think they're home.",
 };
 player.onEffectStart = (id) => {
   if (EFFECT_NOTES[id]) hud.announce(EFFECT_NOTES[id], 2600);

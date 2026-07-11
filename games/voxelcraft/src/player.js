@@ -39,6 +39,7 @@ export const EFFECTS = {
   mirerot: { name: "Mire-rot" },                  // the Mirewalker's gift
   kelpguard: { name: "Kelpguard" },               // Kelpsalve: damage shave + cure
   dimmed: { name: "Dimmed", speed: 0.6 },         // the dark leaning on you
+  tidebreath: { name: "Tidebreath" },             // Tidebreath Broth: sea-lungs
 };
 const EMBERGLOW_INTERVAL = 2.5;  // seconds per healed heart-half
 const MIREROT_INTERVAL = 2;      // seconds per gnawed heart-half
@@ -736,15 +737,24 @@ export class Player {
       this._peakY = this.pos.y;
     }
 
-    // drowning: air runs out, then 1 heart per second
+    // drowning: air runs out, then 1 heart per second. Tidebreath (the
+    // broth's whim) keeps the meter brim-full for its minute — the lungs
+    // think they're home.
     if (this.eyeInWater) {
-      this.air = Math.max(0, this.air - dt);
-      if (this.air <= 0) {
-        this._drownTimer += dt;
-        if (this._drownTimer >= 1) { this._drownTimer -= 1; this.damage(2, "drowning"); }
+      if (this.effects.has("tidebreath")) {
+        this.air = this.maxAir;
+        this._drownTimer = 0;
+      } else {
+        this.air = Math.max(0, this.air - dt);
+        if (this.air <= 0) {
+          this._drownTimer += dt;
+          if (this._drownTimer >= 1) { this._drownTimer -= 1; this.damage(2, "drowning"); }
+        }
       }
     } else {
-      this.air = Math.min(AIR_SECONDS, this.air + dt * 4);
+      // maxAir, not the raw constant: the Nacre Crown's doubled meter must
+      // refill past the old ceiling here too
+      this.air = Math.min(this.maxAir, this.air + dt * 4);
       this._drownTimer = 0;
     }
 

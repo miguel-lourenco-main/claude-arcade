@@ -188,6 +188,9 @@ export const TILE = {
   // what the Shellback sheds, and what the near country makes of it
   NACRE: 139,
   CROWN_NACRE: 140,
+  // the far country's hearth: the pressed snack and the simmered whim
+  KELP_CRISP: 141,
+  TIDE_BROTH: 142,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -1368,6 +1371,8 @@ const brothPainter = (liquid, glint) => (p) => {
 };
 painters[TILE.EMBER_BROTH] = brothPainter([196, 88, 44], [255, 190, 90]);
 painters[TILE.SUNWISP_BROTH] = brothPainter([214, 178, 62], [255, 244, 160]);
+// the Tidebreath: sea-slate teal with a nacre glint riding the surface
+painters[TILE.TIDE_BROTH] = brothPainter([58, 118, 122], [214, 240, 234]);
 
 painters[TILE.KELP_GLAND] = (p) => {
   // the Mirewalker's kelp gland: a slick dark-green sac with a pale vein
@@ -2260,6 +2265,21 @@ painters[TILE.NACRE] = (p) => {
   }
   p.px(6, 6, 232, 206, 214); p.px(10, 10, 208, 228, 216); // the shimmer
   p.px(5, 9, 244, 246, 250); // one bright catch of light
+};
+
+painters[TILE.KELP_CRISP] = (p) => {
+  // the Kelp Crisp: a pressed wafer of dark kelp, edges gone toasty-pale,
+  // one bead's ghost still glinting in the middle
+  p.clear();
+  for (let y = 5; y <= 11; y++) {
+    for (let x = 4; x <= 12; x++) {
+      const edge = y === 5 || y === 11 || x === 4 || x === 12;
+      const d = (p.rand() * 2 - 1) * 8;
+      if (edge) p.px(x, y, 118 + d, 128 + d, 96 + d);
+      else p.px(x, y, 52 + d, 76 + d, 68 + d);
+    }
+  }
+  p.px(8, 8, 196, 216, 200); // the bead's ghost
 };
 
 export function buildAtlas(seed = 1337) {

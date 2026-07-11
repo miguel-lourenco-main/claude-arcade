@@ -19,7 +19,7 @@ import {
   PLANK_HOE, STONE_HOE, IRON_HOE, MEAL_ROOT, BOGBEAN, POTTAGE, LOOMSTONE,
   QUILL, SPRINGSTAVE, STARGLASS, MURK_LANTERN, PAIL,
   ROCKET_SUN, ROCKET_EMBER, ROCKET_GLEAM, POPPY, DANDELION, GLEAM_MOSS,
-  NACRE, NACRE_CROWN,
+  NACRE, NACRE_CROWN, STARKELP, KELP_CRISP,
 } from "./blocks.js";
 
 // in: [[blockId, count], ...]  out: [blockId, count]  note: extra recipe copy
@@ -35,6 +35,9 @@ export const RECIPES = [
   { in: [[PLANKS, 3]], out: [FISHING_POLE, 1], basic: true },
   // quills: whittled darts, fletched with leaf-scrap — field ammunition
   { in: [[PLANKS, 1]], out: [QUILL, 4], basic: true },
+  // the delver's snack: starkelp pressed flat between two hand-feet — a
+  // field recipe, because the far country has no benches yet
+  { in: [[STARKELP, 2]], out: [KELP_CRISP, 2], basic: true },
   // the Notice Post: a post and a planed board — Wanderlings journal in the
   // field, so notices are field gear too and craft anywhere
   { in: [[PLANKS, 3]], out: [SIGN, 2], basic: true },

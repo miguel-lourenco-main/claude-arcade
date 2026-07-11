@@ -230,11 +230,16 @@ specific item vocabulary.
   nothing of the satchel), **Mire-rot** (the Mirewalker's gift — a gnaw
   that armor can't argue with, though it politely stops at half a heart),
   **Kelpguard** (the salve's steadying — every hurt shaved, the rot
-  washed right out), and **Dimmed** (the dark leaning on you; only one
-  thing in the Upturn hits hard enough to leave it). The broths simmer
-  in any kiln: an Emberbell for the glow, a Sunwisp for the feet, and a
-  Mirewalker's own **Kelp Gland** rendered down into **Kelpsalve** — the
-  disease carries its cure, which the bog considers fair.
+  washed right out), **Dimmed** (the dark leaning on you; only one
+  thing in the Upturn hits hard enough to leave it), and **Tidebreath**
+  (a minute of lungs that think they're home — the air meter neither
+  drains nor drowns). The broths simmer in any kiln: an Emberbell for
+  the glow, a Sunwisp for the feet, a Mirewalker's own **Kelp Gland**
+  rendered down into **Kelpsalve** — the disease carries its cure, which
+  the bog considers fair — and Starkelp simmered whole, beads and all,
+  into **Tidebreath Broth**. Pressed flat between two hand-feet instead,
+  starkelp makes the **Kelp Crisp**: the delver's snack that never
+  spoils and never quite stops glowing either.
 - **Gleam** — the light that clings to work. When the stars drowned, their
   light didn't all go out; some of it soaked into the ground and the
   beasts and the making of things, and it sheds as tiny motes when work

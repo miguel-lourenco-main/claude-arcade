@@ -307,6 +307,12 @@ export const STARKELP = 159;
 // wearer's lungs remember the sea (player.js doubles the air meter).
 export const NACRE = 160;
 export const NACRE_CROWN = 161;
+// the far country's hearth: KELP_CRISP is starkelp pressed flat in the
+// field (the delver's snack that never spoils); TIDE_BROTH is starkelp
+// simmered whole — the Tidebreath whim, a minute of lungs that think
+// they're home (player.js EFFECTS).
+export const KELP_CRISP = 162;
+export const TIDE_BROTH = 163;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -873,6 +879,19 @@ BLOCKS[KELPSALVE] = def("Kelpsalve", cropCross({
   tiles: cube(TILE.KELPSALVE),
   placeable: false,
   food: { restore: 1, effect: ["kelpguard", 30] },
+}));
+// the far country's hearth: the crisp is a plain field snack; the broth
+// carries the Tidebreath whim (a minute of sea-lungs — the air meter
+// neither drains nor drowns, player.js)
+BLOCKS[KELP_CRISP] = def("Kelp Crisp", cropCross({
+  tiles: cube(TILE.KELP_CRISP),
+  placeable: false,
+  food: { restore: 3 },
+}));
+BLOCKS[TIDE_BROTH] = def("Tidebreath Broth", cropCross({
+  tiles: cube(TILE.TIDE_BROTH),
+  placeable: false,
+  food: { restore: 1, effect: ["tidebreath", 60] },
 }));
 
 // the Loomstone: a pearl bedded in stone; the light pools in the basin.
