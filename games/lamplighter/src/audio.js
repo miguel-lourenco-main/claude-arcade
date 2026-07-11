@@ -111,3 +111,6 @@ class Sfx {
     this.tone(495, 495, 0.14, "sine", 0.1, 0.12);
   }
 }
+
+/* dual environment: classic script in the browser, module in node tests */
+if (typeof module !== "undefined" && module.exports) module.exports = Sfx;

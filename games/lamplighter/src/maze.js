@@ -258,3 +258,6 @@ const MAZE = (() => {
 
   return { WALL, PATH, DEN, DOOR, COLS, ROWS, TUNNEL_ROW, DIRS, mulberry32, generateMaze, bfsField };
 })();
+
+/* dual environment: classic script in the browser, module in node tests */
+if (typeof module !== "undefined" && module.exports) module.exports = MAZE;

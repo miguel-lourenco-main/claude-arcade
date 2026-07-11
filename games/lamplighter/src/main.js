@@ -1126,6 +1126,58 @@
     if (state !== "title" && state !== "gameover") setPaused(true);
   });
 
+  /* ---------- guarded test handle ----------
+     Inert unless the page set window.__LAMPLIGHTER_TEST__ before this
+     script loaded (the committed test suite does that via CDP). */
+
+  if (window.__LAMPLIGHTER_TEST__) {
+    window.__lamplighter = {
+      snapshot() {
+        return {
+          state, paused, score, high, lives, level, litCount, totalLamps,
+          mode, modeClock, fleeTimer, banishCombo,
+          player: { x: player.x, y: player.y, dir: player.dir, buf: player.buf, face: player.face },
+          gloams: gloams.map((g) => ({ x: g.x, y: g.y, state: g.state, fleeing: g.fleeing })),
+        };
+      },
+      mazeInfo() {
+        return {
+          spawn: maze.spawn,
+          grid: maze.grid,
+          lanterns: maze.lanterns.map((l) => ({ x: l.x, y: l.y, lit: !!l.lit })),
+          braziers: maze.braziers.map((b) => ({ x: b.x, y: b.y, lit: !!b.lit })),
+        };
+      },
+      setPlayer(x, y) {
+        player.x = x; player.y = y;
+        player.prevX = x; player.prevY = y;
+        player.dir = null; player.buf = null;
+      },
+      setGloam(i, patch) {
+        const g = gloams[i];
+        for (const k of Object.keys(patch)) g[k] = patch[k];
+        g.prevX = g.x; g.prevY = g.y;
+      },
+      setLives(n) { lives = n; updateHud(); },
+      setMode(m) { mode = m; },
+      glowAt(x, y) { return litGlow[idx(((x % COLS) + COLS) % COLS, y)]; },
+      clearFlee() { fleeTimer = 0; for (const g of gloams) g.fleeing = false; },
+      target(i) { return gloamTarget(gloams[i]); },
+      playerSpeed() { return playerSpeed(); },
+      gloamSpeed(i) { return gloamSpeed(gloams[i]); },
+      lightAllButOne() {
+        const all = maze.lanterns.concat(maze.braziers);
+        const unlit = all.filter((o) => !o.lit);
+        for (let i = 0; i < unlit.length - 1; i++) {
+          unlit[i].lit = true; litCount++; applyGlow(unlit[i]);
+        }
+        updateHud();
+        const lastOne = unlit[unlit.length - 1];
+        return { x: lastOne.x, y: lastOne.y };
+      },
+    };
+  }
+
   /* ---------- boot ---------- */
 
   buildGlowSprite();
