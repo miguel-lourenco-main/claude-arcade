@@ -224,6 +224,7 @@ const G = {
   particles: [],
   popups: [],
   pausedByBlur: false,
+  confirmPrev: null,      // state to return to if the restart dialog is cancelled
 };
 
 function gravityMs(level) {
@@ -529,6 +530,40 @@ function resumeGame() {
   hideOverlay();
 }
 
+/* ---------------- restart confirmation ----------------
+   R during a live run opens a confirm dialog instead of instantly
+   restarting, so a mis-press can't destroy the dig. While the dialog
+   is open the state is 'confirm', which logicTick treats as frozen.
+   After game over there is nothing to lose, so restart stays instant. */
+
+function openRestartConfirm() {
+  if (G.state !== 'playing' && G.state !== 'clearing') return;
+  G.confirmPrev = G.state;
+  G.state = 'confirm';
+  // drop any held inputs so nothing sticks while the dialog is up
+  G.softDown = false;
+  G.dasDir = 0;
+  G.dasTimer = 0;
+  G.dasRepeating = false;
+  G.heldDirs = [];
+  showOverlay('RESTART?',
+    'restart this run? the current dig will be lost',
+    '<b>Enter</b> restart &middot; <b>Esc</b> keep digging', true);
+}
+
+function cancelRestartConfirm() {
+  if (G.state !== 'confirm') return;
+  G.state = G.confirmPrev || 'playing';
+  G.confirmPrev = null;
+  hideOverlay();
+}
+
+function confirmRestart() {
+  if (G.state !== 'confirm') return;
+  G.confirmPrev = null;
+  startGame();
+}
+
 /* ---------------- fixed-timestep logic ---------------- */
 
 function logicTick(dt) {
@@ -818,6 +853,9 @@ const $oTitle = document.getElementById('overlay-title');
 const $oSub = document.getElementById('overlay-sub');
 const $oAction = document.getElementById('overlay-action');
 const $audioBtn = document.getElementById('audio-toggle');
+const $confirmBtns = document.getElementById('confirm-buttons');
+const $confirmYes = document.getElementById('confirm-yes');
+const $confirmNo = document.getElementById('confirm-no');
 
 function syncHud() {
   $score.textContent = G.score;
@@ -826,10 +864,11 @@ function syncHud() {
   $level.textContent = G.level;
 }
 
-function showOverlay(title, sub, action) {
+function showOverlay(title, sub, action, withConfirm) {
   $oTitle.textContent = title;
   $oSub.innerHTML = sub || '';
   $oAction.innerHTML = action || '';
+  $confirmBtns.classList.toggle('hidden', !withConfirm);
   $overlay.classList.remove('hidden');
 }
 function hideOverlay() {
@@ -877,6 +916,13 @@ document.addEventListener('keydown', e => {
   // sound toggle works everywhere
   if (k === 'm') { AudioSys.toggle(); syncAudioBtn(); return; }
 
+  // restart confirmation dialog: Enter confirms, Esc cancels
+  if (G.state === 'confirm') {
+    if (e.key === 'Enter') { e.preventDefault(); confirmRestart(); }
+    else if (e.key === 'Escape') { e.preventDefault(); cancelRestartConfirm(); }
+    return;
+  }
+
   if (G.state === 'menu') { startGame(); return; }
   if (G.state === 'over') { startGame(); return; }
 
@@ -887,7 +933,7 @@ document.addEventListener('keydown', e => {
   }
   if (G.state === 'paused') return;
 
-  if (k === 'r' && !e.repeat) { startGame(); return; }
+  if (k === 'r' && !e.repeat) { openRestartConfirm(); return; }
 
   if (G.state !== 'playing') return;
 
@@ -930,6 +976,17 @@ $audioBtn.addEventListener('click', () => {
   AudioSys.toggle();
   syncAudioBtn();
   $audioBtn.blur();
+});
+
+$confirmYes.addEventListener('click', e => {
+  e.stopPropagation();
+  $confirmYes.blur();
+  confirmRestart();
+});
+$confirmNo.addEventListener('click', e => {
+  e.stopPropagation();
+  $confirmNo.blur();
+  cancelRestartConfirm();
 });
 
 $overlay.addEventListener('click', () => {

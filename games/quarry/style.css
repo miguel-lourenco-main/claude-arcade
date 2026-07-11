@@ -90,6 +90,27 @@ body {
 #overlay-score { color: #b7c0cc; margin-top: 14px; font-size: 13px; }
 #overlay-score b { color: #c8a24f; }
 
+#confirm-buttons {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  margin-top: 24px;
+}
+#confirm-buttons.hidden { display: none; }
+#confirm-buttons button {
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 2px;
+  padding: 8px 18px;
+  background: transparent;
+  color: #b7c0cc;
+  border: 1px solid #3a414c;
+  border-radius: 4px;
+  cursor: pointer;
+}
+#confirm-buttons button:hover { border-color: #c8a24f; color: #fff; }
+#confirm-yes { border-color: #c8a24f; color: #c8a24f; }
+
 #overlay-controls {
   margin-top: 28px;
   color: #7c8592;

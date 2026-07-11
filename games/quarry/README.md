@@ -21,9 +21,10 @@ the field size, the rotation kick table, the earthy quarry palette, and the nami
 | C / Shift | stash the stone (once per drop) |
 | P | pause (also pauses on window blur) |
 | M | sound on/off |
-| R | restart |
+| R | restart (during a run it asks "Restart this run?" — Enter / RESTART confirms, Esc / KEEP DIGGING cancels; the game is frozen while the dialog is open) |
 
-Any key starts a game from the title or game-over screen.
+Any key starts a game from the title or game-over screen — after a game over the
+restart is instant, since there is nothing left to lose.
 
 ## Rules
 
@@ -57,3 +58,6 @@ Any key starts a game from the title or game-over screen.
   - **Audio**: Web Audio oscillator blips and filtered noise bursts, synthesized on the
     fly. The context is created on the first user gesture; M toggles.
   - **Persistence**: `arcade.quarry.high` and `arcade.quarry.audio` in localStorage.
+- `test/` — committed feature tests: `node test/logic.test.js` (core rules, run against
+  the real `game.js` via a DOM-stub harness) and `node test/browser.test.mjs` (headless
+  Chrome over both `http://` and `file://`). See `test/README.md`.
