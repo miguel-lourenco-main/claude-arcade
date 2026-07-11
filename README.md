@@ -36,6 +36,7 @@ directly via `file://` only works for the arcade shell itself.)
 | [Gemgrove](games/gemgrove/) | Puzzle / match-3 | Swap-adjacent match-3: cascade multipliers, cross/burst specials, no-match reverts, idle hints, move-limited levels. |
 | [Bulwark](games/bulwark/) | Arcade / shooter | Fixed shooter: lockstep fleet that sprints as it thins, one-bullet limit, per-pixel shield erosion, mystery saucer. |
 | [Patience](games/patience/) | Cards / solitaire | Klondike: draw-1/draw-3, run drag & drop, full undo, auto-complete, seeded shareable deals, cascade win physics. |
+| [Reversi](games/reversi/) | Board / strategy | Disc-flipping strategy vs 3 AI tiers (greedy, positional, alpha-beta + endgame solve in a worker) or hotseat. |
 
 ## Structure
 

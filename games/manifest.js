@@ -97,4 +97,12 @@ window.GAMES = [
       "Full Klondike with seeded, shareable deals: drag runs across seven piles, " +
       "undo everything, and finish with a physics-driven cascade of bouncing cards.",
   },
+  {
+    slug: "reversi",
+    title: "Reversi",
+    genre: "Board / Strategy",
+    description:
+      "Bracket enemy discs between two of yours to flip whole lines at once — " +
+      "outwit three tiers of AI, up to a deep endgame-solving searcher, or duel hotseat.",
+  },
 ];

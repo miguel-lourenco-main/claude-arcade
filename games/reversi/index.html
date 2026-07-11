@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reversi</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="page">
+    <header>
+      <a class="back" href="../../index.html">&larr; Arcade</a>
+      <h1>REVER<span>SI</span></h1>
+      <div class="spacer"></div>
+    </header>
+
+    <div id="scorebar">
+      <div class="chip" id="chip-black">
+        <span class="disc black"></span>
+        <span class="label" id="label-black">Black</span>
+        <span class="count" id="count-black">2</span>
+      </div>
+      <div id="status">Set up a game</div>
+      <div class="chip" id="chip-white">
+        <span class="disc white"></span>
+        <span class="label" id="label-white">White</span>
+        <span class="count" id="count-white">2</span>
+      </div>
+    </div>
+
+    <div id="board-wrap">
+      <canvas id="board" width="588" height="588"></canvas>
+      <div id="toast" class="hidden"></div>
+
+      <div id="gameover" class="overlay hidden">
+        <div class="panel">
+          <h2 id="go-title">Game over</h2>
+          <div id="go-score"></div>
+          <div id="go-stats"></div>
+          <div class="row">
+            <button id="go-rematch">Rematch</button>
+            <button id="go-setup" class="secondary">Change setup</button>
+          </div>
+          <p class="hint">Enter &mdash; instant rematch</p>
+        </div>
+      </div>
+
+      <div id="setup" class="overlay">
+        <div class="panel">
+          <h2>New game</h2>
+          <div class="opt">
+            <span>Opponent</span>
+            <div class="seg" id="seg-mode">
+              <button data-v="ai">Computer</button>
+              <button data-v="2p">Two players</button>
+            </div>
+          </div>
+          <div class="opt" id="opt-side">
+            <span>Play as</span>
+            <div class="seg" id="seg-side">
+              <button data-v="1">Black &middot; first</button>
+              <button data-v="2">White</button>
+            </div>
+          </div>
+          <div class="opt" id="opt-level">
+            <span>Difficulty</span>
+            <div class="seg" id="seg-level">
+              <button data-v="1">I &middot; Greedy</button>
+              <button data-v="2">II &middot; Positional</button>
+              <button data-v="3">III &middot; Deep</button>
+            </div>
+          </div>
+          <div class="row">
+            <button id="setup-start">Start game</button>
+            <button id="setup-cancel" class="secondary hidden">Cancel</button>
+          </div>
+          <p class="hint">Bracket enemy discs between two of yours to flip them.<br>Most discs when the board settles wins.</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="toolbar">
+      <button id="btn-new">New game</button>
+      <button id="btn-undo">Undo</button>
+      <button id="btn-hints">Hints: on</button>
+      <button id="btn-sound">Sound: on</button>
+    </div>
+
+    <footer>
+      click &mdash; place disc &nbsp;&middot;&nbsp; <b>U</b> undo &nbsp;&middot;&nbsp; <b>N</b> new game &nbsp;&middot;&nbsp; <b>H</b> hints &nbsp;&middot;&nbsp; <b>M</b> sound &nbsp;&middot;&nbsp; <b>Esc</b> menu
+    </footer>
+  </div>
+
+  <script src="src/engine.js"></script>
+  <script src="src/audio.js"></script>
+  <script src="src/main.js"></script>
+</body>
+</html>
