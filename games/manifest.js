@@ -161,4 +161,12 @@ window.GAMES = [
       "Pseudo-3D checkpoint racer: beat the clock through five themed stages, weave " +
       "through traffic, and brake into the bends before the pull throws you off the road.",
   },
+  {
+    slug: "rootguard",
+    title: "Rootguard",
+    genre: "Strategy / Lane defense",
+    description:
+      "Plant magical flora across a 5-lane grove to stop the shambling blights: " +
+      "collect dew, manage seed cooldowns, and survive five levels to the FINAL SURGE.",
+  },
 ];
