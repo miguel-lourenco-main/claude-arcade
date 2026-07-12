@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fernfoot</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="frame">
+    <header id="topbar">
+      <a href="../../index.html" class="back">&larr; Arcade</a>
+      <h1>FERNFOOT</h1>
+      <button id="audio-toggle" type="button" title="toggle sound">sound: on</button>
+    </header>
+
+    <div id="hud">
+      <div class="stat"><span class="label">glade</span><span id="hud-level">—</span></div>
+      <div class="stat"><span class="label">lives</span><span id="hud-lives">3</span></div>
+      <div class="stat"><span class="label">sparks</span><span id="hud-sparks">0</span></div>
+      <div class="stat"><span class="label">score</span><span id="hud-score">0</span></div>
+      <div class="stat"><span class="label">time</span><span id="hud-time">0.0s</span></div>
+      <div class="stat"><span class="label">power</span><span id="hud-power">—</span></div>
+    </div>
+
+    <div id="stage">
+      <canvas id="game"></canvas>
+      <div id="overlay" class="show">
+        <div class="panel">
+          <div id="overlay-title">FERNFOOT</div>
+          <div id="overlay-sub"></div>
+          <div id="overlay-body"></div>
+        </div>
+      </div>
+    </div>
+
+    <footer id="controls">
+      <span><b>&larr;&rarr;</b>/<b>AD</b> move</span>
+      <span><b>Shift</b> run</span>
+      <span><b>Z</b>/<b>Space</b>/<b>&uarr;</b> jump (hold = higher)</span>
+      <span><b>&darr;</b>+jump drop</span>
+      <span><b>P</b> pause</span>
+      <span><b>M</b> sound</span>
+      <span><b>Esc</b> glades</span>
+    </footer>
+  </main>
+
+  <script src="logic.js"></script>
+  <script src="levels.js"></script>
+  <script src="game.js"></script>
+
+  <!-- shared arcade widget: rules-any-time + player ideas -->
+  <script src="../_common/arcade-config.js"></script>
+  <script src="../_common/arcade-widget.js"></script>
+  <script>
+    ArcadeWidget.init({
+      slug: "fernfoot",
+      title: "Fernfoot",
+      rulesSelector: "#controls",
+    });
+  </script>
+</body>
+</html>

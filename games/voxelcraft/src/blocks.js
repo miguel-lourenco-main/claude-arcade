@@ -188,8 +188,8 @@ export const GLOAM_LEGGINGS = 114;
 export const GLOAM_TREADS = 115;
 // the Mirelands (see LORE.md): the bog country. MUD is Mire Sod — wet
 // ground that drags the stride; REEDS are Marsh Reeds, which rarely hand
-// over BOGBEAN_POD (the bog's seed pouch — planting arrives with the
-// bogbean farming wave, so for now it's a curiosity worth keeping).
+// over BOGBEAN_POD (the bog's seed pouch — plant it in Turned Earth and
+// it twines up the BOGBEAN_* ladder below).
 export const MUD = 116;
 export const REEDS = 117;
 export const BOGBEAN_POD = 118;
@@ -271,8 +271,9 @@ export const EMBER_PAIL = 151;
 // Cinderglass: the Emberwash slaked. When Water meets the Emberwash (a pail
 // pour, or either fluid placed against the other) the molten cell hardens to
 // this dense black volcanic glass — very hard, drops itself, and asks for a
-// Sky-Iron Cracker (iron pick, tier 3) or better. Portal-grade stock for a
-// wave still to come.
+// Sky-Iron Cracker (iron pick, tier 3) or better. The Cinder Door's frame
+// stock: a standing ring of it, given its fire back, opens on the Undersky
+// (portal.js / PORTAL_FILM below).
 export const CINDERGLASS = 152;
 // the Wanderwing (see LORE.md): a patchwork wing-cape woven at the Loomstone.
 // It takes the JERKIN wear slot — the classic trade, no chest armor while you
@@ -288,6 +289,39 @@ export const WANDERWING = 153;
 export const ROCKET_SUN = 154;   // Sunwisp Rocket — a gold willow droop
 export const ROCKET_EMBER = 155; // Emberbell Rocket — a red sphere puff
 export const ROCKET_GLEAM = 156; // Gleam Rocket — a nacre-green ring
+// the Cinder Door (see LORE.md): the film that fills an ignited Cinderglass
+// ring — the door standing open. Never crafted, never mined, never dropped:
+// interact.js writes it when a full Ember Pail gives a whole frame its fire
+// back, and portal.js collapses it the moment the ring stops being whole.
+export const PORTAL_FILM = 157;
+// the Undersky's own country (see LORE.md / undersky.js): PEARLSAND is the
+// pale dune skin of the drowned old floor; STARKELP is the petrified kelp
+// of the sea that used to hang overhead, still holding a bead of the
+// drowned light. Both generate only under the other sky, but travel home
+// in a satchel like anything else.
+export const PEARLSAND = 158;
+export const STARKELP = 159;
+// NACRE is what the Shellback's shell sheds (see LORE.md / mobs.js) — the
+// far country's only export worth the trip; NACRE_CROWN is what the near
+// country makes of it: a crown-slot piece at gloamgold protection whose
+// wearer's lungs remember the sea (player.js doubles the air meter).
+export const NACRE = 160;
+export const NACRE_CROWN = 161;
+// the far country's hearth: KELP_CRISP is starkelp pressed flat in the
+// field (the delver's snack that never spoils); TIDE_BROTH is starkelp
+// simmered whole — the Tidebreath whim, a minute of lungs that think
+// they're home (player.js EFFECTS).
+export const KELP_CRISP = 162;
+export const TIDE_BROTH = 163;
+// the Undertow's fight (see LORE.md / mobs.js): TIDEHEART is what it lets
+// go of — nothing else sheds one; PEARL_CHIME is what calls it up, rung
+// standing in a pearl-bed (consumed by the ringing).
+export const TIDEHEART = 164;
+export const PEARL_CHIME = 165;
+// HEARTGLASS: the Tideheart run molten — a pane whose light the dark
+// won't argue with (mobs.js gives it DOUBLE the torch's spawn-guard
+// radius; one pane holds a homestead the way a wall of torches does).
+export const HEARTGLASS = 166;
 
 // kind: 'cube' | 'cross'
 // bucket: 'opaque' | 'cutout' | 'water' (which mesh/material a face lands in)
@@ -855,6 +889,58 @@ BLOCKS[KELPSALVE] = def("Kelpsalve", cropCross({
   placeable: false,
   food: { restore: 1, effect: ["kelpguard", 30] },
 }));
+// the far country's hearth: the crisp is a plain field snack; the broth
+// carries the Tidebreath whim (a minute of sea-lungs — the air meter
+// neither drains nor drowns, player.js)
+BLOCKS[KELP_CRISP] = def("Kelp Crisp", cropCross({
+  tiles: cube(TILE.KELP_CRISP),
+  placeable: false,
+  food: { restore: 3 },
+}));
+BLOCKS[TIDE_BROTH] = def("Tidebreath Broth", cropCross({
+  tiles: cube(TILE.TIDE_BROTH),
+  placeable: false,
+  food: { restore: 1, effect: ["tidebreath", 60] },
+}));
+
+// the Tideheart: the Dusk Pearl's counterpart from the second boss —
+// nothing sheds it but the Undertow, and (next commit) nothing consumes
+// it but the kiln
+BLOCKS[TIDEHEART] = def("Tideheart", {
+  tiles: cube(TILE.TIDEHEART),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  hardness: 0.05,
+  placeable: false,
+  sound: "stone",
+  maxStack: 1,
+});
+// the Pearl Chime: rung (right-click) standing in a pearl-bed, it calls
+// the Undertow up through the floor. Carried, never placed, spent by the
+// ringing — consume-LAST like the Murk Lantern (interact.js/main.js).
+BLOCKS[PEARL_CHIME] = def("Pearl Chime", {
+  tiles: cube(TILE.PEARL_CHIME),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  hardness: 0.05,
+  placeable: false,
+  sound: "glass",
+});
+// Heartglass: starglass's mesh rules exactly (cutout pane, drops itself),
+// full torch brightness — and mobs.js watches DOUBLE the distance for it
+BLOCKS[HEARTGLASS] = def("Heartglass", {
+  tiles: cube(TILE.HEARTGLASS),
+  hardness: 0.6,
+  opaque: false,
+  bucket: "cutout",
+  cullSame: true,
+  sound: "glass",
+  lightEmit: 14,
+});
 
 // the Loomstone: a pearl bedded in stone; the light pools in the basin.
 // Glows a little (a hollowed starstone would), pick-work to move.
@@ -1135,6 +1221,77 @@ const rocket = (name, tile, color, shape) => def(name, {
 BLOCKS[ROCKET_SUN] = rocket("Sunwisp Rocket", TILE.ROCKET_SUN, 0xffcf4a, "willow");
 BLOCKS[ROCKET_EMBER] = rocket("Emberbell Rocket", TILE.ROCKET_EMBER, 0xff5238, "sphere");
 BLOCKS[ROCKET_GLEAM] = rocket("Gleam Rocket", TILE.ROCKET_GLEAM, 0x84e8bc, "ring");
+
+// the Cinder Door's film: a world block the player walks INTO (non-solid) to
+// cross. Glass-family mesh rules (cutout + cullSame so a wide door draws no
+// inner faces), unbreakable by hand (hardness Infinity — it lives and dies
+// with its frame, via portal.js), sheds a warm ember glow (11 also keeps
+// hostiles off the doorstep, like starglass), and stays out of the palette.
+BLOCKS[PORTAL_FILM] = def("Cinder Door", {
+  tiles: cube(TILE.CINDER_FILM),
+  hardness: Infinity,
+  drops: null,
+  solid: false,
+  opaque: false,
+  bucket: "cutout",
+  cullSame: true,
+  lightEmit: 11,
+  hidden: true,
+  sound: "glass",
+});
+
+// Pearlsand: sand-family handling all the way down (shovel, soft, sounds
+// like a beach) — only the color says it never saw this sun
+BLOCKS[PEARLSAND] = def("Pearlsand", {
+  hardness: 0.5,
+  tiles: cube(TILE.PEARLSAND),
+  sound: "sand",
+  toolKind: "shovel",
+});
+// Starkelp: a plant by every mesh/pop rule (cross, breaks in one pinch,
+// replants on any solid top), glowing dimmer than a Wispcap — a bead of
+// light, not a lamp. Its glow guards only its own cell's pool, like all
+// dim flora.
+BLOCKS[STARKELP] = def("Starkelp", {
+  hardness: 0.05,
+  tiles: cube(TILE.STARKELP),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  sound: "plant",
+  lightEmit: 6,
+});
+
+// Nacre: a carried material like the Dusk Pearl — nothing sheds it but a
+// Shellback's shell, and (for now) nothing consumes it but the crown
+BLOCKS[NACRE] = def("Nacre", {
+  tiles: cube(TILE.NACRE),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  hardness: 0.05,
+  placeable: false,
+  sound: "stone",
+});
+// the Nacre Crown: a one-off top tier for one slot, like the Wanderwing is
+// for the jerkin — gloam-crown protection plus `armor.tide`, which player.js
+// reads as a doubled air meter. Tier "nacre" has no plate overlay in
+// player-model.js (the Wanderwing precedent: unknown tiers simply don't
+// render), so the crown shows on the meter, not the model.
+BLOCKS[NACRE_CROWN] = def("Nacre Crown", {
+  tiles: cube(TILE.CROWN_NACRE),
+  kind: "cross",
+  bucket: "cutout",
+  solid: false,
+  opaque: false,
+  hardness: 0.05,
+  placeable: false,
+  sound: "stone",
+  maxStack: 1,
+  armor: { kind: "crown", tier: "nacre", prot: 0.14, maxDur: 384, tide: true },
+});
 
 // --- the Pearlfall's gifts ------------------------------------------------------
 // Starstone: a landed pearl of the old sky, dense and still glowing. It only

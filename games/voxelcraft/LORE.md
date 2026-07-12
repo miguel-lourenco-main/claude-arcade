@@ -192,6 +192,23 @@ specific item vocabulary.
   Pearl**: nacre in negative, the material of the Dusk Thread, and the
   only proof the Upturn accepts that you met the last shadow and it
   shook first.
+- **The Undertow & the Pearl Chime** — the drowned sea has no waves left,
+  so it does the other thing seas do: it takes hold of what walks on its
+  floor. The Undertow is the floor's own grip stood upright — a wall of
+  old shell with the kelp still draped off its shoulders — and it does
+  not come when called; it comes when RUNG: a **Pearl Chime** (two nacre
+  drops hung from a starglass bar) sounded standing in a pearl-bed. It
+  hits like a closing hand, and past half strength it takes to the floor
+  — sinks clean out of reach and comes up beside you, all shoulders,
+  which the Wanderlings agree is very rude and very like a sea. What it
+  finally lets go of is the **Tideheart**: the piece of the drowned sea
+  that kept beating, and proof the floor shook first.
+- **Heartglass** — the Tideheart run molten in the kiln: a warm teal pane
+  with the beat still caught in it. It burns as bright as any torch, but
+  the dark gives it a WIDE berth — twice a torch's watch — because the
+  dark remembers what the heart belonged to, and it isn't going back to
+  ask. One pane over the door holds a homestead the way a wall of
+  torches does; the Prowl itself won't seat anything inside its light.
 - **The Tuftling** — a small tufty burrower of the meadows, mostly tail
   and opinion, and mad for Silverfin. Offer it one and it might decide
   you are its person (it keeps the fish either way; it is not a
@@ -217,21 +234,29 @@ specific item vocabulary.
   **Flint Thread** (a digger half again as eager), the **Knotwood
   Thread** (wear that lands half as often — named for the wood that
   refuses to split), the **Ward Thread** (a worn piece that argues a
-  little harder), and the **Dusk Thread** (a pearl's dark woven into an
-  edge: three deeper still, and the struck carry the Dimmed whim). One
-  thread per item, and it never comes out — weaving is a promise, not a
-  coat of paint.
+  little harder), the **Dusk Thread** (a pearl's dark woven into an
+  edge: three deeper still, and the struck carry the Dimmed whim), and
+  the **Tide Thread** (two shards of nacre through a pair of treads:
+  the sea carries the wearer — swimming is swift and the Mire Sod
+  forgets to grab, the bog being, after all, just shallow sea that
+  dried). One thread per item, and it never comes out — weaving is a
+  promise, not a coat of paint.
 - **The Whims** — the Upturn's moods, worn briefly. A broth or a bad bite
   can leave one on you for a minute: **Fleetfoot** (the Sunwisp lightness
   takes to your feet), **Emberglow** (a warm ember heals you and asks
   nothing of the satchel), **Mire-rot** (the Mirewalker's gift — a gnaw
   that armor can't argue with, though it politely stops at half a heart),
   **Kelpguard** (the salve's steadying — every hurt shaved, the rot
-  washed right out), and **Dimmed** (the dark leaning on you; only one
-  thing in the Upturn hits hard enough to leave it). The broths simmer
-  in any kiln: an Emberbell for the glow, a Sunwisp for the feet, and a
-  Mirewalker's own **Kelp Gland** rendered down into **Kelpsalve** — the
-  disease carries its cure, which the bog considers fair.
+  washed right out), **Dimmed** (the dark leaning on you; only one
+  thing in the Upturn hits hard enough to leave it), and **Tidebreath**
+  (a minute of lungs that think they're home — the air meter neither
+  drains nor drowns). The broths simmer in any kiln: an Emberbell for
+  the glow, a Sunwisp for the feet, a Mirewalker's own **Kelp Gland**
+  rendered down into **Kelpsalve** — the disease carries its cure, which
+  the bog considers fair — and Starkelp simmered whole, beads and all,
+  into **Tidebreath Broth**. Pressed flat between two hand-feet instead,
+  starkelp makes the **Kelp Crisp**: the delver's snack that never
+  spoils and never quite stops glowing either.
 - **Gleam** — the light that clings to work. When the stars drowned, their
   light didn't all go out; some of it soaked into the ground and the
   beasts and the making of things, and it sheds as tiny motes when work
@@ -262,6 +287,64 @@ specific item vocabulary.
   hand back **Bogbeans**; a meal root and two bogbeans simmered together
   make **Wanderer's Pottage**, the dish every satchel dreams about on
   the fourth night out.
+- **The Cinder Door** — Cinderglass is the Emberwash slaked: fire that was
+  made to forget itself. Stand a ring of it upright — two to four hand-spans
+  wide, three or four tall, the corners optional (a door is about the hole,
+  not the trim) — and give it back a full Sky-Iron Pail of the Emberwash,
+  and the glass remembers. Not being molten; being a DOOR. The fire spreads
+  flat across the opening like a skin of sunset and stays, and stepping in
+  and standing a polite moment carries you through to the far side of the
+  flip's fold. Break any stone of the ring and the whole film lets go with
+  a sigh — a door is one thing, not a grid of little fires. The Upturn is
+  courteous about arrivals: if the far country never got its half built,
+  one is standing there waiting anyway.
+- **The Undersky** — where a Cinder Door opens to: the other side of the
+  turning-over, the drowned old floor the night sky has been showing
+  everyone all along. Permanent dusk — there is no sun to raise, and the
+  pearls hang close enough to read by. Pearl-pale dunes over slate, the old
+  floor flecked with starstone where the drowned light pooled, and the dark
+  walks whenever it pleases (there is no dawn to send it home). Wanderlings
+  who cross say the quiet has a texture. What else is down there — what
+  tends the pearl-beds, and what it guards — the delvers are still arguing
+  about, mostly from a distance.
+- **Pearlsand** — the Undersky's dune skin: sand that never saw this sun,
+  pale as the inside of a shell and glinting faintly pink and green where
+  the drowned light still catches. Scoops like any beach; journals as ×64
+  like any beach; is not, the Wanderlings insist, any beach.
+- **Starkelp** — the kelp of the sea that used to hang overhead, petrified
+  mid-sway when the water became the night. Each stalk still holds a few
+  lit beads of the drowned light — dimmer than a Wispcap, a bead rather
+  than a lamp — and it comes away at a pinch and stands back up on any
+  solid top. Delvers of the far country plant it the way delvers of the
+  near one press Gleam Moss: a trail of company through the quiet.
+- **The Pearl-Beds** — the wide shallow basins of the Undersky where the
+  drowned light pooled and sank in. The dunes dip, the Starkelp crowds up
+  thick, and lit starstone studs the floor itself — treasure lying in the
+  open, which any Wanderling will tell you is the most suspicious kind.
+- **The Sunken Steads** — the pre-flip world didn't only farm and dig; it
+  FISHED. When the water went up and became the night, everything that
+  stood in it was left standing in the air instead: cottages of the old
+  shore-folk sunk to their sills in pearlsand, and the stump-lines of
+  jetties still marching across the dunes toward a shore that is now
+  overhead. Wanderlings who cross read whatever the drowned boards still
+  say, take what the sea kept in the chests — old timber, coal, a shard
+  of nacre, now and then a netted star — and leave the stumps pointing
+  home. Home, the boards agree, points up.
+- **The Shellback** — what tends the pearl-beds, and the answer to why the
+  treasure lies in the open. A low broad dome of slate hide under a
+  nacre-crusted shell, parked among the boulders of a bed floor and
+  indistinguishable from them until a hand-foot reaches for a seam. It
+  does not chase; it does not need to — it is already exactly where you
+  want to be. Heavy as an argument, barely moved by a shove, and polite
+  in the Upturn's particular way: it announces itself only once, all
+  shoulders. Its shell sheds **Nacre**, which is the whole reason anyone
+  files the report.
+- **Nacre** — the drowned sea's mother-of-pearl, shed in curved shards off
+  a Shellback's shell and found nowhere else in either sky. The near
+  country's smiths set it over a gloam band as the **Nacre Crown**: a
+  crown that argues like gloamgold and carries the old sea in it — the
+  wearer's lungs remember water, and a held breath lasts twice as long.
+  Divers swear by it. The Shellbacks, presumably, resent this.
 - **The Delvings-Under** — the Steads-Before didn't just farm; they dug.
   Timbered galleries chasing sky-iron down into the old-sky dark, rung
   shafts up to little head-frames that have mostly given up standing

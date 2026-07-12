@@ -9,6 +9,11 @@ const DAY_SKY = new THREE.Color(0x87ceeb);
 const NIGHT_SKY = new THREE.Color(0x0a0e1c);
 const DUSK = new THREE.Color(0xff9a4a);
 const WATER_FOG = new THREE.Color(0x1a4b8c);
+// the Undersky's fixed dusk: a plum-slate dome, an ember-violet cast on the
+// world, and the drowned stars near enough to read by
+const UNDER_SKY = new THREE.Color(0x1a1024);
+const UNDER_LIGHT = 0.34; // pinned below the 0.45 night gate — the dark walks
+const UNDER_TINT = new THREE.Color(0.92, 0.74, 0.72);
 
 function smoothstep(a, b, t) {
   t = Math.min(1, Math.max(0, (t - a) / (b - a)));
@@ -66,6 +71,18 @@ export class Sky {
     this.skyColor = new THREE.Color();
     // fog must swallow the meshed world edge (5 chunks = 80 blocks)
     scene.fog = new THREE.Fog(0x87ceeb, 45, 82);
+
+    // which sky this is being right now. The ONE Sky instance serves every
+    // dimension — it is also the world clock (time/day feed sleep, the
+    // Peddler, the save) and the weather machine, and those must keep
+    // ticking under any dome. "undersky" only pins the OUTPUTS: fixed dusk
+    // light, no sun/moon/clouds, stars up, plum fog.
+    this.realm = "overworld";
+  }
+
+  setRealm(realm) {
+    this.realm = realm === "undersky" ? "undersky" : "overworld";
+    this.clouds.visible = this.realm !== "undersky";
   }
 
   _makeStars(seed) {
@@ -155,7 +172,10 @@ export class Sky {
         : 300 + Math.random() * 420;  // next arrives in 5-12 min
     }
     const rainStep = dt / 8; // ~8s fade in/out
-    const rainTarget = this.weatherPhase === "rainy" ? 1 : 0;
+    // the Undersky has no weather to have: rain eases out while the phase
+    // machine keeps ticking, so the overworld's shower resumes honestly
+    const rainTarget = this.realm === "undersky" ? 0
+      : this.weatherPhase === "rainy" ? 1 : 0;
     this.rain += Math.max(-rainStep, Math.min(rainStep, rainTarget - this.rain));
     const rain = this.rain;
 
@@ -177,17 +197,29 @@ export class Sky {
       this.lightTint.lerp(this._tintRain, rain * 0.7);
     }
 
+    // the Undersky pins the outputs AFTER the normal computation: the clock
+    // ran, the weather ran — the dome just refuses to follow them
+    const under = this.realm === "undersky";
+    if (under) {
+      this.skyColor.copy(UNDER_SKY);
+      this.lightLevel = UNDER_LIGHT;
+      this.lightTint.copy(UNDER_TINT);
+    }
+
     this.rig.position.copy(camera.position);
     this.sunMesh.position.copy(sunDir).multiplyScalar(350);
     this.sunMesh.lookAt(camera.position);
     this.moonMesh.position.copy(sunDir).multiplyScalar(-350);
     this.moonMesh.lookAt(camera.position);
-    // overcast hides the celestial bodies and the pearls alike
+    // overcast hides the celestial bodies and the pearls alike; the
+    // Undersky never raises a sun or moon, and its stars never set
     this.sunMesh.material.opacity = 1 - rain;
-    this.sunMesh.visible = rain < 0.98;
+    this.sunMesh.visible = !under && rain < 0.98;
     this.moonMesh.material.opacity = 1 - rain;
-    this.moonMesh.visible = rain < 0.98;
-    this.stars.material.opacity = (1 - smoothstep(-0.18, 0.0, elev)) * (1 - rain);
+    this.moonMesh.visible = !under && rain < 0.98;
+    this.stars.material.opacity = under
+      ? 0.95
+      : (1 - smoothstep(-0.18, 0.0, elev)) * (1 - rain);
 
     this.clouds.position.x = camera.position.x;
     this.clouds.position.z = camera.position.z;
@@ -207,8 +239,10 @@ export class Sky {
       this.scene.background = fog.color;
     } else {
       fog.color.copy(this.skyColor);
-      // rain pulls the fog in (still swallowing the meshed world edge)
-      fog.near = 45 - 18 * rain; fog.far = 82 - 20 * rain;
+      // rain pulls the fog in (still swallowing the meshed world edge);
+      // the Undersky's air hangs a touch closer than a clear overworld day
+      if (under) { fog.near = 38; fog.far = 78; }
+      else { fog.near = 45 - 18 * rain; fog.far = 82 - 20 * rain; }
       this.scene.background = this.skyColor;
     }
   }

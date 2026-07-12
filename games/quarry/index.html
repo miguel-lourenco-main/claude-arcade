@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quarry</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="frame">
+    <header id="chrome">
+      <a href="../../index.html" class="back">&larr; Arcade</a>
+      <div id="hud">
+        <span class="stat">SCORE <b id="hud-score">0</b></span>
+        <span class="stat">HIGH <b id="hud-high">0</b></span>
+        <span class="stat">SEAMS <b id="hud-lines">0</b></span>
+        <span class="stat">DEPTH <b id="hud-level">1</b></span>
+      </div>
+      <button id="audio-toggle" title="toggle sound (M)">SND ON</button>
+    </header>
+
+    <div id="stage">
+      <canvas id="game" width="576" height="640"></canvas>
+
+      <div id="overlay">
+        <div id="overlay-panel">
+          <h1 id="overlay-title">QUARRY</h1>
+          <p id="overlay-sub">twelve stones, twelve columns, no mercy</p>
+          <p id="overlay-action">press <b>any key</b> to dig</p>
+          <div id="confirm-buttons" class="hidden">
+            <button id="confirm-yes" type="button">RESTART</button>
+            <button id="confirm-no" type="button">KEEP DIGGING</button>
+          </div>
+          <div id="overlay-controls">
+            <div><b>&larr; &rarr;</b> / <b>A D</b> shift &middot; <b>&darr;</b> / <b>S</b> ease down</div>
+            <div><b>&uarr;</b> / <b>X</b> turn cw &middot; <b>Z</b> turn ccw &middot; <b>Space</b> drop</div>
+            <div><b>C</b> / <b>Shift</b> stash &middot; <b>P</b> pause &middot; <b>M</b> sound &middot; <b>R</b> restart</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer id="foot">
+      <span><b>&larr;&rarr;</b> shift</span>
+      <span><b>&uarr;</b>/<b>Z</b> turn</span>
+      <span><b>&darr;</b> ease</span>
+      <span><b>space</b> drop</span>
+      <span><b>C</b> stash</span>
+      <span><b>P</b> pause</span>
+      <span><b>M</b> sound</span>
+    </footer>
+  </div>
+
+  <script src="game.js"></script>
+
+  <!-- shared arcade widget: rules-any-time + player ideas -->
+  <script src="../_common/arcade-config.js"></script>
+  <script src="../_common/arcade-widget.js"></script>
+  <script>
+    ArcadeWidget.init({
+      slug: "quarry",
+      title: "Quarry",
+      rulesSelector: "#overlay-controls",
+    });
+  </script>
+</body>
+</html>

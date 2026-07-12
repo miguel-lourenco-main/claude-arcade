@@ -372,6 +372,12 @@ export class Boats {
     this.boats.splice(i, 1);
   }
 
+  // a Cinder Door crossing: every hull leaves the scene (the caller
+  // serialized this dimension's fleet first; load() rebuilds the other's)
+  clear(player) {
+    while (this.boats.length) this._removeAt(0, player);
+  }
+
   // --- persistence: an additive save field, positions + headings ---------------
 
   serialize() {

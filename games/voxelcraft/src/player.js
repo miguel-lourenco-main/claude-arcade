@@ -5,7 +5,7 @@ import {
   BLOCKS, isSolid, WATER, LAVA, isFluid, CACTUS, LADDER, ICE, SNOW_LAYER,
   MUD, armorProtection,
 } from "./blocks.js";
-import { wearSkips } from "./loom.js";
+import { wearSkips, tideCarries } from "./loom.js";
 
 const HALF_W = 0.3;
 const PLAYER_HEIGHT = 1.8;
@@ -39,6 +39,7 @@ export const EFFECTS = {
   mirerot: { name: "Mire-rot" },                  // the Mirewalker's gift
   kelpguard: { name: "Kelpguard" },               // Kelpsalve: damage shave + cure
   dimmed: { name: "Dimmed", speed: 0.6 },         // the dark leaning on you
+  tidebreath: { name: "Tidebreath" },             // Tidebreath Broth: sea-lungs
 };
 const EMBERGLOW_INTERVAL = 2.5;  // seconds per healed heart-half
 const MIREROT_INTERVAL = 2;      // seconds per gnawed heart-half
@@ -165,7 +166,22 @@ export class Player {
     this._starveTimer = 0;
   }
 
-  get maxAir() { return AIR_SECONDS; }
+  // the Tide Thread (loom.js): do the worn treads know the water? Swim pace
+  // and the Mire Sod stride both ask. WEAR_KINDS order puts treads last.
+  _tideThread() {
+    return tideCarries(this.wear && this.wear[3]);
+  }
+
+  // the Nacre Crown's gift (armor.tide): the wearer's lungs remember the
+  // sea, and the air meter doubles. A getter, so the HUD, the drown timer,
+  // and the refill clamp all agree the moment the crown goes on or off.
+  get maxAir() {
+    for (const s of this.wear || []) {
+      const a = s && BLOCKS[s.id] && BLOCKS[s.id].armor;
+      if (a && a.tide) return AIR_SECONDS * 2;
+    }
+    return AIR_SECONDS;
+  }
 
   // a whim takes hold: refreshed to the longer of current/new, never stacked.
   // Kelpguard is also the cure — applying it washes the Mire-rot out.
@@ -448,7 +464,7 @@ export class Player {
       this._peakY = this.pos.y;
       this._sinceDamage += dt;
       if (!this.eyeInWater) { // catching breath on the bench
-        this.air = Math.min(AIR_SECONDS, this.air + dt * 4);
+        this.air = Math.min(this.maxAir, this.air + dt * 4);
       }
       return;
     }
@@ -493,6 +509,7 @@ export class Player {
     else if (this.inWater) {
       speed = wantSprint && sprintInput ? SWIM_SPRINT_SPEED : SWIM_SPEED;
       if (this.inLava) speed *= 0.55; // the melt is thicker than any river
+      else if (this._tideThread()) speed *= 1.5; // the sea carries you
     }
     else if (sneaking) speed = SNEAK_SPEED;
     else if (wantSprint && sprintInput) speed = SPRINT_SPEED;
@@ -606,7 +623,7 @@ export class Player {
         const feet = this.world.getBlock(fx, Math.floor(this.pos.y + 0.05), fz);
         if (below === ICE) traction = 0.5;
         else if (below === SNOW_LAYER || feet === SNOW_LAYER) stride = 0.9;
-        else if (below === MUD) stride = 0.75;
+        else if (below === MUD && !this._tideThread()) stride = 0.75;
       }
       const accel = (this.onGround ? (hasInput ? ACCEL_GROUND : FRICTION_GROUND) * traction
         : ACCEL_AIR) * dt;
@@ -720,15 +737,24 @@ export class Player {
       this._peakY = this.pos.y;
     }
 
-    // drowning: air runs out, then 1 heart per second
+    // drowning: air runs out, then 1 heart per second. Tidebreath (the
+    // broth's whim) keeps the meter brim-full for its minute — the lungs
+    // think they're home.
     if (this.eyeInWater) {
-      this.air = Math.max(0, this.air - dt);
-      if (this.air <= 0) {
-        this._drownTimer += dt;
-        if (this._drownTimer >= 1) { this._drownTimer -= 1; this.damage(2, "drowning"); }
+      if (this.effects.has("tidebreath")) {
+        this.air = this.maxAir;
+        this._drownTimer = 0;
+      } else {
+        this.air = Math.max(0, this.air - dt);
+        if (this.air <= 0) {
+          this._drownTimer += dt;
+          if (this._drownTimer >= 1) { this._drownTimer -= 1; this.damage(2, "drowning"); }
+        }
       }
     } else {
-      this.air = Math.min(AIR_SECONDS, this.air + dt * 4);
+      // maxAir, not the raw constant: the Nacre Crown's doubled meter must
+      // refill past the old ceiling here too
+      this.air = Math.min(this.maxAir, this.air + dt * 4);
       this._drownTimer = 0;
     }
 

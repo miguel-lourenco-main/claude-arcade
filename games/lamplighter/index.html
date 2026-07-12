@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lamplighter</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="frame">
+    <header id="topbar">
+      <a href="../../index.html" class="back">&larr; Arcade</a>
+      <h1>LAMPLIGHTER</h1>
+      <button id="audio-toggle" type="button" title="toggle sound (M)">sound: on</button>
+    </header>
+
+    <div id="hud">
+      <div class="stat"><span class="label">score</span><span id="score">0</span></div>
+      <div class="stat"><span class="label">best</span><span id="best">0</span></div>
+      <div class="stat"><span class="label">night</span><span id="level">1</span></div>
+      <div class="stat"><span class="label">lamps</span><span id="lamps">0/0</span></div>
+      <div class="stat"><span class="label">lives</span><span id="lives"></span></div>
+    </div>
+
+    <div id="stage">
+      <canvas id="game" width="546" height="598"></canvas>
+      <div id="overlay" class="show">
+        <div class="panel">
+          <div id="overlay-title">LAMPLIGHTER</div>
+          <div id="overlay-sub"></div>
+          <div id="overlay-score"></div>
+          <div id="overlay-info"></div>
+        </div>
+      </div>
+    </div>
+
+    <footer id="controls">
+      <span><b>&uarr;&darr;&larr;&rarr;</b> / <b>WASD</b> walk</span>
+      <span><b>P</b> pause</span>
+      <span><b>M</b> sound</span>
+      <span><b>any key</b> restart</span>
+    </footer>
+  </main>
+
+  <script src="src/maze.js"></script>
+  <script src="src/audio.js"></script>
+  <script src="src/main.js"></script>
+
+  <!-- shared arcade widget: rules-any-time + player ideas -->
+  <script src="../_common/arcade-config.js"></script>
+  <script src="../_common/arcade-widget.js"></script>
+  <script>
+    ArcadeWidget.init({
+      slug: "lamplighter",
+      title: "Lamplighter",
+      rulesSelector: "#controls",
+    });
+  </script>
+</body>
+</html>

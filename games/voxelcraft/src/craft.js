@@ -19,6 +19,7 @@ import {
   PLANK_HOE, STONE_HOE, IRON_HOE, MEAL_ROOT, BOGBEAN, POTTAGE, LOOMSTONE,
   QUILL, SPRINGSTAVE, STARGLASS, MURK_LANTERN, PAIL,
   ROCKET_SUN, ROCKET_EMBER, ROCKET_GLEAM, POPPY, DANDELION, GLEAM_MOSS,
+  NACRE, NACRE_CROWN, STARKELP, KELP_CRISP, PEARL_CHIME,
 } from "./blocks.js";
 
 // in: [[blockId, count], ...]  out: [blockId, count]  note: extra recipe copy
@@ -34,6 +35,9 @@ export const RECIPES = [
   { in: [[PLANKS, 3]], out: [FISHING_POLE, 1], basic: true },
   // quills: whittled darts, fletched with leaf-scrap — field ammunition
   { in: [[PLANKS, 1]], out: [QUILL, 4], basic: true },
+  // the delver's snack: starkelp pressed flat between two hand-feet — a
+  // field recipe, because the far country has no benches yet
+  { in: [[STARKELP, 2]], out: [KELP_CRISP, 2], basic: true },
   // the Notice Post: a post and a planed board — Wanderlings journal in the
   // field, so notices are field gear too and craft anywhere
   { in: [[PLANKS, 3]], out: [SIGN, 2], basic: true },
@@ -115,6 +119,11 @@ export const RECIPES = [
   { in: [[IRON_INGOT, 7]], out: [IRON_LEGGINGS, 1], note: "iron greaves for the walking legs" },
   { in: [[IRON_INGOT, 4]], out: [IRON_TREADS, 1], note: "iron wraps for the hand-feet" },
   { in: [[GLOAM_INGOT, 5]], out: [GLOAM_CROWN, 1], note: "the sunken metal, bent to the brow" },
+  // the far country's export, set over a gloam band: gloam-crown protection,
+  // and the wearer's lungs remember the sea (the air meter doubles)
+  { in: [[NACRE, 4], [GLOAM_INGOT, 2]], out: [NACRE_CROWN, 1], note: "the drowned sea, bent to the brow" },
+  // rung standing in a pearl-bed, it calls the Undertow up through the floor
+  { in: [[NACRE, 2], [STARGLASS, 1]], out: [PEARL_CHIME, 1], note: "ring it where the floor glows" },
   { in: [[GLOAM_INGOT, 8]], out: [GLOAM_JERKIN, 1], note: "dusk-gold plate, lashed at the seam" },
   { in: [[GLOAM_INGOT, 7]], out: [GLOAM_LEGGINGS, 1], note: "gloam greaves for the walking legs" },
   { in: [[GLOAM_INGOT, 4]], out: [GLOAM_TREADS, 1], note: "gloam wraps for the hand-feet" },

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dustkart</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="frame">
+    <header id="topbar">
+      <a href="../../index.html" class="back">&larr; Arcade</a>
+      <h1>DUSTKART</h1>
+      <button id="audio-toggle" type="button" title="toggle sound">sound: on</button>
+    </header>
+
+    <div id="stage">
+      <canvas id="game" width="640" height="400"></canvas>
+      <div id="overlay">
+        <div class="panel">
+          <div id="overlay-title">DUSTKART</div>
+          <div id="overlay-sub">pick a circuit</div>
+          <div id="overlay-detail"></div>
+        </div>
+      </div>
+    </div>
+
+    <footer id="controls">
+      <span><b>&larr;&rarr;</b> / <b>A D</b> steer</span>
+      <span><b>&uarr;</b> / <b>W</b> accelerate</span>
+      <span><b>&darr;</b> / <b>S</b> brake</span>
+      <span><b>SHIFT</b> drift</span>
+      <span><b>SPACE</b> item</span>
+      <span><b>P</b> pause</span>
+      <span><b>M</b> sound</span>
+      <span><b>ESC</b> circuits</span>
+    </footer>
+  </main>
+
+  <!-- Classic scripts in dependency order (ES modules are blocked on file://). -->
+  <script src="src/circuits.js"></script>
+  <script src="src/sim.js"></script>
+  <script src="src/sprites.js"></script>
+  <script src="src/render.js"></script>
+  <script src="src/audio.js"></script>
+  <script src="src/main.js"></script>
+  <!-- shared arcade widget: rules-any-time + player ideas -->
+  <script src="../_common/arcade-config.js"></script>
+  <script src="../_common/arcade-widget.js"></script>
+  <script>
+    ArcadeWidget.init({
+      slug: "dustkart",
+      title: "Dustkart",
+      rulesSelector: "#controls",
+    });
+  </script>
+</body>
+</html>

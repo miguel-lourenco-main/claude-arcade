@@ -167,7 +167,7 @@ export const TILE = {
   PAIL_WATER: 129,
   PAIL_EMBER: 130,
   // Cinderglass: what the Emberwash becomes when its fire is finally slaked —
-  // a dense black volcanic glass. Portal-grade stock for a wave still to come.
+  // a dense black volcanic glass — the Cinder Door's frame stock.
   CINDERGLASS: 131,
   // the Wanderwing (see LORE.md): a folded patchwork wing-cape icon — leaf-
   // green membrane panels stitched over quill ribs, a mustard collar lashing.
@@ -178,6 +178,24 @@ export const TILE = {
   ROCKET_SUN: 133,
   ROCKET_EMBER: 134,
   ROCKET_GLEAM: 135,
+  // the Cinder Door's film (see LORE.md): the fire a Cinderglass ring
+  // remembers, standing open — an ember-to-plum sheet with bright seams.
+  CINDER_FILM: 136,
+  // the Undersky's country (see LORE.md): the pale dune skin of the
+  // drowned floor, and the petrified kelp still holding its bead of light.
+  PEARLSAND: 137,
+  STARKELP: 138,
+  // what the Shellback sheds, and what the near country makes of it
+  NACRE: 139,
+  CROWN_NACRE: 140,
+  // the far country's hearth: the pressed snack and the simmered whim
+  KELP_CRISP: 141,
+  TIDE_BROTH: 142,
+  // the Undertow's fight: what it drops, and what calls it up
+  TIDEHEART: 143,
+  PEARL_CHIME: 144,
+  // the heart run molten: the pane the dark won't argue with
+  HEARTGLASS: 145,
 };
 
 function clamp255(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
@@ -1358,6 +1376,8 @@ const brothPainter = (liquid, glint) => (p) => {
 };
 painters[TILE.EMBER_BROTH] = brothPainter([196, 88, 44], [255, 190, 90]);
 painters[TILE.SUNWISP_BROTH] = brothPainter([214, 178, 62], [255, 244, 160]);
+// the Tidebreath: sea-slate teal with a nacre glint riding the surface
+painters[TILE.TIDE_BROTH] = brothPainter([58, 118, 122], [214, 240, 234]);
 
 painters[TILE.KELP_GLAND] = (p) => {
   // the Mirewalker's kelp gland: a slick dark-green sac with a pale vein
@@ -1597,6 +1617,8 @@ const ARMOR_PALETTES = {
   bark: { hi: [150, 116, 72], mid: [118, 90, 54], lo: [82, 62, 38] },
   iron: TOOL_PALETTES.iron,
   gloam: TOOL_PALETTES.gloam,
+  // shell-ware: the Nacre Crown's pearly plate (one-off — crown only)
+  nacre: { hi: [232, 236, 244], mid: [204, 206, 222], lo: [160, 164, 186] },
 };
 const TRIM_MUSTARD = [214, 176, 74];
 
@@ -1674,6 +1696,7 @@ painters[TILE.JERKIN_IRON] = armorPainter("jerkin", ARMOR_PALETTES.iron);
 painters[TILE.LEGGINGS_IRON] = armorPainter("leggings", ARMOR_PALETTES.iron);
 painters[TILE.TREADS_IRON] = armorPainter("treads", ARMOR_PALETTES.iron);
 painters[TILE.CROWN_GLOAM] = armorPainter("crown", ARMOR_PALETTES.gloam);
+painters[TILE.CROWN_NACRE] = armorPainter("crown", ARMOR_PALETTES.nacre);
 painters[TILE.JERKIN_GLOAM] = armorPainter("jerkin", ARMOR_PALETTES.gloam);
 painters[TILE.LEGGINGS_GLOAM] = armorPainter("leggings", ARMOR_PALETTES.gloam);
 painters[TILE.TREADS_GLOAM] = armorPainter("treads", ARMOR_PALETTES.gloam);
@@ -2164,6 +2187,147 @@ const rocketPainter = (band) => (p) => {
 painters[TILE.ROCKET_SUN] = rocketPainter([236, 190, 66]);
 painters[TILE.ROCKET_EMBER] = rocketPainter([214, 74, 56]);
 painters[TILE.ROCKET_GLEAM] = rocketPainter([120, 214, 174]);
+
+painters[TILE.CINDER_FILM] = (p) => {
+  // the Cinder Door's film: the Emberwash's fire given back to the glass.
+  // An ember-orange heart cooling to deep plum at the rim, crossed by the
+  // same bright seams the molten pools wear, with a few nacre sparks — the
+  // old sky showing through the open door. Dithered dark pixels keep it
+  // reading as a sheet of light, not a wall.
+  p.noiseFill([44, 22, 52], 8);
+  for (let y = 0; y < TILE_PX; y++) {
+    for (let x = 0; x < TILE_PX; x++) {
+      // radial heat: bright at the center, plum toward the rim
+      const dx = x - 7.5, dy = y - 7.5;
+      const heat = Math.max(0, 1 - Math.sqrt(dx * dx + dy * dy) / 9);
+      if (p.rand() < 0.28) continue; // the dither — dark cells stay plum
+      const d = (p.rand() * 2 - 1) * 12;
+      p.px(x, y,
+        60 + heat * 150 + d,
+        26 + heat * 74 + d * 0.6,
+        58 + heat * 8 + d * 0.4);
+    }
+  }
+  // bright seams wandering the sheet, like the Emberwash's crust cracks
+  for (let s = 0; s < 3; s++) {
+    let x = 2 + ((p.rand() * 12) | 0);
+    for (let y = 1; y < 15; y++) {
+      p.px(x, y, 236, 148, 84);
+      if (p.rand() < 0.5) x = Math.max(1, Math.min(14, x + (p.rand() < 0.5 ? -1 : 1)));
+    }
+  }
+  // nacre sparks — the drowned stars on the far side
+  p.px(4, 3, 226, 230, 246); p.px(12, 6, 238, 240, 252); p.px(6, 12, 226, 230, 246);
+};
+
+painters[TILE.PEARLSAND] = (p) => {
+  // pearlsand: the sand recipe gone nacre — a pale violet-grey bed with the
+  // faint two-tone shimmer of the inside of a shell (a few pink and green
+  // glints where the drowned light still catches)
+  p.noiseFill([196, 188, 198], 10);
+  p.speckle(14, [176, 166, 182], 8);
+  p.speckle(8, [214, 208, 218], 6);
+  p.px(3, 5, 210, 186, 196); p.px(12, 9, 208, 190, 184);   // pink glints
+  p.px(7, 12, 186, 204, 194); p.px(13, 3, 190, 206, 198);  // green glints
+};
+
+painters[TILE.STARKELP] = (p) => {
+  // starkelp: a petrified kelp stalk, dark sea-slate with a gentle sway
+  // baked into its silhouette, carrying three lit beads — the drowned
+  // light that never quite went out
+  p.clear();
+  const STALK = [46, 66, 64], EDGE = [34, 50, 50], FROND = [58, 84, 76];
+  let x = 8;
+  for (let y = 15; y >= 2; y--) {
+    const d = (p.rand() * 2 - 1) * 8;
+    p.px(x, y, STALK[0] + d, STALK[1] + d, STALK[2] + d);
+    p.px(x - 1, y, EDGE[0] + d, EDGE[1] + d, EDGE[2] + d);
+    if (y % 4 === 1) { // short fronds trailing off the sway
+      p.px(x + 1, y, FROND[0], FROND[1], FROND[2]);
+      p.px(x - 2, y - 1, FROND[0] - 8, FROND[1] - 8, FROND[2] - 8);
+    }
+    if (p.rand() < 0.4 && y > 3) x = Math.max(5, Math.min(11, x + (p.rand() < 0.5 ? -1 : 1)));
+  }
+  // the beads: nacre-bright cores with a green-white halo pixel each
+  for (const [bx, by] of [[8, 12], [7, 7], [9, 4]]) {
+    p.px(bx, by, 224, 240, 226);
+    p.px(bx, by - 1, 168, 204, 182);
+  }
+};
+
+painters[TILE.NACRE] = (p) => {
+  // a curved shard of shell: pearly layers banded across the chip, with
+  // the two-tone shimmer pearlsand borrows — pink one way, green the other
+  p.clear();
+  for (let y = 4; y <= 12; y++) {
+    const half = Math.round(5 - Math.abs(y - 8) * 0.55); // a lens shape
+    for (let x = 8 - half; x <= 7 + half; x++) {
+      const band = (y - 4) % 3;
+      const c = band === 0 ? [226, 228, 238] : band === 1 ? [204, 206, 222] : [186, 190, 210];
+      const d = (p.rand() * 2 - 1) * 6;
+      p.px(x, y, c[0] + d, c[1] + d, c[2] + d);
+    }
+  }
+  p.px(6, 6, 232, 206, 214); p.px(10, 10, 208, 228, 216); // the shimmer
+  p.px(5, 9, 244, 246, 250); // one bright catch of light
+};
+
+painters[TILE.KELP_CRISP] = (p) => {
+  // the Kelp Crisp: a pressed wafer of dark kelp, edges gone toasty-pale,
+  // one bead's ghost still glinting in the middle
+  p.clear();
+  for (let y = 5; y <= 11; y++) {
+    for (let x = 4; x <= 12; x++) {
+      const edge = y === 5 || y === 11 || x === 4 || x === 12;
+      const d = (p.rand() * 2 - 1) * 8;
+      if (edge) p.px(x, y, 118 + d, 128 + d, 96 + d);
+      else p.px(x, y, 52 + d, 76 + d, 68 + d);
+    }
+  }
+  p.px(8, 8, 196, 216, 200); // the bead's ghost
+};
+
+painters[TILE.TIDEHEART] = (p) => {
+  // the Tideheart: a fist-sized knot of deep teal with a slow pale pulse
+  // banded through it — the piece of the sea that kept beating
+  p.clear();
+  for (let y = 4; y <= 12; y++) {
+    const half = Math.round(4 - Math.abs(y - 8) * 0.6);
+    for (let x = 8 - half; x <= 7 + half; x++) {
+      const d = (p.rand() * 2 - 1) * 10;
+      p.px(x, y, 30 + d, 92 + d, 98 + d);
+    }
+  }
+  for (let x = 5; x <= 10; x++) p.px(x, 8, 148, 214, 208); // the pulse band
+  p.px(7, 6, 190, 236, 230); p.px(9, 10, 170, 224, 218);   // the beat
+};
+
+painters[TILE.HEARTGLASS] = (p) => {
+  // heartglass: starglass's clear pane recipe, warmed teal — rimmed pale,
+  // crossed by a slow pulse-band, with the heart's beat caught mid-swirl
+  p.clear();
+  for (let i = 0; i < TILE_PX; i++) {
+    p.px(i, 0, 214, 240, 236); p.px(i, 15, 214, 240, 236);
+    p.px(0, i, 214, 240, 236); p.px(15, i, 214, 240, 236);
+  }
+  for (let i = 2; i < 10; i++) p.px(i, 13 - i, 170, 226, 218, 190);
+  for (let i = 7; i < 13; i++) p.px(i, 19 - i, 148, 214, 208, 150);
+  p.px(5, 5, 226, 248, 244, 220); p.px(10, 9, 226, 248, 244, 220);
+  p.px(7, 12, 190, 236, 230, 180);
+};
+
+painters[TILE.PEARL_CHIME] = (p) => {
+  // the Pearl Chime: a starglass bar hung with two nacre drops on cords
+  p.clear();
+  for (let x = 4; x <= 12; x++) p.px(x, 4, 228, 232, 250); // the bar
+  for (const [cx, len] of [[6, 4], [10, 6]]) {
+    for (let y = 5; y <= 4 + len; y++) p.px(cx, y, 150, 142, 120); // cords
+    p.px(cx, 5 + len, 224, 226, 238);
+    p.px(cx, 6 + len, 204, 206, 222); // the nacre drops
+    p.px(cx - 1, 6 + len, 186, 190, 210);
+  }
+  p.px(11, 11, 244, 246, 250); // one bright catch where they'd kiss
+};
 
 export function buildAtlas(seed = 1337) {
   const size = ATLAS_TILES * TILE_PX;

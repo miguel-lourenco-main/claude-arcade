@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dowser</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header id="topbar">
+    <a href="../../index.html" class="back">&larr; Arcade</a>
+    <h1>DOWSER</h1>
+    <button id="sound-toggle" class="chip" title="toggle sound">sound: on</button>
+  </header>
+
+  <main id="stage">
+    <div id="toolbar">
+      <div id="presets">
+        <button class="preset chip" data-preset="seedplot">Seedplot 9&times;9</button>
+        <button class="preset chip" data-preset="meadow">Meadow 16&times;16</button>
+        <button class="preset chip" data-preset="longfield">Longfield 30&times;16</button>
+      </div>
+      <div id="best">best: &mdash;</div>
+    </div>
+
+    <div id="hud">
+      <div class="hud-cell" id="hollow-count" title="hollows left unflagged">10</div>
+      <button id="newfield" class="chip">new field</button>
+      <div class="hud-cell" id="timer">0:00</div>
+    </div>
+
+    <div id="board-wrap">
+      <canvas id="board"></canvas>
+      <div id="banner" class="hidden">
+        <div id="banner-text"></div>
+        <div id="banner-sub"></div>
+      </div>
+    </div>
+
+    <footer id="help">
+      <span><b>click</b> dig</span>
+      <span><b>right-click</b> plant / pull marker</span>
+      <span><b>click a number</b> chord</span>
+      <span><b>long-press</b> marker (touch)</span>
+      <span><b>R</b> new field</span>
+      <span><b>1 2 3</b> preset</span>
+    </footer>
+  </main>
+
+  <div id="intro">
+    <div id="intro-panel">
+      <h2>DOWSER</h2>
+      <p class="sub">Something hollow sleeps under this field.</p>
+      <p class="body">
+        Dig every safe plot without breaking into a hollow. A dug plot shows how many
+        hollows touch it &mdash; plant markers where the rod trembles. Your first dig is
+        always safe ground.
+      </p>
+      <button id="begin">Walk the field</button>
+      <div class="intro-controls">
+        <div><b>Left-click</b> dig &middot; <b>Right-click</b> marker &middot; <b>Click a number</b> whose markers match to dig around it</div>
+        <div><b>Touch:</b> tap digs, long-press plants a marker</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Classic scripts (no modules) so the game works when opened via file:// -->
+  <script src="src/core.js"></script>
+  <script src="src/audio.js"></script>
+  <script src="src/main.js"></script>
+
+  <!-- shared arcade widget: rules-any-time + player ideas -->
+  <script src="../_common/arcade-config.js"></script>
+  <script src="../_common/arcade-widget.js"></script>
+  <script>
+    ArcadeWidget.init({
+      slug: "dowser",
+      title: "Dowser",
+      rulesSelector: ".intro-controls",
+    });
+  </script>
+</body>
+</html>

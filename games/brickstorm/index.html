@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brickstorm</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="frame">
+    <header id="chrome">
+      <a href="../../index.html" class="back">&larr; Arcade</a>
+      <div id="hud">
+        <span class="stat">SCORE <b id="hud-score">0</b></span>
+        <span class="stat">HIGH <b id="hud-hiscore">0</b></span>
+        <span class="stat">LEVEL <b id="hud-level">1</b></span>
+        <span class="stat">LIVES <b id="hud-lives">&#9679;&#9679;&#9679;</b></span>
+      </div>
+      <button id="audio-toggle" title="toggle sound (M)">SND ON</button>
+    </header>
+
+    <div id="stage">
+      <canvas id="game" width="480" height="640"></canvas>
+
+      <div id="overlay">
+        <div id="overlay-panel">
+          <h1 id="overlay-title">BRICKSTORM</h1>
+          <p id="overlay-sub">a paddle, a ball, a wall that deserves it</p>
+          <p id="overlay-action">click or press <b>Space</b> to play</p>
+          <div id="overlay-controls">
+            <div><b>Mouse</b> / <b>&larr; &rarr;</b> / <b>A D</b> move paddle</div>
+            <div><b>Click</b> / <b>Space</b> serve &middot; <b>P</b> pause &middot; <b>M</b> sound</div>
+            <div>catch falling capsules: <b class="pw pw-w">W</b> wide &middot; <b class="pw pw-m">M</b> multiball &middot; <b class="pw pw-s">S</b> slow</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer id="foot">
+      <span><b>mouse</b>/<b>&larr;&rarr;</b>/<b>AD</b> move</span>
+      <span><b>space</b> serve</span>
+      <span><b>P</b> pause</span>
+      <span><b>M</b> sound</span>
+    </footer>
+  </div>
+
+  <script src="logic.js"></script>
+  <script src="game.js"></script>
+  <!-- shared arcade widget: rules-any-time + player ideas -->
+  <script src="../_common/arcade-config.js"></script>
+  <script src="../_common/arcade-widget.js"></script>
+  <script>
+    ArcadeWidget.init({
+      slug: "brickstorm",
+      title: "Brickstorm",
+      rulesSelector: "#overlay-controls",
+    });
+  </script>
+</body>
+</html>

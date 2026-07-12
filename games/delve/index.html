@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Delve</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="frame">
+    <header id="topbar">
+      <a href="../../index.html" class="back">&larr; Arcade</a>
+      <h1>DELVE</h1>
+      <button id="audio-toggle" type="button" title="toggle sound">sound: on</button>
+    </header>
+
+    <div id="main">
+      <div id="stage">
+        <canvas id="game" width="900" height="600"></canvas>
+
+        <div id="title-overlay" class="overlay show">
+          <div class="panel">
+            <div class="big-title">DELVE</div>
+            <div class="sub">beneath the Upturn, the old sky waits</div>
+            <p class="blurb">
+              Nine floors down sleeps the <b>First Pearl</b> — the star that fell
+              deepest when the world turned over. Bring it back. The way in seals
+              behind you; there is no way out but through.
+            </p>
+            <div class="buttons">
+              <button id="btn-new" type="button">Enter &mdash; new delve</button>
+              <button id="btn-continue" type="button" class="hidden">C &mdash; continue delve</button>
+            </div>
+            <div id="title-best" class="best"></div>
+            <div class="keys">
+              <div><b>&larr;&uarr;&darr;&rarr;</b> / <b>WASD</b> / <b>hjkl</b>+<b>yubn</b> / numpad &mdash; move &amp; bump-attack</div>
+              <div><b>.</b> wait &nbsp; <b>g</b> get &nbsp; <b>i</b> satchel &nbsp; <b>t</b> throw pebble &nbsp; <b>&gt;</b> descend &nbsp; <b>&lt;</b> ascend &nbsp; <b>m</b> sound</div>
+              <div class="dim">the run auto-saves on the stairs &mdash; death deletes it</div>
+            </div>
+          </div>
+        </div>
+
+        <div id="aim-banner" class="hidden">throw which way? <span class="dim">(direction key &middot; esc cancels)</span></div>
+
+        <div id="stat-overlay" class="overlay">
+          <div class="panel">
+            <div class="small-title">You grow</div>
+            <div class="dim">choose a boon</div>
+            <ol id="stat-list">
+              <li data-stat="vigor"><b>1</b><span class="inv-glyph">&hearts;</span><span> vigor &mdash; +6 max HP</span></li>
+              <li data-stat="might"><b>2</b><span class="inv-glyph">&#9876;</span><span> might &mdash; +1 damage</span></li>
+              <li data-stat="agility"><b>3</b><span class="inv-glyph">&raquo;</span><span> agility &mdash; +1 agi (speed &amp; dodge)</span></li>
+              <li data-stat="focus"><b>4</b><span class="inv-glyph">&#8982;</span><span> focus &mdash; +1 accuracy</span></li>
+            </ol>
+            <div class="dim">press 1&ndash;4</div>
+          </div>
+        </div>
+
+        <div id="inv-overlay" class="overlay">
+          <div class="panel">
+            <div id="inv-title" class="small-title">Satchel</div>
+            <div id="inv-equipped" class="dim"></div>
+            <ol id="inv-list"></ol>
+            <div id="inv-hint" class="dim"></div>
+          </div>
+        </div>
+
+        <div id="end-overlay" class="overlay">
+          <div class="panel">
+            <div id="end-title" class="big-title">You died</div>
+            <div id="end-cause" class="sub"></div>
+            <div id="end-stats"></div>
+            <div class="buttons">
+              <button id="btn-again" type="button">R &mdash; delve again</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <aside id="side">
+        <div class="panel-box" id="vitals">
+          <div class="vrow"><span class="vlabel">depth</span><span id="v-depth">1 / 9</span></div>
+          <div class="vrow"><span class="vlabel">turn</span><span id="v-turn">0</span></div>
+          <div class="bar hp"><div id="hp-fill"></div><span id="hp-text"></span></div>
+          <div class="bar xp"><div id="xp-fill"></div><span id="xp-text"></span></div>
+          <div class="vrow"><span class="vlabel">atk</span><span id="v-atk"></span></div>
+          <div class="vrow"><span class="vlabel">def</span><span id="v-def"></span></div>
+          <div class="vrow"><span class="vlabel">agi</span><span id="v-agi"></span></div>
+          <div class="vrow"><span class="vlabel">wield</span><span id="v-weapon"></span></div>
+          <div class="vrow"><span class="vlabel">wear</span><span id="v-armor"></span></div>
+          <div class="vrow"><span class="vlabel">charm</span><span id="v-trinket"></span></div>
+          <div class="vrow"><span class="vlabel">satchel</span><span id="v-sack"></span></div>
+          <div id="v-effects"></div>
+        </div>
+        <div id="log-wrap">
+          <div class="panel-box" id="log" aria-live="polite"></div>
+          <button id="log-pip" type="button" class="hidden">&#9660; new</button>
+        </div>
+      </aside>
+    </div>
+
+    <footer id="controls">
+      <span><b>arrows/wasd/hjkl+yubn</b> move</span>
+      <span><b>.</b> wait</span>
+      <span><b>g</b> get</span>
+      <span><b>i</b> satchel</span>
+      <span><b>t</b> throw</span>
+      <span><b>&gt;</b> down</span>
+      <span><b>&lt;</b> up</span>
+      <span><b>m</b> sound</span>
+    </footer>
+  </main>
+
+  <!-- Classic scripts in dependency order (ES modules are blocked on file://) -->
+  <script src="src/core/rng.js"></script>
+  <script src="src/core/dungeon.js"></script>
+  <script src="src/core/fov.js"></script>
+  <script src="src/core/path.js"></script>
+  <script src="src/core/data.js"></script>
+  <script src="src/core/game.js"></script>
+  <script src="src/ui/render.js"></script>
+  <script src="src/ui/audio.js"></script>
+  <script src="src/main.js"></script>
+
+  <!-- shared arcade widget: rules-any-time + player ideas -->
+  <script src="../_common/arcade-config.js"></script>
+  <script src="../_common/arcade-widget.js"></script>
+  <script>
+    ArcadeWidget.init({
+      slug: "delve",
+      title: "Delve",
+      rulesSelector: "#title-overlay .keys",
+    });
+  </script>
+</body>
+</html>

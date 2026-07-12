@@ -7,11 +7,12 @@ import {
   GATE, GATE_OPEN, SEED_TO_SPROUT, DIRT, GRASS, MUD, FARMLAND, LOOMSTONE,
   SLING_STONE, BOAT, WATER, LAVA, FISHING_POLE, SNOW_LAYER, QUILL, ROOT_SEED,
   SILVERFIN, MURK_LANTERN, GLEAM_MOSS, RAIL, CART,
-  PAIL, WATER_PAIL, EMBER_PAIL, CINDERGLASS,
+  PAIL, WATER_PAIL, EMBER_PAIL, CINDERGLASS, PORTAL_FILM, PEARL_CHIME,
   BLOCKS, isSolid, isPlant, isFluid, isDoor, isDoorLower, isGate, isSign, isRail, isRocket,
   DOOR_TOGGLE, dropFor, yawToFacing,
 } from "./blocks.js";
 import { HEIGHT } from "./world.js";
+import { detectFrame } from "./portal.js";
 import { EYE_HEIGHT, MAX_HUNGER } from "./player.js";
 
 const REACH_CREATIVE = 5;
@@ -130,6 +131,7 @@ export class Interaction {
     this.onOpenKiln = opts.onOpenKiln;     // (x, y, z) => open kiln UI (survival)
     this.onOpenLoom = opts.onOpenLoom;     // () => open Loomstone UI (survival)
     this.onSummon = opts.onSummon;         // (target) => the Murk Lantern's use
+    this.onChime = opts.onChime;           // () => the Pearl Chime's ring
     this.onSleep = opts.onSleep;           // (x, y, z) => Moss Cot rest (survival)
     this.onOpenSign = opts.onOpenSign;     // (x, y, z) => Notice Post write window
     this.onPrimeKeg = opts.onPrimeKeg;     // (x, y, z) => light a Blast Keg
@@ -160,6 +162,7 @@ export class Interaction {
     this.swapHeld = opts.swapHeld;   // (newId) => swap the selected slot's item
     this.onSplash = opts.onSplash;   // () => a pail scoop/pour water sound
     this.onSizzle = opts.onSizzle;   // () => the quench (water meets Emberwash)
+    this.onPortalIgnite = opts.onPortalIgnite; // () => a Cinder Door catching
     this.avgColor = opts.avgColor;   // tile -> [r,g,b]
 
     this.target = null;
@@ -877,6 +880,29 @@ export class Interaction {
     if (quenched && this.onSizzle) this.onSizzle();
   }
 
+  // the Cinder Door's ignition: a clicked frame block proves its whole ring
+  // (portal.js), and only THEN the pail spends its fire — every refusal path
+  // runs before the swap, so a failed ignite never empties the tub. The film
+  // cells are one batched edit: the film glows, so the light BFS runs once.
+  _ignitePortal(t) {
+    if (!this.swapHeld) return;
+    const frame = detectFrame(this.world, t.x, t.y, t.z);
+    if (!frame) {
+      if (this.onHint) this.onHint("The ring is not whole — the door can't remember its shape.");
+      return;
+    }
+    if (!this.swapHeld(PAIL)) return; // the fire given back, the tub handed over
+    const affected = new Set();
+    for (const [fx, fy, fz] of frame.cells) {
+      for (const c of this.world.setBlock(fx, fy, fz, PORTAL_FILM)) affected.add(c);
+    }
+    this.onEdit([...affected], {
+      ids: [PORTAL_FILM], x: t.x, y: t.y, z: t.z, placed: PORTAL_FILM,
+    });
+    if (this.onPortalIgnite) this.onPortalIgnite();
+    if (this.onSwing) this.onSwing();
+  }
+
   _place() {
     const t = this.target;
     // right-click a Reed Skiff to board it — checked before any block
@@ -963,6 +989,12 @@ export class Interaction {
       if (t && this.onSummon) this.onSummon(t);
       return;
     }
+    // the Pearl Chime rings where you STAND — no target needed, the bed
+    // underfoot is the whole condition (main.js owns the refusals)
+    if (this.hotbar.selectedId() === PEARL_CHIME && !this._interactiveTarget()) {
+      if (this.onChime) this.onChime();
+      return;
+    }
     // a sling stone throws instead of placing — unless an interactive block
     // is targeted (sneak-throw at a chest works, like sneak-place does)
     if (this.hotbar.selectedId() === SLING_STONE && !this._interactiveTarget()) {
@@ -999,6 +1031,14 @@ export class Interaction {
     const pailHeld = this.hotbar.selectedId();
     if ((pailHeld === PAIL || pailHeld === WATER_PAIL || pailHeld === EMBER_PAIL) &&
         !this._interactiveTarget()) {
+      // a full Ember Pail against Cinderglass tries the Cinder Door FIRST —
+      // sneak keeps the plain pour (build a molten moat against your own
+      // frame if you insist). Checked before _usePail or the ember would
+      // pour against the ring instead of igniting it.
+      if (pailHeld === EMBER_PAIL && t && t.id === CINDERGLASS && !this.player._sneaking) {
+        this._ignitePortal(t);
+        return;
+      }
       this._usePail(pailHeld);
       return;
     }

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rootguard</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="frame">
+    <header id="topbar">
+      <a href="../../index.html" class="back">&larr; Arcade</a>
+      <h1>ROOTGUARD</h1>
+      <button id="audio-toggle" type="button" title="toggle sound">sound: on</button>
+    </header>
+
+    <div id="hud">
+      <div class="stat"><span class="label">dew</span><span id="dew">0</span></div>
+      <div class="stat wide"><span class="label">level</span><span id="level-name">&mdash;</span></div>
+      <div class="stat wide wave"><span class="label">waves</span>
+        <div id="wave-bar"><div id="wave-fill"></div></div>
+      </div>
+    </div>
+
+    <div id="seedbar"></div>
+
+    <div id="stage">
+      <canvas id="game"></canvas>
+      <div id="banner">FINAL SURGE</div>
+      <div id="overlay" class="show">
+        <div class="panel">
+          <div id="overlay-title">ROOTGUARD</div>
+          <div id="overlay-sub">defend the grove from the shambling blights</div>
+          <div id="overlay-extra"></div>
+        </div>
+      </div>
+    </div>
+
+    <footer id="controls">
+      <span><b>click</b> seed card, then a cell to plant</span>
+      <span><b>click</b> dew motes to collect</span>
+      <span><b>1-6</b> select seed</span>
+      <span><b>X</b> shovel</span>
+      <span><b>Esc</b> cancel / pause</span>
+      <span><b>P</b> pause</span>
+      <span><b>M</b> sound</span>
+      <span><b>R</b> restart</span>
+      <span><b>L</b> levels</span>
+    </footer>
+  </main>
+
+  <script src="logic.js"></script>
+  <script src="game.js"></script>
+
+  <!-- shared arcade widget: rules-any-time + player ideas -->
+  <script src="../_common/arcade-config.js"></script>
+  <script src="../_common/arcade-widget.js"></script>
+  <script>
+    ArcadeWidget.init({
+      slug: "rootguard",
+      title: "Rootguard",
+      rulesSelector: "#controls",
+    });
+  </script>
+</body>
+</html>

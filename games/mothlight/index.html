@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mothlight</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="frame">
+    <canvas id="game" width="480" height="720"></canvas>
+    <div id="chrome">
+      <a href="../../index.html" class="back">&larr; Arcade</a>
+      <button id="audio-toggle" title="toggle sound (M)">sound: on</button>
+    </div>
+    <div id="footer">
+      <span><b>Space</b> / <b>click</b> / <b>tap</b> — flap</span>
+      <span><b>M</b> — sound</span>
+      <span><b>P</b> — pause</span>
+    </div>
+  </div>
+  <script src="logic.js"></script>
+  <script src="game.js"></script>
+
+  <!-- shared arcade widget: rules-any-time + player ideas -->
+  <script src="../_common/arcade-config.js"></script>
+  <script src="../_common/arcade-widget.js"></script>
+  <script>
+    ArcadeWidget.init({
+      slug: "mothlight",
+      title: "Mothlight",
+      rulesSelector: "#footer",
+    });
+  </script>
+</body>
+</html>

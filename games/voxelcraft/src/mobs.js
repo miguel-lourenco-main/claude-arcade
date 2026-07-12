@@ -7,7 +7,7 @@ import * as THREE from "three";
 import {
   BLOCKS, GRASS, SAND, MUD, WATER, LAVA, isFluid, COAL_ORE, TORCH,
   SNUFFET_LOIN, MOSS_CLUMP, KELP_GLAND, DUSK_PEARL, STARSTONE, AIR,
-  LEAVES, LEAVES_COLD, isSolid,
+  LEAVES, LEAVES_COLD, isSolid, PEARLSAND, NACRE, TIDEHEART, HEARTGLASS,
 } from "./blocks.js";
 import { mulberry32 } from "./noise.js";
 
@@ -84,13 +84,38 @@ export const SPECIES = {
   unshaken: {
     name: "The Unshaken", hp: 60, speed: 2.0, behavior: "hostile", habitat: "boss",
     cap: 1, halfW: 0.6, height: 2.6, damage: 6, aggro: 48, attackRange: 2.2,
-    knockResist: 0.9, gleam: 40, boss: true, sound: "bellow",
+    knockResist: 0.9, gleam: 40, boss: true, phase: "split", sound: "bellow",
     drops: [[DUSK_PEARL, 1], [STARSTONE, 2]],
     inflicts: ["dimmed", 5], // its hits hang the dark on you
     // flavor lines main.js reads — a second boss brings its own words
     deathLine: "The Unshaken comes apart into ordinary night.",
     splitLine: "The shadow splits!",
     goneLine: "The shadow settles back into the ground.",
+  },
+  // the Undertow: what the drowned sea does instead of waves (see LORE.md).
+  // Summon-only, like every boss — the Pearl Chime rung IN a pearl-bed —
+  // and its half-health turn is the BURROW: it sinks under the floor
+  // (untouchable, unwalkable) and comes up beside you, all shoulders.
+  undertow: {
+    name: "The Undertow", hp: 80, speed: 2.2, behavior: "hostile", habitat: "boss",
+    cap: 1, halfW: 0.7, height: 2.2, damage: 7, aggro: 48, attackRange: 2.4,
+    knockResist: 0.95, gleam: 60, boss: true, phase: "burrow", sound: "bellow",
+    drops: [[TIDEHEART, 1], [NACRE, 2]],
+    deathLine: "The Undertow lets go of the floor.",
+    splitLine: "The floor swallows it!",
+    goneLine: "The sand settles, unconvinced.",
+  },
+  // the Shellback: the keeper of the pearl-beds (see LORE.md). To a passing
+  // Wanderling it reads as one more nacre-crusted boulder on the bed floor —
+  // until the treasure moves. Ambush like the Stalkid (motionless until
+  // something steps close, then all shoulders), heavy on its feet, near-
+  // unmoved by knockback, and the only thing in either sky that sheds NACRE.
+  // Habitat "undersky" matches neither day- nor night-cleanup rule, and the
+  // spawn director only deals it where the far country's floor shows.
+  shellback: {
+    name: "Shellback", hp: 24, speed: 1.7, behavior: "ambush", habitat: "undersky",
+    cap: 2, halfW: 0.55, height: 0.9, damage: 5, aggro: 3.2, attackRange: 1.6,
+    knockResist: 0.9, drops: [[NACRE, 2]], sound: "clicks", gleam: 12,
   },
   // the Peddler: a wandering trader Wanderling, hunched under an enormous
   // patchwork backpack. Day-only (gone by dusk, the way the Murkling is gone
@@ -188,6 +213,15 @@ export class Mobs {
     // Prickleback: cactus-green slab with sand belly
     const prBody = this._mat(paint(0xd41, [74, 128, 58], 10));
     const prSpine = this._mat(paint(0xd42, [206, 196, 150], 8));
+    // Shellback: slate hide under a nacre-crusted shell — the crust catches
+    // pink and green, exactly the pearl-bed floor it pretends to be part of
+    const shBody = this._mat(paint(0x5b01, [88, 92, 104], 9));
+    const shShell = this._mat(paint(0x5b02, [176, 180, 194], 11, (ctx, rand) => {
+      for (let i = 0; i < 10; i++) {
+        ctx.fillStyle = rand() < 0.5 ? "rgb(214,190,200)" : "rgb(188,210,198)";
+        ctx.fillRect((rand() * 16) | 0, (rand() * 16) | 0, 1, 1);
+      }
+    }));
     // Mirewalker: kelp-dark dredger of the flooded ruins
     const miBody = this._mat(paint(0xe51, [44, 62, 48], 8, (ctx, rand) => {
       for (let x = 0; x < 16; x += 3) {
@@ -438,6 +472,61 @@ export class Mobs {
         }
         return { group: g, legs };
       },
+      // the Shellback: a low broad dome over stubby feet — parked, it reads
+      // as a boulder (the ambush AI keeps it motionless until the pounce)
+      shellback: () => {
+        const g = new THREE.Group();
+        const body = box(1.0, 0.5, 1.1, shBody);
+        body.position.y = 0.35;
+        g.add(body);
+        // the shell: two stepped nacre tiers doming the back
+        const shellLow = box(1.1, 0.3, 1.2, shShell);
+        shellLow.position.y = 0.62;
+        g.add(shellLow);
+        const shellHigh = box(0.8, 0.24, 0.9, shShell);
+        shellHigh.position.y = 0.86;
+        g.add(shellHigh);
+        // a heavy brow peeking out the front of the dome
+        const brow = box(0.5, 0.18, 0.22, shBody);
+        brow.position.set(0, 0.5, 0.6);
+        g.add(brow);
+        const legs = [];
+        for (const [lx, lz] of [[-0.4, 0.4], [0.4, 0.4], [-0.4, -0.4], [0.4, -0.4]]) {
+          const leg = box(0.18, 0.2, 0.18, shBody);
+          leg.position.set(lx, 0.1, lz);
+          g.add(leg); legs.push(leg);
+        }
+        return { group: g, legs };
+      },
+      // the Undertow: a wall of old shell with the sea's own kelp still
+      // draped off its shoulders — reads as a piece of the floor stood up
+      undertow: () => {
+        const g = new THREE.Group();
+        const torso = box(1.1, 1.1, 0.7, shShell);
+        torso.position.y = 1.1;
+        g.add(torso);
+        const chest = box(0.9, 0.5, 0.6, shBody);
+        chest.position.y = 1.85;
+        g.add(chest);
+        const head = box(0.5, 0.4, 0.5, shBody);
+        head.position.set(0, 2.0, 0.35);
+        g.add(head);
+        for (const side of [-1, 1]) {
+          const drape = box(0.2, 0.9, 0.4, miBody); // the old kelp, still on
+          drape.position.set(side * 0.62, 1.55, -0.12);
+          g.add(drape);
+        }
+        const legs = [];
+        for (const side of [-1, 1]) {
+          const arm = box(0.28, 1.1, 0.28, shShell);
+          arm.position.set(side * 0.78, 1.1, 0);
+          g.add(arm); legs.push(arm);
+          const leg = box(0.3, 0.55, 0.3, shBody);
+          leg.position.set(side * 0.3, 0.28, 0);
+          g.add(leg); legs.push(leg);
+        }
+        return { group: g, legs };
+      },
       mirewalker: () => {
         const g = new THREE.Group();
         const body = box(0.6, 1.05, 0.42, miBody);
@@ -631,6 +720,8 @@ export class Mobs {
       mode: "follow",    // tamed: "follow" | "stay"
       split: false,      // boss: the half-health shadow-split fired
       lungeCd: 0,        // boss phase 2: seconds to the next lunge
+      burrowT: 0,        // boss (burrow phase): seconds still under the floor
+      burrowCd: 0,       // boss: seconds to the next allowed burrow
       farT: 0,           // boss: seconds spent >60 blocks from the player
       dimT: 0,           // a Dusk Thread's mark: halved pace while it holds
       // the Steadfolk (steads.js): a resident manager fills these in — null
@@ -777,7 +868,7 @@ export class Mobs {
   // CLICKED cell — a cave summon rises in the cave, not on the surface
   // sixty blocks up. Returns the boss, or null if one already stalks the
   // world (callers announce; consume-last discipline lives in main.js).
-  summonBoss(world, x, y, z) {
+  summonBoss(world, x, y, z, species = "unshaken") {
     for (const m of this.mobs) if (m.spec.boss) return null;
     // first open pair of cells above the clicked block (it needs headroom)
     const bx = Math.floor(x), bz = Math.floor(z);
@@ -788,7 +879,7 @@ export class Mobs {
           world.getBlock(bx, cy + 3, bz) === AIR) { sy = cy; break; }
     }
     if (sy < 0) return null;
-    const boss = this.spawnAt(x, sy + 1.01, z, "unshaken");
+    const boss = this.spawnAt(x, sy + 1.01, z, species);
     if (boss) {
       boss.critT = 0.3; // rises with a pop
       if (this.onSound) this.onSound(boss.spec.sound);
@@ -825,27 +916,35 @@ export class Mobs {
   // a mushroom is not a campfire.
   _nearTorch(world, x, y, z) {
     const cx = Math.floor(x) >> 4, cz = Math.floor(z) >> 4;
-    const r2 = TORCH_SAFE_DIST * TORCH_SAFE_DIST;
-    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+    // Heartglass watches DOUBLE the torch's distance (the pane the dark
+    // won't argue with), which reaches into a second ring of chunks — the
+    // outer ring is scanned for heartglass ONLY, so the everyday 3x3 cost
+    // is unchanged when nobody has slain an Undertow yet
+    for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) {
+      const outer = Math.abs(dx) === 2 || Math.abs(dz) === 2;
       const c = world.getChunk(cx + dx, cz + dz);
       if (!c || c.emitters.size === 0) continue;
       for (const [idx, level] of c.emitters) {
+        const lx = idx % 16, ly = (idx / 256) | 0, lz = ((idx / 16) | 0) % 16;
+        // only full-strength emitters can be heartglass — one cheap array
+        // read tells them apart from torches
+        const heart = level >= 14 && c.get(lx, ly, lz) === HEARTGLASS;
+        if (outer && !heart) continue;
         // the safety radius scales with the emitter's strength: proper
         // lights (torch 14, starstone/Emberwash 13, starglass 11) keep the
         // full watch; DIM growth — a gleam moss tuft (7), a Wispcap (8) —
         // only guards its own small pool of light, so the deep stays
         // dangerous between the tufts (a mushroom is not a campfire)
-        const safe = level >= 11 ? TORCH_SAFE_DIST : TORCH_SAFE_DIST * (level / 14);
+        const safe = heart ? TORCH_SAFE_DIST * 2
+          : level >= 11 ? TORCH_SAFE_DIST : TORCH_SAFE_DIST * (level / 14);
         const s2 = safe * safe;
         // y first: one compare rejects a surface spawn 30 blocks above the
         // Emberwash without paying the full distance math per pool cell
-        const ly = (idx / 256) | 0;
         const dy2 = (ly - y) * (ly - y);
         if (dy2 >= s2) continue;
-        const lx = idx % 16, lz = ((idx / 16) | 0) % 16;
         const ex = c.cx * 16 + lx, ez = c.cz * 16 + lz;
         const d2 = (ex - x) ** 2 + dy2 + (ez - z) ** 2;
-        if (d2 < Math.min(r2, s2)) return true;
+        if (d2 < s2) return true;
       }
     }
     return false;
@@ -898,6 +997,12 @@ export class Mobs {
     }
     if (night && isSolid(topId)) candidates.push("murkling");
     if (biome === "desert" && topId === SAND) candidates.push("prickleback");
+    // the pearl-beds' keeper: only where the far country's floor shows, and
+    // only toward a bed's heart (pearlBedAt exists only on that terrain)
+    if (topId === PEARLSAND && terrain.pearlBedAt &&
+        terrain.pearlBedAt(x, z) > 0.35) {
+      candidates.push("shellback");
+    }
     if (topId === SAND || topId === GRASS || topId === MUD) {
       // shoreline: standing water within 3 blocks (the Mirelands' Mire Sod
       // counts as shore ground — the bog is Mirewalker country)
@@ -939,9 +1044,15 @@ export class Mobs {
     // creatures of the old sky (murkling/stalkid) pass the full darkness
     // gate — light at the CELL, not just the hour; other hostiles (the
     // Mirewalker walks in daylight) only respect torch pools, as before
+    // the Shellback is exempt from the light veto: it LIVES in the light —
+    // the pearl-beds it keeps are studded with lit starstone, and a keeper
+    // the glow chased off would keep nothing
     if (pick === "murkling" || pick === "stalkid") {
       if (!this.canHostileSpawnAt(world, x, spawnY, z, night)) return;
-    } else if (hostile && this._nearTorch(world, x + 0.5, spawnY, z + 0.5)) return;
+    } else if (hostile && pick !== "shellback" &&
+               this._nearTorch(world, x + 0.5, spawnY, z + 0.5)) {
+      return;
+    }
 
     this.spawnAt(x + 0.5, spawnY + 0.01, z + 0.5, pick);
   }
@@ -1005,6 +1116,25 @@ export class Mobs {
       // 3D distance for behavior: a stalkid 25 blocks below the surface must
       // NOT wake up because someone walked overhead
       const dist3 = Math.hypot(m.x - player.pos.x, m.y - player.pos.y, m.z - player.pos.z);
+
+      // the Undertow's burrow: under the floor there is nothing to hit and
+      // nothing walking — the whole update skips until it resurfaces,
+      // right beside the player, all shoulders
+      if (m.burrowT > 0) {
+        m.burrowT -= dt;
+        if (m.burrowT > 0) continue;
+        const a = Math.random() * Math.PI * 2;
+        m.x = player.pos.x + Math.cos(a) * 2.5;
+        m.z = player.pos.z + Math.sin(a) * 2.5;
+        m.y = player.pos.y + 0.2; // gravity settles the rest
+        m.vx = m.vy = m.vz = 0;
+        m.group.visible = true;
+        m.group.position.set(m.x, m.y, m.z);
+        m.critT = 0.3;
+        m.attackCd = 0.6; // one beat to get a foot out of the way
+        if (this.onSound) this.onSound(spec.sound);
+        if (this.onBurrow) this.onBurrow(m.x, m.y, m.z);
+      }
 
       // bondlings and tamed companions never despawn — distance is handled
       // by their own teleports; a boss has its own leash below
@@ -1076,6 +1206,7 @@ export class Mobs {
       m.breedCd = Math.max(0, m.breedCd - dt);
       m.dimT = Math.max(0, m.dimT - dt);
       m.lungeCd = Math.max(0, m.lungeCd - dt);
+      m.burrowCd = Math.max(0, m.burrowCd - dt);
       if (m.baby) {
         m.growT -= dt;
         if (m.growT <= 0) { m.baby = false; m.sizeMul = 1; }
@@ -1128,7 +1259,22 @@ export class Mobs {
         // The Unshaken's phases: crossing half health it SPLITS — two
         // murklings peel off its flanks — then it moves half again as
         // fast and starts lunging in bursts the substepped mover handles
-        if (spec.boss) {
+        if (spec.boss && spec.phase === "burrow") {
+          // the Undertow's turn: under half health it takes to the floor —
+          // sinks (untouchable), then erupts beside the player. Between
+          // dives it presses a third again as fast.
+          if (m.hp <= spec.hp / 2) {
+            targetSpeed = spec.speed * 1.3;
+            if (m.burrowCd <= 0 && m.onGround && distToPlayer > 2.5) {
+              m.burrowCd = 9;
+              m.burrowT = 1.6;
+              m.group.visible = false;
+              if (this.onSound) this.onSound(spec.sound);
+              if (this.onBossSplit) this.onBossSplit(spec); // "The floor swallows it!"
+              if (this.onBurrow) this.onBurrow(m.x, m.y, m.z);
+            }
+          }
+        } else if (spec.boss) {
           if (!m.split && m.hp <= spec.hp / 2) {
             m.split = true;
             m.critT = 0.3;
@@ -1541,6 +1687,7 @@ export class Mobs {
   rayHit(origin, dir, maxDist) {
     let best = null, bestT = maxDist;
     for (const m of this.mobs) {
+      if (m.burrowT > 0) continue; // a burrowed boss eats no clicks
       const hw = m.spec.halfW * m.sizeMul, hh = m.spec.height * m.sizeMul;
       const min = [m.x - hw, m.y, m.z - hw];
       const max = [m.x + hw, m.y + hh, m.z + hw];
@@ -1578,6 +1725,7 @@ export class Mobs {
   // land a hit on a mob: damage, knockback away from fromPos, and the full
   // reaction suite. Shared by punches and thrown sling-stones.
   strike(m, dmg, fromPos, opts = {}) {
+    if (m.burrowT > 0) return; // under the floor, nothing holds an edge
     // any hit the PLAYER lands marks the target for a following Tuftling.
     // Mob-landed strikes (byPet, or a bondling/hostile feud's attacker)
     // never mark — a hostile striking back at a bondling must not point

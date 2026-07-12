@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crateshift</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="frame">
+    <header id="topbar">
+      <a href="../../index.html" class="back">&larr; Arcade</a>
+      <h1>CRATESHIFT</h1>
+      <button id="audio-toggle" type="button" title="toggle sound">sound: on</button>
+    </header>
+
+    <section id="select" class="view">
+      <div id="select-head">
+        <span id="select-title">pick a shift</span>
+        <span id="total-stars">&#9733; 0/63</span>
+      </div>
+      <div id="level-grid"></div>
+      <footer class="controls">
+        <span><b>&uarr;&darr;&larr;&rarr;</b> browse</span>
+        <span><b>Enter</b> play</span>
+        <span><b>M</b> sound</span>
+      </footer>
+    </section>
+
+    <section id="play" class="view hidden">
+      <div id="hud">
+        <div class="stat wide"><span class="label">shift</span><span id="hud-level">&mdash;</span></div>
+        <div class="stat"><span class="label">moves</span><span id="hud-moves">0</span></div>
+        <div class="stat"><span class="label">pushes</span><span id="hud-pushes">0</span></div>
+        <div class="stat"><span class="label">par</span><span id="hud-par">0</span></div>
+        <div class="stat"><span class="label">best</span><span id="hud-best">&mdash;</span></div>
+      </div>
+      <div id="stage">
+        <canvas id="game"></canvas>
+        <div id="overlay" class="hidden">
+          <div class="panel">
+            <div id="overlay-title">SHIFT CLEAR</div>
+            <div id="overlay-stars"></div>
+            <div id="overlay-stats"></div>
+            <div id="overlay-sub">N next &middot; R replay &middot; Esc shifts</div>
+          </div>
+        </div>
+      </div>
+      <footer class="controls">
+        <span><b>&uarr;&darr;&larr;&rarr;</b>/<b>WASD</b> move (hold to repeat)</span>
+        <span><b>U</b>/<b>Z</b> undo</span>
+        <span><b>R</b> restart</span>
+        <span><b>N</b>/<b>P</b> next/prev</span>
+        <span><b>Esc</b> shifts</span>
+        <span><b>M</b> sound</span>
+      </footer>
+    </section>
+  </main>
+
+  <script src="levels.js"></script>
+  <script src="logic.js"></script>
+  <script src="game.js"></script>
+
+  <!-- shared arcade widget: rules-any-time + player ideas -->
+  <script src="../_common/arcade-config.js"></script>
+  <script src="../_common/arcade-widget.js"></script>
+  <script>
+    ArcadeWidget.init({
+      slug: "crateshift",
+      title: "Crateshift",
+      rulesSelector: "#play .controls",
+    });
+  </script>
+</body>
+</html>

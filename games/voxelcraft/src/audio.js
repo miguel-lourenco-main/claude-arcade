@@ -458,6 +458,75 @@ export class Sfx {
     this._noiseBurst(1400, 0.18, 0.09); // the wing-snap of the thrust
   }
 
+  // a Cinder Door taking its fire: an airy swell under a rising sine — the
+  // frame catching, then holding — capped with a bright glassy settle
+  portalIgnite() {
+    if (!this.enabled || !this._ensure()) return;
+    const ctx = this.ctx, now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(110, now);
+    osc.frequency.exponentialRampToValueAtTime(440, now + 0.9); // the catch
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.linearRampToValueAtTime(0.09, now + 0.5);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 1.1);
+    osc.connect(g).connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 1.15);
+    this._noiseBurst(2200, 0.6, 0.06);                       // the air rushing in
+    setTimeout(() => this._noiseBurst(3400, 0.12, 0.07), 550); // the glassy settle
+  }
+
+  // crossing the film: a low gliss falling away underfoot while a thin high
+  // partial shimmers in overhead — one sky handing you to the other
+  portalCross() {
+    if (!this.enabled || !this._ensure()) return;
+    const ctx = this.ctx, now = ctx.currentTime;
+    const DUR = 1.2;
+    const low = ctx.createOscillator(), lg = ctx.createGain();
+    low.type = "sine";
+    low.frequency.setValueAtTime(220, now);
+    low.frequency.exponentialRampToValueAtTime(55, now + DUR); // the floor going
+    lg.gain.setValueAtTime(0.09, now);
+    lg.gain.exponentialRampToValueAtTime(0.001, now + DUR);
+    low.connect(lg).connect(ctx.destination);
+    low.start(now);
+    low.stop(now + DUR + 0.05);
+    const hi = ctx.createOscillator(), hg = ctx.createGain();
+    hi.type = "triangle";
+    hi.frequency.setValueAtTime(1320, now);
+    hi.frequency.linearRampToValueAtTime(1760, now + DUR); // the far shimmer
+    hg.gain.setValueAtTime(0.0001, now);
+    hg.gain.linearRampToValueAtTime(0.035, now + DUR * 0.6);
+    hg.gain.exponentialRampToValueAtTime(0.0001, now + DUR);
+    hi.connect(hg).connect(ctx.destination);
+    hi.start(now);
+    hi.stop(now + DUR + 0.05);
+  }
+
+  // a broken ring letting its fire go: a soft downward sigh, no drama —
+  // the door simply stops being open
+  portalFold() {
+    this._noiseBurst(1200, 0.25, 0.07);
+    setTimeout(() => this._noiseBurst(500, 0.3, 0.05), 90);
+  }
+
+  // the Pearl Chime: two clear bell tones stepping DOWN — a call sent into
+  // the floor, and the pause where an answer starts moving
+  chime() {
+    this._bellTone(880, 1.0, 0.06);
+    setTimeout(() => this._bellTone(659, 1.4, 0.055), 320);
+  }
+
+  // the Undertow taking to (or leaving) the floor: a deep ground-groan
+  // under a rush of shifting sand
+  burrow() {
+    this._noiseBurst(90, 0.7, 0.4);
+    this._noiseBurst(700, 0.35, 0.12); // the sand
+    setTimeout(() => this._noiseBurst(60, 0.5, 0.2), 160);
+  }
+
   pickup() {
     if (!this.enabled || !this._ensure()) return;
     const ctx = this.ctx;
