@@ -7,6 +7,11 @@ through three floors of a haunted keep where shadow-creatures — gloams —
 roam torch-lit halls. Find the sigil-keys, open what's sealed, use the
 glowing way-sigil to descend.
 
+The automap is fogged: it only charts what you have actually seen. Some
+secret push-walls are mere shortcuts; a rare few guard **hidden vaults** —
+sealed rooms that don't exist on the automap until the wall grinds open,
+holding the keep's best loot.
+
 ## Controls
 
 | Input | Action |
@@ -21,8 +26,27 @@ glowing way-sigil to descend.
 | **R / Enter** | instant restart on the death screen |
 
 Scoring: kills (100–500 by type), ember shards (+100), secrets (+250),
-exit bonus (+500). Best score persists in `localStorage`
-(`arcade.gloamkeep.*`). Health/ammo/score carry between floors; keys do not.
+treasures (chalice +250, idol +500, Duskcrown +1000), exit bonus (+500).
+Best score persists in `localStorage` (`arcade.gloamkeep.*`).
+Health/ammo/ward/score carry between floors; keys and buffs do not.
+
+## Items
+
+| Item | Effect |
+| --- | --- |
+| **Pale tonic** | +25 vigor |
+| **Grand tonic** | +60 vigor |
+| **Ember vials** | +12 shots |
+| **Ember cache** | +30 shots |
+| **Warding stone** | +50 ward — each hit is half-soaked by ward before vigor |
+| **Wraith ember** | emberlock deals double damage for 15 s |
+| **Phase draught** | move 40% faster for 20 s |
+| **Seer's orb** | bares the whole floor on the automap and tints unopened secret walls gold |
+| **Ember shard / chalice / idol / Duskcrown** | score (+100 / +250 / +500 / +1000) |
+| **Sigil-keys** | open the matching sealed door |
+
+The best of these — warding stones, wraith embers, seer's orbs, idols and
+the Duskcrown — live in the hidden vaults.
 
 ## Bestiary
 
@@ -45,7 +69,10 @@ double-clicking `index.html` just works.
 
 - `src/maps.js` — three handcrafted ASCII grid maps + parser + reachability
   validator (progressive BFS that respects key/door gating; secrets checked
-  on a separate pass). Pure module.
+  on a separate pass; vault rules — no keys/spawn inside, openable from
+  outside, no items on push-wall slide paths). Hidden regions are *derived*:
+  any floor pocket sealed off except for a push-wall becomes a vault
+  automatically. Pure module.
 - `src/game.js` — the whole simulation, DOM-free and deterministic (seeded
   RNG): DDA raycast (`castRay`, shared by rendering, hitscan, line-of-sight
   and the use-key), circle-vs-grid collision resolved per axis (wall

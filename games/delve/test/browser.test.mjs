@@ -20,6 +20,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const GAME_DIR = path.resolve(__dirname, '..');
+const REPO_ROOT = path.resolve(GAME_DIR, '..', '..');
 const CHROME_BIN = '/usr/bin/google-chrome';
 
 let passed = 0;
@@ -46,8 +47,8 @@ function startServer() {
   return new Promise((resolve) => {
     const server = http.createServer((req, res) => {
       const urlPath = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-      let file = path.normalize(path.join(GAME_DIR, urlPath));
-      if (!file.startsWith(GAME_DIR)) { res.writeHead(403); res.end(); return; }
+      let file = path.normalize(path.join(REPO_ROOT, urlPath));
+      if (!file.startsWith(REPO_ROOT)) { res.writeHead(403); res.end(); return; }
       if (urlPath === '/' || urlPath === '') file = path.join(GAME_DIR, 'index.html');
       fs.readFile(file, (err, data) => {
         if (err) { res.writeHead(404); res.end('not found'); return; }
@@ -575,7 +576,7 @@ const consoleErrors = [];
 try {
   userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'delve-cdp-'));
   server = await startServer();
-  const httpUrl = `http://127.0.0.1:${server.address().port}/index.html`;
+  const httpUrl = `http://127.0.0.1:${server.address().port}/games/delve/index.html`;
   const fileUrl = pathToFileURL(path.join(GAME_DIR, 'index.html')).href;
 
   ({ proc: chrome, wsUrl: globalThis.__wsUrl } = await launchChrome(userDataDir));

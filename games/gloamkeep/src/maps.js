@@ -10,7 +10,15 @@
 //   '.' floor           '@' player start
 //   enemies: 'g' gloam  'z' stalker  'h' husk  'W' warden
 //   items:   '+' health '(' is unused; 'a' ammo  '1'/'2'/'3' keys  '*' ember shard
+//            'T' grand tonic   'c' ember cache   'o' warding stone
+//            'w' wraith ember  'p' phase draught 'e' seer's orb
+//            'u' gloam chalice 'i' ember idol    'C' duskcrown
 //   't' torch (decor sprite, floor cell near a wall)
+//
+// Floor pockets sealed off except for a push-wall are "hidden regions"
+// (vaults): derived automatically by deriveHiddenRegions, invisible on the
+// automap until their push-wall is activated. Push-walls that connect two
+// already-reachable areas are plain shortcut secrets.
 
 (function () {
 'use strict';
@@ -49,6 +57,15 @@ const ITEM_CHARS = {
   '2': 'key2',
   '3': 'key3',
   '*': 'shard',
+  'T': 'tonic',
+  'c': 'cache',
+  'o': 'aegis',
+  'w': 'wraith',
+  'p': 'phase',
+  'e': 'orb',
+  'u': 'chalice',
+  'i': 'idol',
+  'C': 'crown',
 };
 
 const MAPS = [
@@ -64,18 +81,18 @@ const MAPS = [
       '##########....+.....#........#',
       '#..t.....#........g.##########',
       '#........#..........#........#',
-      '#........#...a......#..a.....#',
+      '#........#...a......#..c.....#',
       '#........####D######...t.....#',
       '#........#...........#......g#',
       '#g.......#...........#.......#',
-      '#........#..g........#.......#',
+      '#........#..g...p....#.......#',
       '#....%%..#.....t.....#....&..#',
       '#....%...#...........#.......#',
       '#........D...........########&',
       '#........#...........#.t..X..#',
-      '#..z.....#......z....#.......#',
+      '#..z.....#......z....#..T....#',
       '##S##....#...........R.......#',
-      '#*.+#....#.a.........#..g..a.#',
+      '#*.u.....#.a.........#..g..a.#',
       '##.##.t..#...........#.......#',
       '##############################',
     ],
@@ -89,9 +106,9 @@ const MAPS = [
       '#......D..................G....#',
       '#......#...g........z.....#.t..#',
       '#.t....#..................######',
-      '########....&&....&&......#.a..#',
+      '###S####....&&....&&......#.a..#',
       '#......#..................D..+.#',
-      '#..a...D..h...............#....#',
+      '#.a....D..h...............#....#',
       '#......#..................#....#',
       '############D#######..##########',
       '#............#.................#',
@@ -100,12 +117,12 @@ const MAPS = [
       '#...*....t...#......%...2......#',
       '#.....g......#.............%%%%#',
       '#........z...#.............S..%#',
-      '#....h.......#.............%+*%#',
-      '#............#.............%%%%#',
+      '#....h.......#.............%Ti%#',
+      '#............#.............%c.%#',
       '##########R#####################',
-      '#.....#.....................t..#',
+      '#..e..#.....................t..#',
       '#..+..D.....g........h.........#',
-      '#.....#...a................#####',
+      '#.....#...a....p...........#####',
       '#..t..#.z..............3...Y.X##',
       '################################',
     ],
@@ -117,25 +134,25 @@ const MAPS = [
       '#################################',
       '#..t....#............#..h..#..*.#',
       '#.......#..z.....z...#.....S...+#',
-      '#...@...D............#..a..#....#',
-      '#.......#............#.....#....#',
+      '#...@...D............#..a..#..C.#',
+      '#.......#............#.....#o..w#',
       '#..t....#............###D########',
       '#########............#....t.....#',
       '#.......#..............g........#',
-      '#..a....#.....gg................#',
+      '#..a....#.....gg....c...........#',
       '#..+....D............#.......z..#',
       '#.......#............#....1.....#',
-      '#.......######R############D#####',
+      '#.......##S###R############D#####',
       '#.......%............#..h.......#',
       '#..g....%..t......t..#...z....g.#',
-      '#.......%............#....%%....#',
+      '#.......%......e.....#....%%....#',
       '#...z...D....&..&....#..a....*..#',
       '#.......%....2.......#....%%....#',
       '#.t...+.%..g......z..#.....+....#',
       '#.......%............#..........#',
       '#%%%%%%%%###G####################',
-      '#.....h.........h..........&&...#',
-      '#..t.........................a..#',
+      '#.....h.........h...p......&&...#',
+      '#..t.T....................o..a..#',
       '#########Y########D##############',
       '########...#.............########',
       '########.X.#..W......3...########',
@@ -211,11 +228,91 @@ function parseMap(def) {
     }
   }
   if (!spawn) throw new Error(`map "${def.name}" has no '@' spawn`);
-  return {
+  const level = {
     name: def.name,
     w, h, grid, doors, doorIdx, pushwalls,
     spawn, enemies, items, torches,
   };
+  deriveHiddenRegions(level);
+  return level;
+}
+
+const DIRS4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+// Derive "hidden regions": floor pockets unreachable from spawn while every
+// push-wall stays shut (doors, locked or not, count as passable — locked is
+// not hidden). Each push-wall learns which regions it reveals; an empty
+// `reveals` marks a plain shortcut secret. Also picks each push-wall's
+// automap disguise: the dominant wall type among its neighbours.
+function deriveHiddenRegions(level) {
+  const { w, h, grid, pushwalls } = level;
+
+  // flood from spawn, push-walls solid
+  const seen = new Uint8Array(w * h);
+  const start = Math.floor(level.spawn.y) * w + Math.floor(level.spawn.x);
+  const queue = [start];
+  seen[start] = 1;
+  while (queue.length) {
+    const i = queue.pop();
+    const x = i % w, y = (i / w) | 0;
+    for (const [dx, dy] of DIRS4) {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+      const ni = ny * w + nx;
+      if (seen[ni]) continue;
+      const t = grid[ni];
+      if (t !== TILE.EMPTY && !(t >= TILE.DOOR && t <= TILE.DOOR_Y)) continue;
+      seen[ni] = 1;
+      queue.push(ni);
+    }
+  }
+
+  // group unreached floor into connected components
+  const hiddenId = new Int16Array(w * h).fill(-1);
+  const hiddenRegions = [];
+  for (let i = 0; i < w * h; i++) {
+    if (grid[i] !== TILE.EMPTY || seen[i] || hiddenId[i] !== -1) continue;
+    const cells = [];
+    const stack = [i];
+    hiddenId[i] = hiddenRegions.length;
+    while (stack.length) {
+      const j = stack.pop();
+      cells.push(j);
+      const x = j % w, y = (j / w) | 0;
+      for (const [dx, dy] of DIRS4) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        const nj = ny * w + nx;
+        if (hiddenId[nj] !== -1 || seen[nj] || grid[nj] !== TILE.EMPTY) continue;
+        hiddenId[nj] = hiddenRegions.length;
+        stack.push(nj);
+      }
+    }
+    hiddenRegions.push({ cells, revealed: false });
+  }
+  level.hiddenId = hiddenId;
+  level.hiddenRegions = hiddenRegions;
+
+  for (const p of pushwalls) {
+    p.reveals = [];
+    const wallCounts = new Map();
+    for (const [dx, dy] of DIRS4) {
+      const nx = p.x + dx, ny = p.y + dy;
+      if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+      const ni = ny * w + nx;
+      const id = hiddenId[ni];
+      if (id >= 0 && !p.reveals.includes(id)) p.reveals.push(id);
+      const t = grid[ni];
+      if (t === TILE.STONE || t === TILE.MOSS || t === TILE.BANNER) {
+        wallCounts.set(t, (wallCounts.get(t) || 0) + 1);
+      }
+    }
+    p.disguise = TILE.STONE;
+    let best = 0;
+    for (const [t, count] of wallCounts) {
+      if (count > best) { best = count; p.disguise = t; }
+    }
+  }
 }
 
 // --- validation helpers (used by the headless test) -------------------------
@@ -313,7 +410,9 @@ function validateReachability(level) {
     if (!seenLoot[i]) problems.push(`enemy ${e.type} at ${Math.floor(e.x)},${Math.floor(e.y)} unreachable`);
   }
 
-  // each push-wall must have 2 free cells in at least one cardinal direction
+  // each push-wall must have 2 free cells in at least one cardinal direction;
+  // and since the wall parks as stone two cells out (in whichever valid
+  // direction the player picks), no item may sit on any possible slide path
   for (const p of level.pushwalls) {
     let ok = false;
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
@@ -322,10 +421,52 @@ function validateReachability(level) {
       const ax = p.x + dx, ay = p.y + dy, bx = p.x + 2 * dx, by = p.y + 2 * dy;
       if (ax <= 0 || ay <= 0 || ax >= w - 1 || ay >= h - 1) continue;
       if (bx <= 0 || by <= 0 || bx >= w - 1 || by >= h - 1) continue;
-      if (grid[a] === TILE.EMPTY && grid[b] === TILE.EMPTY) ok = true;
+      if (grid[a] !== TILE.EMPTY || grid[b] !== TILE.EMPTY) continue;
+      ok = true;
+      for (const it of level.items) {
+        const ix = Math.floor(it.x), iy = Math.floor(it.y);
+        if ((ix === ax && iy === ay) || (ix === bx && iy === by)) {
+          problems.push(`item ${it.kind} at ${ix},${iy} sits on the slide path of push-wall ${p.x},${p.y}`);
+        }
+      }
     }
     if (!ok) problems.push(`push-wall at ${p.x},${p.y} has no room to slide`);
   }
+
+  // hidden-region (vault) rules
+  const { hiddenId, hiddenRegions } = level;
+  const spawnI = Math.floor(level.spawn.y) * w + Math.floor(level.spawn.x);
+  if (hiddenId[spawnI] >= 0) problems.push('spawn is inside a hidden region');
+  for (const it of level.items) {
+    if (!it.kind.startsWith('key')) continue;
+    const i = Math.floor(it.y) * w + Math.floor(it.x);
+    if (hiddenId[i] >= 0) problems.push(`${it.kind} is inside a hidden region`);
+  }
+  // every region must be openable via a push-wall reachable outside it
+  // (iterate so a vault chained behind another vault still counts)
+  const openable = new Array(hiddenRegions.length).fill(false);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const p of level.pushwalls) {
+      let usable = false;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = p.x + dx, ny = p.y + dy;
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        const ni = ny * w + nx;
+        if (grid[ni] !== TILE.EMPTY) continue;
+        const id = hiddenId[ni];
+        if (id === -1 || openable[id]) usable = true;
+      }
+      if (!usable) continue;
+      for (const r of p.reveals) {
+        if (!openable[r]) { openable[r] = true; grew = true; }
+      }
+    }
+  }
+  openable.forEach((can, i) => {
+    if (!can) problems.push(`hidden region ${i} has no push-wall openable from outside`);
+  });
 
   return problems;
 }

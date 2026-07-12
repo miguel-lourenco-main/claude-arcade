@@ -1,4 +1,4 @@
-* { box-sizing: border-box; margin: 0; padding: 0; }
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
 :root {
   --bg: #0d0f12;
@@ -11,7 +11,7 @@
   --gold: #ffd76e;
 }
 
-html, body { height: 100%; }
+html, body { height: 100%; touch-action: manipulation; }
 body {
   background: var(--bg);
   color: var(--text);
@@ -127,6 +127,8 @@ body {
   height: auto;
   aspect-ratio: 1 / 1;
   touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
   cursor: pointer;
 }
 

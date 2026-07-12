@@ -3,6 +3,7 @@
 window.GAMES = [
   {
     slug: "voxelcraft",
+    mobile: false,
     title: "Voxelcraft",
     genre: "Sandbox / Voxel",
     description:
@@ -11,6 +12,7 @@ window.GAMES = [
   },
   {
     slug: "wyrm",
+    mobile: false,
     title: "Wyrm",
     genre: "Arcade / Grid",
     description:
@@ -19,6 +21,7 @@ window.GAMES = [
   },
   {
     slug: "fuse",
+    mobile: true,
     title: "Fuse",
     genre: "Puzzle / Sliding",
     description:
@@ -27,6 +30,7 @@ window.GAMES = [
   },
   {
     slug: "dowser",
+    mobile: true,
     title: "Dowser",
     genre: "Puzzle / Logic",
     description:
@@ -35,6 +39,7 @@ window.GAMES = [
   },
   {
     slug: "brickstorm",
+    mobile: true,
     title: "Brickstorm",
     genre: "Arcade / Paddle",
     description:
@@ -43,6 +48,7 @@ window.GAMES = [
   },
   {
     slug: "mothlight",
+    mobile: true,
     title: "Mothlight",
     genre: "Arcade / One-button",
     description:
@@ -51,6 +57,7 @@ window.GAMES = [
   },
   {
     slug: "softfall",
+    mobile: false,
     title: "Softfall",
     genre: "Arcade / Physics",
     description:
@@ -59,6 +66,7 @@ window.GAMES = [
   },
   {
     slug: "shardfield",
+    mobile: false,
     title: "Shardfield",
     genre: "Arcade / Space",
     description:
@@ -67,6 +75,7 @@ window.GAMES = [
   },
   {
     slug: "crateshift",
+    mobile: false,
     title: "Crateshift",
     genre: "Puzzle / Box-pusher",
     description:
@@ -75,6 +84,7 @@ window.GAMES = [
   },
   {
     slug: "gemgrove",
+    mobile: true,
     title: "Gemgrove",
     genre: "Puzzle / Match-3",
     description:
@@ -83,6 +93,7 @@ window.GAMES = [
   },
   {
     slug: "bulwark",
+    mobile: false,
     title: "Bulwark",
     genre: "Arcade / Shooter",
     description:
@@ -91,6 +102,7 @@ window.GAMES = [
   },
   {
     slug: "patience",
+    mobile: true,
     title: "Patience",
     genre: "Cards / Solitaire",
     description:
@@ -99,6 +111,7 @@ window.GAMES = [
   },
   {
     slug: "reversi",
+    mobile: true,
     title: "Reversi",
     genre: "Board / Strategy",
     description:
@@ -107,6 +120,7 @@ window.GAMES = [
   },
   {
     slug: "quarry",
+    mobile: false,
     title: "Quarry",
     genre: "Puzzle / Falling-block",
     description:
@@ -115,6 +129,7 @@ window.GAMES = [
   },
   {
     slug: "lamplighter",
+    mobile: false,
     title: "Lamplighter",
     genre: "Arcade / Maze",
     description:
@@ -123,6 +138,7 @@ window.GAMES = [
   },
   {
     slug: "chess",
+    mobile: true,
     title: "Chess",
     genre: "Board / Strategy",
     description:
@@ -131,6 +147,7 @@ window.GAMES = [
   },
   {
     slug: "delve",
+    mobile: false,
     title: "Delve",
     genre: "RPG / Roguelike",
     description:
@@ -139,6 +156,7 @@ window.GAMES = [
   },
   {
     slug: "gloamkeep",
+    mobile: false,
     title: "Gloamkeep",
     genre: "FPS / Raycaster",
     description:
@@ -147,6 +165,7 @@ window.GAMES = [
   },
   {
     slug: "palisade",
+    mobile: true,
     title: "Palisade",
     genre: "Strategy / Tower defense",
     description:
@@ -155,6 +174,7 @@ window.GAMES = [
   },
   {
     slug: "slipstream",
+    mobile: false,
     title: "Slipstream",
     genre: "Arcade / Racer",
     description:
@@ -163,6 +183,7 @@ window.GAMES = [
   },
   {
     slug: "rootguard",
+    mobile: true,
     title: "Rootguard",
     genre: "Strategy / Lane defense",
     description:
@@ -171,6 +192,7 @@ window.GAMES = [
   },
   {
     slug: "fernfoot",
+    mobile: false,
     title: "Fernfoot",
     genre: "Platformer",
     description:
@@ -179,6 +201,7 @@ window.GAMES = [
   },
   {
     slug: "dustkart",
+    mobile: false,
     title: "Dustkart",
     genre: "Racing / Kart",
     description:

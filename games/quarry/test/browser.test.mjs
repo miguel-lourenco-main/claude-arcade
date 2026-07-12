@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 
 const CHROME = '/usr/bin/google-chrome';
 const GAME_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const REPO_ROOT = path.resolve(GAME_DIR, '..', '..');
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -397,12 +398,12 @@ async function testUrl(browser, port, url, envName) {
 async function main() {
   if (!existsSync(CHROME)) throw new Error(`chrome not found at ${CHROME}`);
   const profileDir = await mkdtemp(path.join(tmpdir(), 'quarry-test-'));
-  const { server, port: httpPort } = await startHttpServer(GAME_DIR);
+  const { server, port: httpPort } = await startHttpServer(REPO_ROOT);
   let chrome;
   try {
     chrome = await launchChrome(profileDir);
     const browser = await CDP.connect(chrome.browserWs);
-    await testUrl(browser, chrome.port, `http://127.0.0.1:${httpPort}/index.html`, 'http');
+    await testUrl(browser, chrome.port, `http://127.0.0.1:${httpPort}/games/quarry/index.html`, 'http');
     await testUrl(browser, chrome.port, `file://${path.join(GAME_DIR, 'index.html')}`, 'file');
     browser.close();
     console.log(`\nPASS — ${assertCount} browser assertions across http + file://`);

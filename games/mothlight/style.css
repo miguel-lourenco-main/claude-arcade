@@ -1,6 +1,6 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
-html, body { height: 100%; }
+html, body { height: 100%; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 body {
   background: #0d0f12;
   color: #cdd3da;
@@ -32,7 +32,9 @@ body {
   max-height: calc(100vh - 90px);
   height: auto;
   cursor: pointer;
-  touch-action: manipulation;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 #chrome {

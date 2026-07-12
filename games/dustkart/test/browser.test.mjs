@@ -20,6 +20,7 @@ import { fileURLToPath } from 'node:url';
 
 const CHROME = process.env.CHROME_BIN || '/usr/bin/google-chrome';
 const GAME_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const REPO_ROOT = path.resolve(GAME_DIR, '..', '..');
 
 let failures = 0;
 function ok(cond, name, extra = '') {
@@ -35,8 +36,8 @@ function startServer() {
     const srv = createServer(async (req, res) => {
       try {
         const rel = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-        const file = path.join(GAME_DIR, rel === '/' ? 'index.html' : rel);
-        if (!file.startsWith(GAME_DIR)) throw new Error('traversal');
+        const file = path.join(REPO_ROOT, rel === '/' ? 'index.html' : rel);
+        if (!file.startsWith(REPO_ROOT)) throw new Error('traversal');
         const body = await readFile(file);
         res.writeHead(200, { 'content-type': MIME[path.extname(file)] || 'application/octet-stream' });
         res.end(body);
@@ -419,7 +420,7 @@ async function runSuite(cdp, url, label) {
 // ---------------------------------------------------------------- main
 const server = await startServer();
 const port = server.address().port;
-const httpUrl = `http://127.0.0.1:${port}/index.html`;
+const httpUrl = `http://127.0.0.1:${port}/games/dustkart/index.html`;
 const fileUrl = `file://${path.join(GAME_DIR, 'index.html')}`;
 
 const userDataDir = await mkdtemp(path.join(tmpdir(), 'dustkart-chrome-'));

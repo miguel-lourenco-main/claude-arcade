@@ -464,6 +464,12 @@
     hover = (col >= 0 && col < COLS && lane >= 0 && lane < LANES) ? { lane, col } : null;
   });
   canvas.addEventListener("mouseleave", () => { hover = null; });
+  canvas.addEventListener("pointerdown", (ev) => {
+    const p = canvasPoint(ev);
+    const col = Math.floor((p.x - SURGE_W) / CELL_W);
+    const lane = Math.floor(p.y / CELL_H);
+    hover = (col >= 0 && col < COLS && lane >= 0 && lane < LANES) ? { lane, col } : null;
+  });
 
   canvas.addEventListener("click", (ev) => {
     ensureAudio();

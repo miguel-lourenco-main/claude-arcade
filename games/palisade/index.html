@@ -92,5 +92,16 @@
   <script src="src/render.js"></script>
   <script src="src/sfx.js"></script>
   <script src="src/main.js"></script>
+
+  <!-- shared arcade widget: rules-any-time + player ideas -->
+  <script src="../_common/arcade-config.js"></script>
+  <script src="../_common/arcade-widget.js"></script>
+  <script>
+    ArcadeWidget.init({
+      slug: "palisade",
+      title: "Palisade",
+      rulesSelector: ".ctrl-lines",
+    });
+  </script>
 </body>
 </html>

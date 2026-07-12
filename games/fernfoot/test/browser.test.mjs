@@ -19,6 +19,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const GAME_DIR = path.resolve(__dirname, "..");
+const REPO_ROOT = path.resolve(GAME_DIR, "..", "..");
 const CHROME = "/usr/bin/google-chrome";
 
 let checks = 0;
@@ -39,15 +40,15 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
 const server = http.createServer(async (req, res) => {
   try {
     const p = decodeURIComponent(new URL(req.url, "http://localhost").pathname);
-    const fp = path.normalize(path.join(GAME_DIR, p === "/" ? "index.html" : p));
-    if (!fp.startsWith(GAME_DIR)) { res.writeHead(403); res.end(); return; }
+    const fp = path.normalize(path.join(REPO_ROOT, p === "/" ? "index.html" : p));
+    if (!fp.startsWith(REPO_ROOT)) { res.writeHead(403); res.end(); return; }
     const body = await readFile(fp);
     res.writeHead(200, { "content-type": MIME[path.extname(fp)] || "application/octet-stream" });
     res.end(body);
   } catch { res.writeHead(404); res.end("not found"); }
 });
 await new Promise((r) => server.listen(0, "127.0.0.1", r));
-const HTTP_URL = `http://127.0.0.1:${server.address().port}/index.html?fftest=1`;
+const HTTP_URL = `http://127.0.0.1:${server.address().port}/games/fernfoot/index.html?fftest=1`;
 const FILE_URL = "file://" + path.join(GAME_DIR, "index.html") + "?fftest=1";
 
 // ---- chrome --------------------------------------------------------------------

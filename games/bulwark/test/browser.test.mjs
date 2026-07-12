@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const GAME_DIR = path.resolve(__dirname, '..');
+const REPO_ROOT = path.resolve(GAME_DIR, '..', '..');
 const CHROME = process.env.CHROME_BIN || '/usr/bin/google-chrome';
 const SAUCER_SCORES = [50, 100, 150, 300];
 
@@ -37,8 +38,8 @@ function startServer() {
   const types = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.mjs': 'text/javascript' };
   const server = http.createServer((req, res) => {
     const urlPath = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-    const fp = path.normalize(path.join(GAME_DIR, urlPath === '/' ? 'index.html' : urlPath));
-    if (!fp.startsWith(GAME_DIR) || !fs.existsSync(fp) || !fs.statSync(fp).isFile()) {
+    const fp = path.normalize(path.join(REPO_ROOT, urlPath === '/' ? 'index.html' : urlPath));
+    if (!fp.startsWith(REPO_ROOT) || !fs.existsSync(fp) || !fs.statSync(fp).isFile()) {
       res.writeHead(404); res.end('not found'); return;
     }
     res.writeHead(200, { 'Content-Type': types[path.extname(fp)] || 'application/octet-stream' });
@@ -427,7 +428,7 @@ try {
   server = srv.server;
   chrome = await launchChrome();
 
-  const httpUrl = `http://127.0.0.1:${srv.port}/index.html`;
+  const httpUrl = `http://127.0.0.1:${srv.port}/games/bulwark/index.html`;
   const fileUrl = 'file://' + path.join(GAME_DIR, 'index.html');
 
   await runSuite('http', httpUrl, chrome.port);

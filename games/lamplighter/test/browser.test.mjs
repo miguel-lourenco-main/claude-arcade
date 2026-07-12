@@ -13,6 +13,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const GAME_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const REPO_ROOT = path.resolve(GAME_DIR, "..", "..");
 const CHROME = "/usr/bin/google-chrome";
 
 /* ---------------- tiny assert + log helpers ---------------- */
@@ -38,8 +39,8 @@ function startServer() {
     const srv = http.createServer((req, res) => {
       const urlPath = decodeURIComponent(new URL(req.url, "http://x").pathname);
       if (urlPath === "/favicon.ico") { res.writeHead(204); res.end(); return; }
-      let fp = path.join(GAME_DIR, urlPath === "/" ? "index.html" : urlPath);
-      if (!fp.startsWith(GAME_DIR)) { res.writeHead(403); res.end(); return; }
+      let fp = path.join(REPO_ROOT, urlPath === "/" ? "index.html" : urlPath);
+      if (!fp.startsWith(REPO_ROOT)) { res.writeHead(403); res.end(); return; }
       fs.readFile(fp, (err, data) => {
         if (err) { res.writeHead(404); res.end("not found"); return; }
         res.writeHead(200, { "Content-Type": MIME[path.extname(fp)] || "application/octet-stream" });
@@ -525,7 +526,7 @@ let chrome = null, server = null;
 let exitCode = 1;
 try {
   server = await startServer();
-  const httpUrl = "http://127.0.0.1:" + server.address().port + "/index.html";
+  const httpUrl = "http://127.0.0.1:" + server.address().port + "/games/lamplighter/index.html";
   const fileUrl = "file://" + path.join(GAME_DIR, "index.html");
 
   chrome = await launchChrome(path.join(tmp, "profile"));

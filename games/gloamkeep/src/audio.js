@@ -171,13 +171,46 @@ function createAudio() {
       } else if (kind === 'shard') {
         osc('sine', 980, t, 0.08, 0.14);
         osc('sine', 1470, t + 0.07, 0.16, 0.14);
-      } else if (kind === 'health') {
+      } else if (kind === 'chalice' || kind === 'idol' || kind === 'crown') {
+        // treasure gleam: rising arpeggio, grander with the tier
+        const steps = kind === 'chalice' ? 3 : kind === 'idol' ? 4 : 5;
+        for (let i = 0; i < steps; i++) {
+          osc('sine', 740 * Math.pow(1.25, i), t + i * 0.07, 0.14, 0.13);
+        }
+        if (kind === 'crown') osc('sine', 1970, t + 0.42, 0.5, 0.08);
+      } else if (kind === 'aegis') {
+        // low stony chime
+        noise(t, 0.12, 0.1, 'lowpass', 500, 200);
+        osc('triangle', 220, t, 0.35, 0.16);
+        osc('sine', 440, t + 0.05, 0.4, 0.1);
+      } else if (kind === 'wraith' || kind === 'phase') {
+        // breathy detuned swell
+        const f = kind === 'wraith' ? 160 : 240;
+        osc('sawtooth', f, t, 0.45, 0.1, f * 2);
+        osc('sawtooth', f * 1.02, t, 0.45, 0.08, f * 2.04);
+        noise(t, 0.35, 0.08, 'bandpass', 900, 1800, 2);
+      } else if (kind === 'orb') {
+        // sine shimmer
+        osc('sine', 880, t, 0.5, 0.1, 1760);
+        osc('sine', 1320, t + 0.12, 0.4, 0.07, 2200);
+      } else if (kind === 'health' || kind === 'tonic') {
         osc('sine', 420, t, 0.1, 0.14);
         osc('sine', 630, t + 0.09, 0.16, 0.14);
-      } else { // ammo
+        if (kind === 'tonic') osc('sine', 840, t + 0.18, 0.2, 0.12);
+      } else { // ammo / cache
         osc('triangle', 260, t, 0.06, 0.16);
         osc('triangle', 350, t + 0.06, 0.08, 0.16);
+        if (kind === 'cache') osc('triangle', 470, t + 0.12, 0.1, 0.16);
       }
+    },
+    vault() {
+      if (!ensure()) return;
+      const t = ctx.currentTime;
+      // deeper grind than a plain secret, then a discovery gleam
+      noise(t, 1.3, 0.28, 'lowpass', 130, 45, 2);
+      osc('triangle', 38, t, 1.2, 0.18, 30);
+      osc('sine', 520, t + 0.25, 0.3, 0.09, 780);
+      osc('sine', 780, t + 0.5, 0.4, 0.09, 1170);
     },
     playerHit() {
       if (!ensure()) return;

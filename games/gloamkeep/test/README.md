@@ -30,15 +30,25 @@ node games/gloamkeep/test/browser.test.mjs
 - carry between floors keeps hp/ammo/score but not keys — level-to-level carry rules
 - simulation is deterministic for a given seed — seeded-RNG fixed-timestep determinism
 - gunshots alert enemies within hearing path-distance — noise propagation AI
+- hidden regions derive as [0, 1, 1] across the floors — sealed-pocket auto-derivation
+- vault push-walls know their region; shortcut secrets reveal nothing — secret variety
+- fog of war: spawn known, distant rooms dark, walking reveals more — automap explored mask
+- hidden vault: dark on the automap until opened, then `vaultFound` fires — reveal flow + crown payout
+- failsafe: standing inside an unrevealed vault reveals it — reveal safety net
+- grand tonic / ember cache / warding stone / wraith ember / phase draught / treasures / seer's orb — every new item's effect, caps and expiry
+- ward carries between floors; buff timers do not — carry rules for the new stats
 
 ## engine.test.mjs — the original deep engine suite (adapted to the namespace)
 
-Covers map validity/reachability for all floors, raycast geometry (axis hits,
-sides, texU, diagonals), door ray behaviour, sliding collision, hitscan/combat
-events and cooldowns, dry fire, door use/auto-close/locked flows, push-wall
-mechanics, enemy AI (shot alerting, chase, melee, ranged bolts), pickups,
-death/level-complete flows, carry + determinism, and a raycast performance
-smoke test.
+Covers map validity/reachability for all floors (including the vault rules:
+region counts, openable-from-outside, no items on push-wall slide paths),
+raycast geometry (axis hits, sides, texU, diagonals), door ray behaviour,
+sliding collision, hitscan/combat events and cooldowns, dry fire, door
+use/auto-close/locked flows, push-wall mechanics, a hidden-vault integration
+(dark on the automap → open → `vaultFound` → wall slides out → every vault
+item still lootable), enemy AI (shot alerting, chase, melee, ranged bolts),
+pickups, death/level-complete flows, carry + determinism, and a raycast
+performance smoke test.
 
 ## browser.test.mjs — headless Chrome, real page, real inputs
 
@@ -58,6 +68,7 @@ asserts, one feature at a time:
 - locked door: `E` refuses with the "Sealed by the crimson sigil." message
 - key pickup: walking over the key sets it, lights the HUD gem, then the same door opens
 - minimap toggle: `M` hides and re-shows the minimap
+- fog of war: the automap keeps unseen cells dark; floor 1 derives no hidden region, floor 2 hides its vault
 - audio toggle: `N` flips the sound button label and persists `arcade.gloamkeep.sound`
 - pause on blur: a window `blur` pauses; the Resume button resumes
 - damage flow: losing vigor updates the HUD health readout

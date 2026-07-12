@@ -1,6 +1,6 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
-html, body { height: 100%; }
+html, body { height: 100%; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 body {
   background: #0d0f12;
   color: #e8eaed;
@@ -66,6 +66,9 @@ body {
   max-width: calc(100vw - 24px);
   max-height: calc(100vh - 110px);
   aspect-ratio: 3 / 4;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* ---- overlay ---- */

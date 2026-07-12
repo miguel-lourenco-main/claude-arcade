@@ -117,5 +117,16 @@
   <script src="src/pieces.js"></script>
   <script src="src/audio.js"></script>
   <script src="src/ui.js"></script>
+
+  <!-- shared arcade widget: rules-any-time + player ideas -->
+  <script src="../_common/arcade-config.js"></script>
+  <script src="../_common/arcade-widget.js"></script>
+  <script>
+    ArcadeWidget.init({
+      slug: "chess",
+      title: "Chess",
+      rulesSelector: "footer",
+    });
+  </script>
 </body>
 </html>

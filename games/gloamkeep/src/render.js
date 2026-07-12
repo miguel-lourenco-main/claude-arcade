@@ -15,6 +15,14 @@ const FOV = (66 * Math.PI) / 180;
 const TAN_HALF = Math.tan(FOV / 2);
 const PROJ = (IW / 2) / TAN_HALF;    // projection plane distance in pixels
 
+// item kinds rendered with the sprite glow halo (keys glow too)
+const GLOW_KINDS = new Set(['shard', 'aegis', 'wraith', 'orb', 'chalice', 'idol', 'crown']);
+
+function pushwallAt(m, x, y) {
+  for (const p of m.pushwalls) if (p.x === x && p.y === y) return p;
+  return null;
+}
+
 function createRenderer(displayCanvas, minimapCanvas, assets) {
   const inner = document.createElement('canvas');
   inner.width = IW; inner.height = IH;
@@ -134,7 +142,7 @@ function createRenderer(displayCanvas, minimapCanvas, assets) {
       const s = getSlot(n++);
       s.x = it.x; s.y = it.y; s.tex = assets.items[it.kind];
       s.scale = 0.55; s.anchor = 0; s.flash = 0;
-      s.glow = it.kind.startsWith('key') || it.kind === 'shard' ? 1 : 0;
+      s.glow = it.kind.startsWith('key') || GLOW_KINDS.has(it.kind) ? 1 : 0;
       s.d2 = (it.x - p.x) * (it.x - p.x) + (it.y - p.y) * (it.y - p.y);
     }
     const torchFrame = ((state.time * 9) | 0) % 3;
@@ -295,10 +303,20 @@ function createRenderer(displayCanvas, minimapCanvas, assets) {
     mctx.fillRect(0, 0, mw, mh);
     for (let y = 0; y < m.h; y++) {
       for (let x = 0; x < m.w; x++) {
-        const t = m.grid[y * m.w + x];
+        const i = y * m.w + x;
+        if (!state.explored[i]) continue; // fog of war: unseen cells stay dark
+        let t = m.grid[i];
+        let seerTint = false;
+        if (t === TILE.PUSH) {
+          // wear the neighbouring wall's colour so the automap keeps the secret
+          const pw = pushwallAt(m, x, y);
+          if (state.mapSeer) seerTint = true;
+          else t = pw ? pw.disguise : TILE.STONE;
+        }
         if (t === TILE.EMPTY) continue;
         let c = '#3c414c';
-        if (t === TILE.MOSS) c = '#39493c';
+        if (seerTint) c = '#e8c04a';
+        else if (t === TILE.MOSS) c = '#39493c';
         else if (t === TILE.BANNER) c = '#4a3a5c';
         else if (t === TILE.DOOR) c = '#8a6a42';
         else if (t === TILE.DOOR_R) c = '#c04848';
@@ -309,10 +327,11 @@ function createRenderer(displayCanvas, minimapCanvas, assets) {
         mctx.fillRect(x * cell, y * cell, cell - 0.5, cell - 0.5);
       }
     }
-    // alive, alerted enemies show as faint motes
+    // alive, alerted enemies in explored cells show as faint motes
     mctx.fillStyle = 'rgba(224,90,90,0.9)';
     for (const e of state.enemies) {
       if (e.state === 'dead' || e.state === 'idle' || e.state === 'patrol') continue;
+      if (!state.explored[Math.floor(e.y) * m.w + Math.floor(e.x)]) continue;
       mctx.fillRect(e.x * cell - 1.5, e.y * cell - 1.5, 3, 3);
     }
     // player arrow

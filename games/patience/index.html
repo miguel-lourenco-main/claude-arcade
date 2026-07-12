@@ -53,5 +53,16 @@
   <script src="src/game.js"></script>
   <script src="src/audio.js"></script>
   <script src="src/main.js"></script>
+
+  <!-- shared arcade widget: rules-any-time + player ideas -->
+  <script src="../_common/arcade-config.js"></script>
+  <script src="../_common/arcade-widget.js"></script>
+  <script>
+    ArcadeWidget.init({
+      slug: "patience",
+      title: "Patience",
+      rulesSelector: "#controls",
+    });
+  </script>
 </body>
 </html>

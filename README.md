@@ -59,17 +59,61 @@ node run-tests.mjs wyrm fuse  # only the named games
 | [Fernfoot](games/fernfoot/) | Platformer | Momentum platformer: variable jump, coyote time, jump buffering, stomps, power-ups, 6 levels with secrets. |
 | [Dustkart](games/dustkart/) | Racing / kart | Kart racer: drift-charge boosts, launch window, position-weighted items, rubberband AI, 3 circuits. |
 
+## Mobile
+
+Each game is tagged `mobile: true|false` in `games/manifest.js`. The shell shows
+a **📱 Mobile / 🖥 Desktop** badge on every card and a filter to show only the
+games that play on a phone; on a small touch device it defaults to the mobile
+list. Mobile-tagged games take touch input and are laid out to work on a phone;
+desktop-tagged games need a keyboard, mouse-look, or precise pointing.
+
+## In-game rules & player ideas
+
+Every game page loads a small shared widget (`games/_common/arcade-widget.js`,
+Shadow-DOM isolated so it can't clash with a game's CSS):
+
+- **? Rules** — opens that game's how-to-play at any time, not just on the start
+  screen (it clones the game's existing controls text).
+- **★ Ideas** — a structured suggestion form plus a roadmap of accepted ideas.
+
+The roadmap is read client-side from the project's **public** GitLab issues API
+(no token). Submissions go through a serverless worker that holds the token and
+files a triage issue — see [`serverless/`](serverless/). The whole pipeline is
+optional: until `feedbackEndpoint` is set in `games/_common/arcade-config.js`,
+the form opens but explains it isn't wired up, and nothing calls the network on
+page load.
+
+```
+player → ★ Ideas form → serverless worker (holds token)
+       → GitLab issue (suggestion, needs-triage, type::*, game::<slug>)
+you triage → relabel `accepted` → shows on the arcade + game-page roadmap
+```
+
+Games with mouse-look (**gloamkeep**, **voxelcraft**) expose a **mouse
+sensitivity** slider on their start/pause screens, persisted per game.
+
 ## Structure
 
 ```
-index.html          arcade shell (lists games)
-games/manifest.js   game registry the shell reads
-games/<slug>/       each game, fully self-contained
+index.html                arcade shell (lists + filters games, ideas widget)
+games/manifest.js          game registry the shell reads (incl. mobile flags)
+games/_common/             shared, game-agnostic bits (config + ideas/rules widget)
+games/<slug>/              each game, fully self-contained
+serverless/                feedback intake worker (files GitLab issues) + its tests
 ```
 
 ## Adding a game
 
 1. Create `games/<slug>/index.html` (plus whatever the game needs).
-2. Add an entry to `games/manifest.js`.
+2. Add an entry to `games/manifest.js` (including `mobile: true|false`).
+3. Before `</body>`, load the shared widget so the game gets the rules + ideas
+   buttons:
+   ```html
+   <script src="../_common/arcade-config.js"></script>
+   <script src="../_common/arcade-widget.js"></script>
+   <script>
+     ArcadeWidget.init({ slug: "<slug>", title: "<Title>", rulesSelector: "<your controls element>" });
+   </script>
+   ```
 
 That's the whole integration surface.

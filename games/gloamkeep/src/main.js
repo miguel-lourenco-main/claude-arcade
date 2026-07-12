@@ -9,6 +9,13 @@ const { createGame, tick, makeInput, DT, LEVEL_COUNT, MAX_HP,
 
 const LS_HIGH = 'arcade.gloamkeep.high';
 const LS_SOUND = 'arcade.gloamkeep.sound';
+const LS_SENS = 'arcade.gloamkeep.sensitivity';
+
+// mouse-look sensitivity: a multiplier on the base turn-per-pixel. Persisted
+// and adjustable from the start + pause screens (range 0.3–2.5, default 1).
+const BASE_LOOK = 0.0021;
+let sensitivity = clampSens(parseFloat(localStorage.getItem(LS_SENS)));
+function clampSens(v) { return Number.isFinite(v) ? Math.min(2.5, Math.max(0.3, v)) : 1; }
 
 const $ = (id) => document.getElementById(id);
 const screen = $('screen');
@@ -90,7 +97,7 @@ screen.addEventListener('mousedown', (e) => {
 window.addEventListener('mouseup', (e) => { if (e.button === 0) firing = false; });
 window.addEventListener('mousemove', (e) => {
   if (phase === 'playing' && document.pointerLockElement === screen) {
-    lookDelta += e.movementX * 0.0021;
+    lookDelta += e.movementX * BASE_LOOK * sensitivity;
   }
 });
 document.addEventListener('pointerlockchange', () => {
@@ -140,6 +147,7 @@ function nextLevel() {
   startLevel(levelIndex + 1, {
     hp: game.player.hp,
     ammo: game.player.ammo,
+    armor: game.player.armor,
     score: game.score,
   });
 }
@@ -221,6 +229,26 @@ for (const b of document.querySelectorAll('.sound-toggle')) {
   b.textContent = audio.enabled ? 'sound: on' : 'sound: off';
   b.addEventListener('click', toggleSound);
 }
+
+// mouse-sensitivity sliders (start + pause screens stay in sync)
+const sensSliders = [
+  [$('sens-start'), $('sens-start-val')],
+  [$('sens-pause'), $('sens-pause-val')],
+].filter(([s]) => s);
+function syncSens() {
+  for (const [slider, label] of sensSliders) {
+    slider.value = String(sensitivity);
+    label.textContent = sensitivity.toFixed(2) + '×';
+  }
+}
+for (const [slider] of sensSliders) {
+  slider.addEventListener('input', () => {
+    sensitivity = clampSens(parseFloat(slider.value));
+    localStorage.setItem(LS_SENS, String(sensitivity));
+    syncSens();
+  });
+}
+syncSens();
 saveHigh();
 
 // ---------------------------------------------------------------------------
@@ -243,6 +271,7 @@ function handleEvents() {
       case 'locked': audio.locked(); break;
       case 'useThud': audio.useThud(); break;
       case 'secret': audio.secret(); break;
+      case 'vaultFound': audio.vault(); break;
       case 'pickup': audio.pickup(ev.kind); break;
       case 'boltFire': audio.boltFire(ev.dist); break;
       case 'boltHit': audio.boltHit(ev.dist); break;
@@ -263,6 +292,7 @@ function handleEvents() {
 // ---------------------------------------------------------------------------
 
 let lastHp = -1, lastAmmo = -1, lastScore = -1, lastKeys = '', lastMsg = null;
+let lastWard = -1, lastBuffs = null;
 
 function updateHud(force) {
   const p = game.player;
@@ -271,6 +301,19 @@ function updateHud(force) {
     $('hud-hp-num').textContent = p.hp;
     $('hud-hp-fill').style.width = `${(p.hp / MAX_HP) * 100}%`;
     $('hud-hp-fill').classList.toggle('critical', p.hp <= 25);
+  }
+  if (force || p.armor !== lastWard) {
+    lastWard = p.armor;
+    $('hud-ward-group').classList.toggle('hidden', p.armor <= 0);
+    $('hud-ward-num').textContent = p.armor;
+  }
+  const buffs = [];
+  if (p.dmgT > 0) buffs.push(`wraith ${Math.ceil(p.dmgT)}s`);
+  if (p.speedT > 0) buffs.push(`phase ${Math.ceil(p.speedT)}s`);
+  const bstr = buffs.join(' · ');
+  if (force || bstr !== lastBuffs) {
+    lastBuffs = bstr;
+    $('hud-buffs').textContent = bstr;
   }
   if (force || p.ammo !== lastAmmo) {
     lastAmmo = p.ammo;

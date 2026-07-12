@@ -319,6 +319,7 @@ function cellFromEvent(ev) {
 
 canvas.addEventListener('mousemove', (ev) => { hover = cellFromEvent(ev); });
 canvas.addEventListener('mouseleave', () => { hover = null; });
+canvas.addEventListener('pointerdown', (ev) => { hover = cellFromEvent(ev); });
 
 canvas.addEventListener('click', (ev) => {
   if (!running || !game || paused) return;

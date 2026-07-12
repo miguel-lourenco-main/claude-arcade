@@ -121,5 +121,16 @@
   <script src="src/ui/render.js"></script>
   <script src="src/ui/audio.js"></script>
   <script src="src/main.js"></script>
+
+  <!-- shared arcade widget: rules-any-time + player ideas -->
+  <script src="../_common/arcade-config.js"></script>
+  <script src="../_common/arcade-widget.js"></script>
+  <script>
+    ArcadeWidget.init({
+      slug: "delve",
+      title: "Delve",
+      rulesSelector: "#title-overlay .keys",
+    });
+  </script>
 </body>
 </html>

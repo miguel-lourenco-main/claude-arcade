@@ -19,6 +19,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const GAME_DIR = path.resolve(__dirname, '..');
+const REPO_ROOT = path.resolve(GAME_DIR, '..', '..');
 const CHROME_BIN = '/usr/bin/google-chrome';
 
 let passed = 0;
@@ -42,8 +43,8 @@ function startServer() {
   return new Promise((resolve) => {
     const server = http.createServer((req, res) => {
       const urlPath = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-      let file = path.normalize(path.join(GAME_DIR, urlPath));
-      if (!file.startsWith(GAME_DIR)) { res.writeHead(403); res.end(); return; }
+      let file = path.normalize(path.join(REPO_ROOT, urlPath));
+      if (!file.startsWith(REPO_ROOT)) { res.writeHead(403); res.end(); return; }
       if (urlPath === '/' || urlPath === '') file = path.join(GAME_DIR, 'index.html');
       fs.readFile(file, (err, data) => {
         if (err) { res.writeHead(404); res.end('not found'); return; }
@@ -442,7 +443,7 @@ async function runSuite(page, url, label, { startViaKeyboard }) {
 
 const server = await startServer();
 const port = server.address().port;
-const httpUrl = `http://127.0.0.1:${port}/index.html`;
+const httpUrl = `http://127.0.0.1:${port}/games/softfall/index.html`;
 const fileUrl = pathToFileURL(path.join(GAME_DIR, 'index.html')).href;
 
 const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'softfall-cdp-'));

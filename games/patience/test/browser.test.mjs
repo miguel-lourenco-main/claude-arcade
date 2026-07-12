@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 
 const CHROME = '/usr/bin/google-chrome';
 const GAME_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const REPO_ROOT = path.resolve(GAME_DIR, '..', '..');
 const MIME = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript' };
 
 let passed = 0;
@@ -32,8 +33,8 @@ function startServer() {
   return new Promise((resolve) => {
     const srv = http.createServer((req, res) => {
       const rel = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-      const file = path.join(GAME_DIR, rel === '/' ? 'index.html' : rel);
-      if (!file.startsWith(GAME_DIR) || !fs.existsSync(file) || !fs.statSync(file).isFile()) {
+      const file = path.join(REPO_ROOT, rel === '/' ? 'index.html' : rel);
+      if (!file.startsWith(REPO_ROOT) || !fs.existsSync(file) || !fs.statSync(file).isFile()) {
         res.writeHead(404).end('not found');
         return;
       }
@@ -497,7 +498,7 @@ const watchdog = setTimeout(() => {
 try {
   if (!fs.existsSync(CHROME)) throw new Error(`chrome not found at ${CHROME}`);
   server = await startServer();
-  const httpUrl = `http://127.0.0.1:${server.address().port}/index.html`;
+  const httpUrl = `http://127.0.0.1:${server.address().port}/games/patience/index.html`;
   const fileUrl = 'file://' + path.join(GAME_DIR, 'index.html');
 
   chrome = await launchChrome(profileDir);

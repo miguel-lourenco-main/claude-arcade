@@ -47,6 +47,17 @@ body {
   white-space: nowrap;
 }
 
+#hud-buffs {
+  position: absolute; left: 50%; bottom: 62px;
+  transform: translateX(-50%);
+  font-size: 12px; letter-spacing: 0.1em;
+  color: #b48ae8;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  white-space: nowrap;
+}
+
+.hud-big.ward { color: #8af0e4; }
+
 #hud-bar {
   position: absolute; left: 50%; bottom: 10px;
   transform: translateX(-50%);
@@ -145,6 +156,15 @@ button.secondary { font-size: 12px; padding: 6px 14px; color: rgba(205, 211, 218
   color: rgba(205, 211, 218, 0.75);
 }
 .controls b { color: #ffd9a0; }
+
+.sens-row {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  margin: 16px 0 4px;
+  font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: rgba(205, 211, 218, 0.6);
+}
+.sens-row input[type="range"] { width: 150px; accent-color: #e8983a; cursor: pointer; }
+.sens-row span { color: #ffd9a0; min-width: 3.5ch; text-align: left; }
 
 .hint { font-size: 11px; color: rgba(205, 211, 218, 0.45); margin-top: 10px; }
 .dim { color: rgba(205, 211, 218, 0.45); font-weight: normal; }

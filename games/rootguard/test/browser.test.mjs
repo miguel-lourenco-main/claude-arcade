@@ -19,6 +19,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const GAME_DIR = path.resolve(__dirname, "..");
+const REPO_ROOT = path.resolve(GAME_DIR, "..", "..");
 const CHROME = "/usr/bin/google-chrome";
 
 // ---- tiny assert ------------------------------------------------------------
@@ -43,8 +44,8 @@ const MIME = {
 const server = http.createServer(async (req, res) => {
   try {
     const p = decodeURIComponent(new URL(req.url, "http://localhost").pathname);
-    const fp = path.normalize(path.join(GAME_DIR, p === "/" ? "index.html" : p));
-    if (!fp.startsWith(GAME_DIR)) { res.writeHead(403); res.end(); return; }
+    const fp = path.normalize(path.join(REPO_ROOT, p === "/" ? "games/rootguard/index.html" : p));
+    if (!fp.startsWith(REPO_ROOT)) { res.writeHead(403); res.end(); return; }
     const body = await readFile(fp);
     res.writeHead(200, { "content-type": MIME[path.extname(fp)] || "application/octet-stream" });
     res.end(body);
@@ -54,7 +55,7 @@ const server = http.createServer(async (req, res) => {
   }
 });
 await new Promise((r) => server.listen(0, "127.0.0.1", r));
-const HTTP_URL = `http://127.0.0.1:${server.address().port}/index.html?rgtest=1`;
+const HTTP_URL = `http://127.0.0.1:${server.address().port}/games/rootguard/index.html?rgtest=1`;
 const FILE_URL = "file://" + path.join(GAME_DIR, "index.html") + "?rgtest=1";
 
 // ---- chrome ----------------------------------------------------------------------

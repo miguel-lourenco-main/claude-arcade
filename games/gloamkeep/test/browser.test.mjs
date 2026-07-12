@@ -320,6 +320,16 @@ async function runScenario(cdp, label, { denyPointerLock = false } = {}) {
   await waitFor(`!document.getElementById('minimap').classList.contains('hidden')`, 'minimap returns');
   ok(true, 'M toggles the minimap both ways');
 
+  // -- automap fog of war + hidden vaults (engine state via the debug hook) ----
+  const fog = await evaluate(`(() => {
+    const g = window.__gloamkeep.game;
+    let unexplored = 0;
+    for (let i = 0; i < g.explored.length; i++) if (!g.explored[i]) unexplored++;
+    return { regions: g.map.hiddenRegions.length, unexplored };
+  })()`);
+  ok(fog.regions === 0, 'floor 1 keeps no hidden region (vaults live deeper)');
+  ok(fog.unexplored > 0, `automap stays fogged where the player has not seen (${fog.unexplored} cells dark)`);
+
   // -- audio toggle -----------------------------------------------------------
   const sound0 = await evaluate(`document.querySelector('.sound-toggle').textContent`);
   await key('KeyN', 'n');
@@ -375,6 +385,7 @@ async function runScenario(cdp, label, { denyPointerLock = false } = {}) {
   await waitFor(`window.__gloamkeep.phase === 'playing' && document.getElementById('hud-level').textContent.includes('Gallery')`, 'next level');
   ok(true, 'Continue descends to the next floor');
   ok(await evaluate(`window.__gloamkeep.game.score`) === carriedScore, 'score carries between floors');
+  ok(await evaluate(`window.__gloamkeep.game.map.hiddenRegions.length`) === 1, 'the Gallery hides a vault');
 
   // -- game over + instant restart --------------------------------------------------
   const hpAtFloorStart = await evaluate(`window.__gloamkeep.game.player.hp`);

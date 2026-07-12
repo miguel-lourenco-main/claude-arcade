@@ -32,5 +32,16 @@
 
   <script src="src/logic.js" defer></script>
   <script src="src/main.js" defer></script>
+
+  <!-- shared arcade widget: rules-any-time + player ideas -->
+  <script src="../_common/arcade-config.js"></script>
+  <script src="../_common/arcade-widget.js"></script>
+  <script>
+    ArcadeWidget.init({
+      slug: "softfall",
+      title: "Softfall",
+      rulesSelector: "#controls",
+    });
+  </script>
 </body>
 </html>

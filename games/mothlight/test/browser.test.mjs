@@ -15,6 +15,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const CHROME = "/usr/bin/google-chrome";
 const GAME_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const REPO_ROOT = path.resolve(GAME_DIR, "..", "..");
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -33,8 +34,8 @@ function startServer() {
   return new Promise((resolve) => {
     const srv = http.createServer((req, res) => {
       const rel = decodeURIComponent(new URL(req.url, "http://x").pathname);
-      const file = path.join(GAME_DIR, rel === "/" ? "index.html" : rel);
-      if (!file.startsWith(GAME_DIR) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+      const file = path.join(REPO_ROOT, rel === "/" ? "index.html" : rel);
+      if (!file.startsWith(REPO_ROOT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
         res.writeHead(404); res.end("not found"); return;
       }
       res.writeHead(200, { "Content-Type": MIME[path.extname(file)] || "application/octet-stream" });
@@ -379,7 +380,7 @@ async function main() {
   const { proc, wsUrl } = await launchChrome(userDataDir);
   try {
     const cdp = await CDP.connect(wsUrl);
-    const httpUrl = `http://127.0.0.1:${server.address().port}/index.html`;
+    const httpUrl = `http://127.0.0.1:${server.address().port}/games/mothlight/index.html`;
     const fileUrl = pathToFileURL(path.join(GAME_DIR, "index.html")).href;
     await runScenario(cdp, httpUrl, "http");
     await runScenario(cdp, fileUrl, "file");

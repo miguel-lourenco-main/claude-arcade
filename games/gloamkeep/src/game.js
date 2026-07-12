@@ -17,6 +17,10 @@ const DOOR_SPEED = 1 / 0.8;   // full open in 0.8s
 const DOOR_HOLD = 4;          // seconds before auto-close
 const PUSH_SPEED = 0.9;       // tiles/s
 const KEY_NAMES = ['crimson', 'viridian', 'gold'];
+const ARMOR_MAX = 100;
+const WRAITH_TIME = 15;       // seconds of doubled emberlock damage
+const PHASE_TIME = 20;        // seconds of quickened stride
+const EXPLORE_RADIUS = 6;     // automap reveal radius (line-of-sight gated)
 
 const ENEMY_DEFS = {
   gloam:   { hp: 30,  speed: 1.7,  melee: [7, 13],  ranged: false, points: 100, radius: 0.30, sightR: 12, attackRange: 1.05, meleeCd: 1.15, windup: 0.32, patrol: true,  scale: 0.85 },
@@ -50,6 +54,9 @@ function createGame(levelIndex, carry, seed) {
       angle: level.spawn.angle,
       hp: carry && carry.hp !== undefined ? carry.hp : MAX_HP,
       ammo: carry && carry.ammo !== undefined ? carry.ammo : 24,
+      armor: carry && carry.armor !== undefined ? carry.armor : 0,
+      speedT: 0,       // phase draught time left
+      dmgT: 0,         // wraith ember time left
       keys: [false, false, false],
       radius: PLAYER_RADIUS,
       cooldown: 0,
@@ -99,10 +106,16 @@ function createGame(levelIndex, carry, seed) {
     distField: new Int16Array(level.w * level.h),
     distQueue: new Int32Array(level.w * level.h),
     distTimer: 0,
+    // automap fog of war: cells the player has seen (walls via adjacent floor)
+    explored: new Uint8Array(level.w * level.h),
+    mapSeer: false,   // seer's orb: whole floor bared, secrets tinted
+    expCellX: -1,
+    expCellY: -1,
   };
   state.scoreAtStart = state.score;
   state.distField.fill(-1);
   computeDistField(state);
+  updateExplored(state);
   return state;
 }
 
@@ -360,6 +373,12 @@ function activatePushwall(state, p) {
       state.score += 250;
       say(state, 'A hidden passage grinds open...', 3);
       emit(state, 'secret');
+      for (const idx of p.reveals) {
+        if (revealRegion(state, idx)) {
+          say(state, 'You breach a hidden vault...', 3);
+          emit(state, 'vaultFound');
+        }
+      }
       return true;
     }
   }
@@ -387,6 +406,58 @@ function updatePushwalls(state, dt) {
       moveWithCollision(state, pl, p.dirX * PUSH_SPEED * dt * 1.5, p.dirY * PUSH_SPEED * dt * 1.5);
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Automap fog of war
+// ---------------------------------------------------------------------------
+
+// Mark a floor cell explored, plus its surrounding wall cells (a ray straight
+// at a wall centre hits the wall itself, so walls reveal via adjacent floor).
+function exploreFloorCell(state, i) {
+  const m = state.map;
+  state.explored[i] = 1;
+  const x = i % m.w, y = (i / m.w) | 0;
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= m.w || ny >= m.h) continue;
+      const ni = ny * m.w + nx;
+      if (m.grid[ni] !== TILE.EMPTY) state.explored[ni] = 1;
+    }
+  }
+}
+
+// Reveal every line-of-sight floor cell around the player. Called on spawn
+// and whenever the player crosses into a new tile — cheap enough there.
+function updateExplored(state) {
+  const m = state.map;
+  const p = state.player;
+  const px = Math.floor(p.x), py = Math.floor(p.y);
+  state.expCellX = px;
+  state.expCellY = py;
+  const R = EXPLORE_RADIUS;
+  for (let y = py - R; y <= py + R; y++) {
+    for (let x = px - R; x <= px + R; x++) {
+      if (x < 0 || y < 0 || x >= m.w || y >= m.h) continue;
+      const i = y * m.w + x;
+      if (state.explored[i] || m.grid[i] !== TILE.EMPTY) continue;
+      const cx = x + 0.5, cy = y + 0.5;
+      const dx = cx - p.x, dy = cy - p.y;
+      if (dx * dx + dy * dy > R * R) continue;
+      if (!hasLineOfSight(state, p.x, p.y, cx, cy)) continue;
+      exploreFloorCell(state, i);
+    }
+  }
+}
+
+// Reveal a hidden region (vault) on the automap. Returns true if it was new.
+function revealRegion(state, idx) {
+  const r = state.map.hiddenRegions[idx];
+  if (r.revealed) return false;
+  r.revealed = true;
+  for (const i of r.cells) exploreFloorCell(state, i);
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -458,7 +529,7 @@ function playerFire(state) {
     if (t < bestT) { bestT = t; best = e; }
   }
   if (best) {
-    const dmg = 15 + Math.floor(state.rng() * 9);
+    const dmg = (15 + Math.floor(state.rng() * 9)) * (p.dmgT > 0 ? 2 : 1);
     damageEnemy(state, best, dmg);
   } else {
     emit(state, 'wallSpark', { dist: wallDist });
@@ -500,7 +571,7 @@ function updatePlayer(state, input, dt) {
   const mlen = Math.hypot(mx, my);
   if (mlen > 0.001) {
     mx /= mlen; my /= mlen;
-    const SPEED = 3.3;
+    const SPEED = p.speedT > 0 ? 3.3 * 1.4 : 3.3;
     moveWithCollision(state, p, mx * SPEED * dt, my * SPEED * dt);
     p.bobPhase += dt * 9.5;
     p.moving = Math.min(1, p.moving + dt * 6);
@@ -510,8 +581,19 @@ function updatePlayer(state, input, dt) {
 
   p.cooldown = Math.max(0, p.cooldown - dt);
   p.muzzle = Math.max(0, p.muzzle - dt);
+  p.speedT = Math.max(0, p.speedT - dt);
+  p.dmgT = Math.max(0, p.dmgT - dt);
   if (input.fire && p.cooldown <= 0) playerFire(state);
   if (input.usePressed) playerUse(state);
+
+  // automap: reveal on tile crossings; walking into an unrevealed hidden
+  // region (however the player got there) reveals it as a failsafe
+  const cx = Math.floor(p.x), cy = Math.floor(p.y);
+  if (cx !== state.expCellX || cy !== state.expCellY) {
+    updateExplored(state);
+    const hid = state.map.hiddenId[cy * state.map.w + cx];
+    if (hid >= 0) revealRegion(state, hid);
+  }
 
   // pickups
   for (const it of state.items) {
@@ -540,6 +622,49 @@ function updatePlayer(state, input, dt) {
         state.shards++;
         say(state, 'An ember shard. +100.', 1.4);
         break;
+      case 'tonic':
+        if (p.hp >= MAX_HP) continue;
+        p.hp = Math.min(MAX_HP, p.hp + 60);
+        say(state, 'A grand tonic. +60 vigor.', 1.8);
+        break;
+      case 'cache':
+        if (p.ammo >= MAX_AMMO) continue;
+        p.ammo = Math.min(MAX_AMMO, p.ammo + 30);
+        say(state, 'An ember cache. +30 shots.', 1.8);
+        break;
+      case 'aegis':
+        if (p.armor >= ARMOR_MAX) continue;
+        p.armor = Math.min(ARMOR_MAX, p.armor + 50);
+        say(state, 'A warding stone. The gloam bites shallower.', 2.2);
+        break;
+      case 'wraith':
+        p.dmgT = WRAITH_TIME;
+        say(state, 'A wraith ember! The emberlock burns twofold.', 2.4);
+        break;
+      case 'phase':
+        p.speedT = PHASE_TIME;
+        say(state, 'A phase draught. Your stride quickens.', 2.2);
+        break;
+      case 'orb':
+        state.mapSeer = true;
+        state.explored.fill(1);
+        for (let r = 0; r < state.map.hiddenRegions.length; r++) {
+          state.map.hiddenRegions[r].revealed = true;
+        }
+        say(state, "A seer's orb. The keep lays itself bare.", 2.6);
+        break;
+      case 'chalice':
+        state.score += 250;
+        say(state, 'A gloam chalice. +250.', 1.4);
+        break;
+      case 'idol':
+        state.score += 500;
+        say(state, 'An ember idol. +500.', 1.4);
+        break;
+      case 'crown':
+        state.score += 1000;
+        say(state, 'The Duskcrown! +1000.', 2);
+        break;
     }
     it.taken = true;
     emit(state, 'pickup', { kind: it.kind });
@@ -549,6 +674,11 @@ function updatePlayer(state, input, dt) {
 function damagePlayer(state, dmg, srcX, srcY) {
   const p = state.player;
   if (!p.alive || state.status !== 'playing') return;
+  if (p.armor > 0) {
+    const absorbed = Math.min(p.armor, Math.ceil(dmg / 2));
+    p.armor -= absorbed;
+    dmg -= absorbed;
+  }
   p.hp -= dmg;
   // direction hint relative to view: -1 left, +1 right, 0 front/back
   const ang = Math.atan2(srcY - p.y, srcX - p.x);
@@ -863,6 +993,7 @@ const LEVEL_COUNT = MAPS.length;
 Object.assign(G, {
   DT, PLAYER_RADIUS, MAX_HP, MAX_AMMO, FIRE_COOLDOWN, WEAPON_RANGE,
   DOOR_SPEED, DOOR_HOLD, PUSH_SPEED, KEY_NAMES, ENEMY_DEFS, LEVEL_COUNT,
+  ARMOR_MAX, WRAITH_TIME, PHASE_TIME, EXPLORE_RADIUS,
   makeRng, createGame, say, cellSolid, circleBlocked, moveWithCollision,
   castRay, hasLineOfSight, tryOpenDoor, damagePlayer, damageEnemy,
   tick, makeInput,

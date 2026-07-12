@@ -11,7 +11,7 @@
   --gap: clamp(6px, 1.8vw, 12px);
 }
 
-html, body { height: 100%; }
+html, body { height: 100%; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 body {
   background: var(--bg);
   color: var(--text);
@@ -127,6 +127,8 @@ button.muted { color: var(--dim); }
   border-radius: 10px;
   padding: var(--gap);
   touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 #cells {

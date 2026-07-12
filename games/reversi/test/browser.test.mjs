@@ -22,6 +22,7 @@ import { fileURLToPath } from "node:url";
 
 const CHROME = "/usr/bin/google-chrome";
 const GAME_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const REPO_ROOT = path.resolve(GAME_DIR, "..", "..");
 
 // ------------------------------------------------------------ tiny assert --
 let checks = 0;
@@ -42,8 +43,8 @@ function startServer() {
   };
   const server = http.createServer((req, res) => {
     const urlPath = decodeURIComponent(new URL(req.url, "http://x").pathname);
-    const file = path.join(GAME_DIR, urlPath === "/" ? "index.html" : urlPath);
-    if (!file.startsWith(GAME_DIR) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+    const file = path.join(REPO_ROOT, urlPath === "/" ? "index.html" : urlPath);
+    if (!file.startsWith(REPO_ROOT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
       res.writeHead(404); res.end("not found"); return;
     }
     res.writeHead(200, { "Content-Type": types[path.extname(file)] || "application/octet-stream" });
@@ -419,7 +420,7 @@ async function runSuite(page, protocol) {
 async function main() {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "reversi-test-"));
   const server = await startServer();
-  const httpUrl = `http://127.0.0.1:${server.address().port}/index.html`;
+  const httpUrl = `http://127.0.0.1:${server.address().port}/games/reversi/index.html`;
   const fileUrl = "file://" + path.join(GAME_DIR, "index.html");
 
   const { proc, wsUrl } = await launchChrome(tmp);

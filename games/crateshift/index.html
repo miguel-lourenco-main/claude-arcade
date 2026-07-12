@@ -60,5 +60,16 @@
   <script src="levels.js"></script>
   <script src="logic.js"></script>
   <script src="game.js"></script>
+
+  <!-- shared arcade widget: rules-any-time + player ideas -->
+  <script src="../_common/arcade-config.js"></script>
+  <script src="../_common/arcade-widget.js"></script>
+  <script>
+    ArcadeWidget.init({
+      slug: "crateshift",
+      title: "Crateshift",
+      rulesSelector: "#play .controls",
+    });
+  </script>
 </body>
 </html>

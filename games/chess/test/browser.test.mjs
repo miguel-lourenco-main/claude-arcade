@@ -24,6 +24,7 @@ import { fileURLToPath } from "node:url";
 const CHROME = "/usr/bin/google-chrome";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const gameDir = path.resolve(__dirname, "..");
+const repoRoot = path.resolve(gameDir, "..", "..");
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 let testCount = 0;
@@ -367,9 +368,9 @@ async function runSuite(page, proto) {
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "chess-btest-"));
 let chrome = null, server = null, failed = false;
 try {
-  server = await startServer(gameDir);
+  server = await startServer(repoRoot);
   const port = server.address().port;
-  const httpUrl = `http://127.0.0.1:${port}/index.html`;
+  const httpUrl = `http://127.0.0.1:${port}/games/chess/index.html`;
   const fileUrl = "file://" + path.join(gameDir, "index.html");
 
   ({ proc: chrome, wsUrl: globalThis.__wsUrl } = await launchChrome(path.join(scratch, "profile")));

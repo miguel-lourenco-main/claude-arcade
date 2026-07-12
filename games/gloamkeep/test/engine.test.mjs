@@ -232,6 +232,54 @@ console.log('\n== push-wall ==');
   ok(m.grid[pw.y * m.w + pw.x] === TILE.EMPTY, 'origin cell is now open');
 }
 
+// ---- 8b. Hidden vaults + automap fog of war ----------------------------------
+console.log('\n== hidden vaults ==');
+{
+  const expected = [0, 1, 1];
+  MAPS.forEach((def, i) => {
+    const level = parseMap(def);
+    ok(level.hiddenRegions.length === expected[i],
+       `${def.name}: ${expected[i]} hidden region(s) (got ${level.hiddenRegions.length})`);
+  });
+
+  // open the Gallery vault end-to-end and loot the interior
+  const s = createGame(1, null, 30);
+  for (const e of s.enemies) { e.state = 'dead'; e.hp = 0; }
+  const m = s.map;
+  const pw = m.pushwalls.find((p) => p.reveals.length);
+  ok(!!pw, 'the Gallery has a vault push-wall');
+  let sx = -1, sy = -1;
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    const ni = (pw.y + dy) * m.w + (pw.x + dx);
+    if (m.grid[ni] === TILE.EMPTY && m.hiddenId[ni] === -1) { sx = pw.x + dx; sy = pw.y + dy; break; }
+  }
+  ok(sx >= 0, 'vault push-wall is usable from a visible cell');
+  s.player.x = sx + 0.5; s.player.y = sy + 0.5;
+  s.player.angle = Math.atan2(pw.y - sy, pw.x - sx);
+  const region = m.hiddenRegions[pw.reveals[0]];
+  ok(region.cells.every((c) => !s.explored[c]), 'vault fully dark on the automap before opening');
+  const input = makeInput(); input.usePressed = true;
+  tick(s, input, DT);
+  input.usePressed = false;
+  ok(region.revealed, 'vault revealed on activation');
+  ok(s.events.some((ev) => ev.type === 'vaultFound'), 'vaultFound event emitted');
+  ok(region.cells.every((c) => s.explored[c]), 'vault explored on the automap after opening');
+  for (let i = 0; i < 60 * 4; i++) tick(s, input, DT);
+  ok(pw.done, 'vault wall finished sliding');
+  // every vault item survives the slide (nothing entombed) and can be looted
+  // (restores are left on the ground when full, so run the loot pass hurt)
+  s.player.hp = 10; s.player.ammo = 5;
+  const vaultItems = s.items.filter((it) => m.hiddenId[Math.floor(it.y) * m.w + Math.floor(it.x)] >= 0);
+  ok(vaultItems.length >= 3, `vault holds high-grade loot (${vaultItems.map((i) => i.kind).join(', ')})`);
+  for (const it of vaultItems) {
+    const ci = Math.floor(it.y) * m.w + Math.floor(it.x);
+    ok(m.grid[ci] === TILE.EMPTY, `${it.kind} cell still open after the slide`);
+    s.player.x = it.x; s.player.y = it.y;
+    tick(s, input, DT);
+    ok(it.taken, `${it.kind} looted inside the vault`);
+  }
+}
+
 // ---- 9. Enemy AI: alert on shot, chase, melee -------------------------------
 console.log('\n== enemy AI ==');
 {

@@ -15,11 +15,16 @@
   <div id="hud" class="hidden">
     <div id="hud-level"></div>
     <div id="hud-message"></div>
+    <div id="hud-buffs"></div>
     <div id="hud-bar">
       <div class="hud-group">
         <span class="hud-label">vigor</span>
         <div id="hud-hp-track"><div id="hud-hp-fill"></div></div>
         <span id="hud-hp-num" class="hud-big">100</span>
+      </div>
+      <div class="hud-group hidden" id="hud-ward-group">
+        <span class="hud-label">ward</span>
+        <span id="hud-ward-num" class="hud-big ward">0</span>
       </div>
       <div class="hud-group">
         <span class="hud-label">shots</span>
@@ -48,6 +53,10 @@
         <div><b>LMB / Space</b> fire the emberlock · <b>E</b> use doors, push suspicious walls, take the exit</div>
         <div><b>M</b> minimap · <b>N</b> sound · <b>P / Esc</b> pause</div>
       </div>
+      <label class="sens-row">mouse sensitivity
+        <input id="sens-start" type="range" min="0.3" max="2.5" step="0.05">
+        <span id="sens-start-val"></span>
+      </label>
       <p class="hint">shots are loud — the keep listens. sealed doors want their matching sigil-key.</p>
       <div id="start-high" class="score-line"></div>
       <div class="row">
@@ -62,6 +71,10 @@
       <h2>held breath</h2>
       <p class="sub">the keep waits.</p>
       <button id="btn-resume" class="primary">Resume</button>
+      <label class="sens-row">mouse sensitivity
+        <input id="sens-pause" type="range" min="0.3" max="2.5" step="0.05">
+        <span id="sens-pause-val"></span>
+      </label>
       <div class="row">
         <button class="sound-toggle secondary"></button>
         <a href="../../index.html" class="back">← Arcade</a>
@@ -111,5 +124,16 @@
   <script src="src/render.js"></script>
   <script src="src/audio.js"></script>
   <script src="src/main.js"></script>
+
+  <!-- shared arcade widget: rules-any-time + player ideas -->
+  <script src="../_common/arcade-config.js"></script>
+  <script src="../_common/arcade-widget.js"></script>
+  <script>
+    ArcadeWidget.init({
+      slug: "gloamkeep",
+      title: "Gloamkeep",
+      rulesSelector: "#overlay-start .controls",
+    });
+  </script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
-html, body { height: 100%; }
+html, body { height: 100%; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 body {
   background: #0d0f12;
   color: #e8eaed;
@@ -111,7 +111,9 @@ body {
   border-radius: 6px;
   background: #101319;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
-  touch-action: manipulation;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 #banner {

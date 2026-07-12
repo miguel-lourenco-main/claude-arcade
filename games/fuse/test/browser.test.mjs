@@ -14,6 +14,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const GAME_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const REPO_ROOT = path.resolve(GAME_DIR, '..', '..');
 const CHROME = '/usr/bin/google-chrome';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -505,8 +506,8 @@ let server = null;
 let failed = false;
 
 try {
-  server = await startServer(GAME_DIR);
-  const httpUrl = `http://127.0.0.1:${server.address().port}/index.html`;
+  server = await startServer(REPO_ROOT);
+  const httpUrl = `http://127.0.0.1:${server.address().port}/games/fuse/index.html`;
   const fileUrl = 'file://' + encodeURI(path.join(GAME_DIR, 'index.html'));
 
   chrome = await launchChrome(path.join(scratch, 'profile'));

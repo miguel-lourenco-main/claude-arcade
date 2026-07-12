@@ -610,6 +610,257 @@ function boltSprite() {
   }, 705);
 }
 
+function tonicSprite() {
+  return sprite((g) => {
+    // tall crimson flask with a gold band
+    g.fillStyle = 'rgba(240,140,150,0.22)';
+    g.beginPath(); g.arc(32, 44, 13, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#c03040';
+    g.beginPath();
+    g.moveTo(27, 34); g.lineTo(27, 42);
+    g.quadraticCurveTo(22, 46, 24, 54);
+    g.quadraticCurveTo(32, 60, 40, 54);
+    g.quadraticCurveTo(42, 46, 37, 42); g.lineTo(37, 34);
+    g.closePath(); g.fill();
+    g.fillStyle = '#f0808a';
+    g.beginPath(); g.arc(28, 46, 3.5, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#e8c04a';
+    g.fillRect(26, 33, 12, 4);
+    g.fillStyle = 'rgba(220,235,240,0.5)';
+    g.fillRect(28, 24, 8, 9);
+    g.fillStyle = '#8a6a42';
+    g.fillRect(27, 21, 10, 4);
+    g.strokeStyle = 'rgba(255,240,245,0.5)';
+    g.lineWidth = 1.5;
+    g.beginPath(); g.arc(32, 49, 8, -1.1, 0.9); g.stroke();
+  }, 706);
+}
+
+function cacheSprite() {
+  return sprite((g) => {
+    // squat iron-banded chest, ember light bleeding through the slats
+    g.fillStyle = '#3a3026';
+    g.fillRect(16, 38, 32, 18);
+    g.fillStyle = '#2a2620';
+    g.fillRect(16, 33, 32, 7);
+    // ember glow from the seam and slats
+    const gg = g.createRadialGradient(32, 43, 1, 32, 43, 16);
+    gg.addColorStop(0, 'rgba(255,190,90,0.9)');
+    gg.addColorStop(1, 'rgba(200,100,20,0)');
+    g.fillStyle = gg;
+    g.fillRect(17, 39, 30, 3);
+    for (const x of [22, 32, 42]) g.fillRect(x - 1, 42, 2, 12);
+    // iron bands
+    g.fillStyle = '#23252c';
+    g.fillRect(16, 33, 32, 2);
+    g.fillRect(16, 54, 32, 2);
+    g.fillRect(19, 33, 3, 23);
+    g.fillRect(42, 33, 3, 23);
+    // clasp
+    g.fillStyle = '#565b68';
+    g.fillRect(30, 38, 4, 5);
+  }, 707);
+}
+
+function aegisSprite() {
+  return sprite((g) => {
+    // hexagonal rune-carved warding stone
+    g.save();
+    g.translate(32, 45);
+    const gg = g.createRadialGradient(0, 0, 2, 0, 0, 18);
+    gg.addColorStop(0, 'rgba(90,220,210,0.5)');
+    gg.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gg;
+    g.fillRect(-20, -20, 40, 40);
+    g.fillStyle = '#2c5c58';
+    g.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 - Math.PI / 2;
+      const x = Math.cos(a) * 12, y = Math.sin(a) * 12;
+      i ? g.lineTo(x, y) : g.moveTo(x, y);
+    }
+    g.closePath(); g.fill();
+    g.strokeStyle = '#48a89c';
+    g.lineWidth = 2;
+    g.stroke();
+    // rune glyph
+    g.strokeStyle = '#8af0e4';
+    g.lineWidth = 1.8;
+    g.beginPath();
+    g.moveTo(0, -7); g.lineTo(0, 7);
+    g.moveTo(-5, -3); g.lineTo(5, 3);
+    g.moveTo(5, -3); g.lineTo(-5, 3);
+    g.stroke();
+    g.restore();
+  }, 708);
+}
+
+function wraithSprite() {
+  return sprite((g) => {
+    // violet-black flame with a pale core
+    const gg = g.createRadialGradient(32, 44, 1, 32, 44, 18);
+    gg.addColorStop(0, 'rgba(200,120,250,0.6)');
+    gg.addColorStop(1, 'rgba(90,20,150,0)');
+    g.fillStyle = gg;
+    g.fillRect(12, 24, 40, 40);
+    g.fillStyle = '#3a1454';
+    g.beginPath();
+    g.moveTo(26, 56);
+    g.quadraticCurveTo(20, 44, 28, 36);
+    g.quadraticCurveTo(26, 30, 32, 22);
+    g.quadraticCurveTo(38, 30, 36, 36);
+    g.quadraticCurveTo(44, 44, 38, 56);
+    g.quadraticCurveTo(32, 60, 26, 56);
+    g.fill();
+    g.fillStyle = '#9c48e0';
+    g.beginPath();
+    g.moveTo(29, 54);
+    g.quadraticCurveTo(26, 44, 32, 32);
+    g.quadraticCurveTo(38, 44, 35, 54);
+    g.quadraticCurveTo(32, 57, 29, 54);
+    g.fill();
+    g.fillStyle = '#f0e0ff';
+    g.beginPath(); g.arc(32, 47, 4, 0, Math.PI * 2); g.fill();
+  }, 709);
+}
+
+function phaseSprite() {
+  return sprite((g) => {
+    // slim pale-blue vial with a spiral wisp
+    g.fillStyle = 'rgba(140,200,240,0.2)';
+    g.beginPath(); g.arc(32, 44, 11, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(90,160,220,0.85)';
+    g.beginPath();
+    g.moveTo(29, 30); g.lineTo(29, 52);
+    g.quadraticCurveTo(32, 57, 35, 52); g.lineTo(35, 30);
+    g.closePath(); g.fill();
+    g.strokeStyle = '#c8ecff';
+    g.lineWidth = 1.6;
+    g.beginPath();
+    g.moveTo(30, 50);
+    g.quadraticCurveTo(36, 46, 30, 42);
+    g.quadraticCurveTo(35, 38, 31, 34);
+    g.stroke();
+    g.fillStyle = '#8a6a42';
+    g.fillRect(28, 26, 8, 4);
+  }, 710);
+}
+
+function orbSprite() {
+  return sprite((g) => {
+    // milky seer's orb with a slit iris
+    const gg = g.createRadialGradient(32, 44, 1, 32, 44, 18);
+    gg.addColorStop(0, 'rgba(240,240,255,0.5)');
+    gg.addColorStop(1, 'rgba(120,120,180,0)');
+    g.fillStyle = gg;
+    g.fillRect(12, 24, 40, 40);
+    const og = g.createRadialGradient(28, 40, 2, 32, 44, 12);
+    og.addColorStop(0, '#f4f2ff');
+    og.addColorStop(0.7, '#b8b4d8');
+    og.addColorStop(1, '#787498');
+    g.fillStyle = og;
+    g.beginPath(); g.arc(32, 44, 11, 0, Math.PI * 2); g.fill();
+    // iris
+    g.fillStyle = '#3c3454';
+    g.beginPath(); g.ellipse(32, 44, 2.4, 7, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#e8c04a';
+    g.beginPath(); g.ellipse(32, 44, 1, 4.5, 0, 0, Math.PI * 2); g.fill();
+    // radiating sight-lines
+    g.strokeStyle = 'rgba(232,192,74,0.4)';
+    g.lineWidth = 1;
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 + 0.26;
+      g.beginPath();
+      g.moveTo(32 + Math.cos(a) * 13, 44 + Math.sin(a) * 13);
+      g.lineTo(32 + Math.cos(a) * 17, 44 + Math.sin(a) * 17);
+      g.stroke();
+    }
+  }, 711);
+}
+
+function chaliceSprite() {
+  return sprite((g) => {
+    // gold goblet with a violet gem
+    const gg = g.createRadialGradient(32, 42, 1, 32, 42, 16);
+    gg.addColorStop(0, 'rgba(255,220,120,0.5)');
+    gg.addColorStop(1, 'rgba(200,150,40,0)');
+    g.fillStyle = gg;
+    g.fillRect(14, 26, 36, 36);
+    g.fillStyle = '#d8a838';
+    g.beginPath();
+    g.moveTo(23, 32); g.lineTo(41, 32);
+    g.quadraticCurveTo(41, 42, 32, 45);
+    g.quadraticCurveTo(23, 42, 23, 32);
+    g.fill();
+    g.fillRect(30, 44, 4, 8);
+    g.beginPath(); g.ellipse(32, 54, 8, 3, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#f8e0a0';
+    g.fillRect(25, 33, 3, 6);
+    g.fillStyle = '#9c48e0';
+    g.beginPath(); g.arc(32, 37, 2.6, 0, Math.PI * 2); g.fill();
+  }, 712);
+}
+
+function idolSprite() {
+  return sprite((g) => {
+    // squat golden figurine with ember eyes
+    const gg = g.createRadialGradient(32, 44, 1, 32, 44, 17);
+    gg.addColorStop(0, 'rgba(255,220,120,0.5)');
+    gg.addColorStop(1, 'rgba(200,150,40,0)');
+    g.fillStyle = gg;
+    g.fillRect(14, 26, 36, 36);
+    g.fillStyle = '#d8a838';
+    // plinth, body, head
+    g.fillRect(23, 52, 18, 5);
+    g.beginPath();
+    g.moveTo(26, 52);
+    g.quadraticCurveTo(22, 40, 28, 36);
+    g.lineTo(36, 36);
+    g.quadraticCurveTo(42, 40, 38, 52);
+    g.closePath(); g.fill();
+    g.beginPath(); g.arc(32, 31, 6, 0, Math.PI * 2); g.fill();
+    // folded arms
+    g.strokeStyle = '#a87c20';
+    g.lineWidth = 2;
+    g.beginPath(); g.moveTo(26, 44); g.quadraticCurveTo(32, 48, 38, 44); g.stroke();
+    g.fillStyle = '#f8e0a0';
+    g.fillRect(27, 38, 2, 10);
+    // ember eyes
+    g.fillStyle = '#ff7830';
+    g.fillRect(29, 29, 2, 2);
+    g.fillRect(33, 29, 2, 2);
+  }, 713);
+}
+
+function crownSprite() {
+  return sprite((g) => {
+    // the Duskcrown: three-point gold crown, violet gems
+    const gg = g.createRadialGradient(32, 44, 1, 32, 44, 20);
+    gg.addColorStop(0, 'rgba(255,225,130,0.65)');
+    gg.addColorStop(1, 'rgba(200,150,40,0)');
+    g.fillStyle = gg;
+    g.fillRect(10, 22, 44, 42);
+    g.fillStyle = '#e0b040';
+    g.beginPath();
+    g.moveTo(20, 52); g.lineTo(20, 36); g.lineTo(26, 44);
+    g.lineTo(32, 32); g.lineTo(38, 44); g.lineTo(44, 36);
+    g.lineTo(44, 52);
+    g.closePath(); g.fill();
+    g.fillStyle = '#f8e0a0';
+    g.fillRect(21, 47, 3, 5);
+    // band
+    g.fillStyle = '#b8882c';
+    g.fillRect(20, 49, 24, 4);
+    // gems
+    g.fillStyle = '#9c48e0';
+    for (const [x, y] of [[32, 34], [21, 38], [43, 38]]) {
+      g.beginPath(); g.arc(x, y, 2.2, 0, Math.PI * 2); g.fill();
+    }
+    g.fillStyle = '#7830c0';
+    g.beginPath(); g.arc(32, 51, 2.6, 0, Math.PI * 2); g.fill();
+  }, 714);
+}
+
 // --- first-person weapon (kept as canvases; composited in 2D) ----------------
 
 function weaponCanvas(flash) {
@@ -706,6 +957,15 @@ function makeAssets() {
       key2: keySprite('#48d078', 'rgba(72,208,120,0.35)'),
       key3: keySprite('#e8c04a', 'rgba(232,192,74,0.35)'),
       shard: shardSprite(),
+      tonic: tonicSprite(),
+      cache: cacheSprite(),
+      aegis: aegisSprite(),
+      wraith: wraithSprite(),
+      phase: phaseSprite(),
+      orb: orbSprite(),
+      chalice: chaliceSprite(),
+      idol: idolSprite(),
+      crown: crownSprite(),
     },
     bolt: boltSprite(),
     weapon: weaponCanvas(false),

@@ -281,4 +281,201 @@ test('gunshots alert enemies within hearing path-distance', () => {
   assert.ok(e.state === 'chase' || e.state === 'attack', 'alerted: ' + e.state);
 });
 
+// ---- hidden vaults & automap fog of war ------------------------------------
+
+test('hidden regions derive as [0, 1, 1] across the floors, all floor cells', () => {
+  const counts = MAPS.map((def) => parseMap(def).hiddenRegions.length);
+  assert.deepEqual(counts, [0, 1, 1]);
+  for (const def of MAPS) {
+    const level = parseMap(def);
+    const sI = Math.floor(level.spawn.y) * level.w + Math.floor(level.spawn.x);
+    assert.equal(level.hiddenId[sI], -1, 'spawn never hidden');
+    for (const r of level.hiddenRegions) {
+      assert.ok(r.cells.length > 0);
+      assert.ok(!r.revealed);
+      for (const c of r.cells) assert.equal(level.grid[c], TILE.EMPTY, 'hidden cells are floor');
+    }
+    for (const it of level.items) {
+      if (!it.kind.startsWith('key')) continue;
+      const i = Math.floor(it.y) * level.w + Math.floor(it.x);
+      assert.equal(level.hiddenId[i], -1, 'keys never hidden');
+    }
+  }
+});
+
+test('vault push-walls know their region; shortcut secrets reveal nothing', () => {
+  for (const idx of [1, 2]) {
+    const level = parseMap(MAPS[idx]);
+    assert.equal(level.pushwalls.filter((p) => p.reveals.length).length, 1, MAPS[idx].name + ' vault');
+    assert.equal(level.pushwalls.filter((p) => !p.reveals.length).length, 1, MAPS[idx].name + ' shortcut');
+  }
+  assert.ok(parseMap(MAPS[0]).pushwalls.every((p) => !p.reveals.length), 'floor 1 secrets are plain');
+});
+
+test('fog of war: spawn surroundings known, distant rooms dark, walking reveals more', () => {
+  const s = createGame(0, null, 21);
+  clearEnemies(s);
+  const m = s.map;
+  assert.ok(s.explored[Math.floor(s.player.y) * m.w + Math.floor(s.player.x)], 'spawn cell explored');
+  assert.ok(!s.explored[19 * m.w + 27], 'far room unexplored at spawn');
+  const count = () => s.explored.reduce((a, b) => a + b, 0);
+  const before = count();
+  const input = makeInput(); input.forward = 1;
+  for (let i = 0; i < 240; i++) tick(s, input, DT);
+  assert.ok(count() > before, `walking reveals map (${before} -> ${count()})`);
+});
+
+test('hidden vault: dark on the automap until opened, then vaultFound fires and pays out', () => {
+  const s = createGame(2, null, 22);
+  clearEnemies(s);
+  const m = s.map;
+  const pw = m.pushwalls.find((p) => p.reveals.length);
+  const region = m.hiddenRegions[pw.reveals[0]];
+  assert.ok(region.cells.every((c) => !s.explored[c]), 'vault unexplored at start');
+  // stand on the visible side of the push-wall, facing it
+  let sx = -1, sy = -1;
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    const ni = (pw.y + dy) * m.w + (pw.x + dx);
+    if (m.grid[ni] === TILE.EMPTY && m.hiddenId[ni] === -1) { sx = pw.x + dx; sy = pw.y + dy; break; }
+  }
+  assert.ok(sx >= 0, 'vault wall openable from a visible cell');
+  s.player.x = sx + 0.5; s.player.y = sy + 0.5;
+  s.player.angle = Math.atan2(pw.y - sy, pw.x - sx);
+  const sc0 = s.score;
+  const input = makeInput(); input.usePressed = true;
+  tick(s, input, DT);
+  assert.ok(region.revealed, 'region revealed on activation');
+  assert.ok(region.cells.every((c) => s.explored[c]), 'vault cells explored on reveal');
+  assert.ok(s.events.some((ev) => ev.type === 'secret'), 'secret event');
+  assert.ok(s.events.some((ev) => ev.type === 'vaultFound'), 'vaultFound event');
+  assert.equal(s.score, sc0 + 250);
+  // loot the crown inside
+  const crown = s.items.find((i) => i.kind === 'crown');
+  s.player.x = crown.x; s.player.y = crown.y;
+  const sc1 = s.score;
+  tick(s, makeInput(), DT);
+  assert.ok(crown.taken, 'crown looted');
+  assert.equal(s.score, sc1 + 1000, 'Duskcrown +1000');
+});
+
+test('failsafe: standing inside an unrevealed vault reveals it', () => {
+  const s = createGame(1, null, 23);
+  clearEnemies(s);
+  const m = s.map;
+  const region = m.hiddenRegions[0];
+  const c = region.cells[0];
+  s.player.x = (c % m.w) + 0.5;
+  s.player.y = ((c / m.w) | 0) + 0.5;
+  tick(s, makeInput(), DT);
+  assert.ok(region.revealed);
+});
+
+test('grand tonic and ember cache: bigger restores, same caps', () => {
+  const s = createGame(0, null, 24);
+  clearEnemies(s);
+  const p = s.player;
+  const tonic = s.items.find((i) => i.kind === 'tonic');
+  const cache = s.items.find((i) => i.kind === 'cache');
+  p.hp = 30; p.ammo = 50;
+  p.x = tonic.x; p.y = tonic.y; tick(s, makeInput(), DT);
+  assert.equal(p.hp, 90, '+60 vigor');
+  p.x = cache.x; p.y = cache.y; tick(s, makeInput(), DT);
+  assert.equal(p.ammo, 80, '+30 shots');
+  // full vigor leaves the tonic on the ground
+  const s2 = createGame(0, null, 25);
+  clearEnemies(s2);
+  const t2 = s2.items.find((i) => i.kind === 'tonic');
+  s2.player.x = t2.x; s2.player.y = t2.y;
+  tick(s2, makeInput(), DT);
+  assert.ok(!t2.taken, 'tonic left at full vigor');
+});
+
+test('warding stone soaks half of each hit until it shatters', () => {
+  const s = createGame(2, null, 26);
+  clearEnemies(s);
+  const p = s.player;
+  const aegis = s.items.find((i) => i.kind === 'aegis');
+  p.x = aegis.x; p.y = aegis.y;
+  tick(s, makeInput(), DT);
+  assert.equal(p.armor, 50, 'ward granted');
+  damagePlayer(s, 20, p.x + 1, p.y);
+  assert.equal(p.hp, MAX_HP - 10, 'half the blow soaked');
+  assert.equal(p.armor, 40, 'ward chipped');
+  p.armor = 3;
+  damagePlayer(s, 20, p.x + 1, p.y);
+  assert.equal(p.armor, 0, 'ward shattered');
+  assert.equal(p.hp, MAX_HP - 10 - 17, 'only the remaining ward soaked');
+});
+
+test('wraith ember doubles emberlock damage, then fades', () => {
+  const s = createGame(2, null, 27);
+  clearEnemies(s);
+  const p = s.player;
+  const wraith = s.items.find((i) => i.kind === 'wraith');
+  p.x = wraith.x; p.y = wraith.y;
+  tick(s, makeInput(), DT);
+  assert.ok(p.dmgT > 0, 'wraith burning');
+  // open hall duel: doubled hitscan lands 30..46 (base is 15..23)
+  p.x = 12.5; p.y = 8.5; p.angle = 0; p.cooldown = 0;
+  const e = s.enemies[0];
+  e.state = 'idle'; e.hp = 999;
+  e.x = p.x + 2; e.y = p.y;
+  const input = makeInput(); input.fire = true;
+  tick(s, input, DT);
+  const dealt = 999 - e.hp;
+  assert.ok(dealt >= 30 && dealt <= 46, `doubled damage (dealt ${dealt})`);
+  p.dmgT = 0.001;
+  tick(s, makeInput(), DT);
+  assert.equal(p.dmgT, 0, 'ember burns out');
+});
+
+test('phase draught quickens the stride and expires', () => {
+  const a = createGame(0, null, 28);
+  const b = createGame(0, null, 28);
+  clearEnemies(a); clearEnemies(b);
+  b.player.speedT = 999;
+  const input = makeInput(); input.forward = 1;
+  const x0 = a.player.x;
+  for (let i = 0; i < 30; i++) { tick(a, input, DT); tick(b, input, DT); }
+  const da = a.player.x - x0, db = b.player.x - x0;
+  assert.ok(db > da * 1.3, `phased stride is faster (${da.toFixed(2)} vs ${db.toFixed(2)})`);
+  b.player.speedT = 0.001;
+  tick(b, makeInput(), DT);
+  assert.equal(b.player.speedT, 0, 'draught wears off');
+});
+
+test('treasure tiers score 250 / 500 / 1000', () => {
+  const tiers = [[0, 'chalice', 250], [1, 'idol', 500], [2, 'crown', 1000]];
+  for (const [lvl, kind, pts] of tiers) {
+    const s = createGame(lvl, null, 29 + lvl);
+    clearEnemies(s);
+    const it = s.items.find((i) => i.kind === kind);
+    assert.ok(it, `${MAPS[lvl].name} holds a ${kind}`);
+    s.player.x = it.x; s.player.y = it.y;
+    const sc0 = s.score;
+    tick(s, makeInput(), DT);
+    assert.ok(it.taken, kind + ' taken');
+    assert.equal(s.score, sc0 + pts, `${kind} +${pts}`);
+  }
+});
+
+test("seer's orb bares the whole floor and marks vaults revealed", () => {
+  const s = createGame(1, null, 33);
+  clearEnemies(s);
+  const orb = s.items.find((i) => i.kind === 'orb');
+  s.player.x = orb.x; s.player.y = orb.y;
+  tick(s, makeInput(), DT);
+  assert.ok(orb.taken);
+  assert.ok(s.mapSeer, 'seer sight granted');
+  assert.ok(s.explored.every((v) => v === 1), 'whole floor explored');
+  assert.ok(s.map.hiddenRegions.every((r) => r.revealed), 'vaults revealed');
+});
+
+test('ward carries between floors; buff timers do not', () => {
+  const s = createGame(1, { hp: 80, ammo: 20, armor: 40, score: 500 }, 34);
+  assert.equal(s.player.armor, 40);
+  assert.equal(s.player.speedT, 0);
+  assert.equal(s.player.dmgT, 0);
+});
+
 console.log(process.exitCode ? '\nFAILURES' : `\nall ${n} logic tests passed`);
