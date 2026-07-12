@@ -152,11 +152,13 @@ body {
   position: relative;
   flex: 1;
   min-height: 0;
-  display: flex;
 }
+/* The log fills its wrapper via absolute positioning so its (unbounded) message
+   content never drives the sidebar/page height — otherwise a long backlog grows
+   #side taller than the canvas and the whole page scrolls instead of the log. */
 #log {
-  flex: 1;
-  min-height: 0;
+  position: absolute;
+  inset: 0;
   overflow-y: auto;
   font-size: 12px;
   line-height: 1.45;

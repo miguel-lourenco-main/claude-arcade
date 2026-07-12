@@ -407,6 +407,25 @@ async function runSuite(page, url, label) {
              pip: !document.getElementById('log-pip').classList.contains('hidden') }; })()`);
   assert(logState.atBottom && !logState.pip, `${label}: clicking the pip jumps to the bottom and clears it`);
 
+  // Regression: a large backlog must scroll INSIDE the log, not balloon the box (and
+  // with it the sidebar/page). This only manifests at a real desktop viewport where the
+  // canvas reaches its natural size and drives a tall sidebar — the default headless
+  // window scales the canvas down and hides the bug — so force a realistic viewport.
+  await page.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 880, deviceScaleFactor: 1, mobile: false });
+  await page.eval(`(() => { const g = Delve.debug.game; for (let i = 0; i < 200; i++) g.msg('deep backlog line ' + i); })()`);
+  await page.key('.', 'Period');
+  const bound = await page.eval(`(() => {
+    const el = document.getElementById('log'), side = document.getElementById('side');
+    return { logH: el.clientHeight, logScrollH: el.scrollHeight, sideH: side.clientHeight,
+             internalScroll: el.scrollHeight > el.clientHeight + 2,
+             logFitsViewport: el.clientHeight <= window.innerHeight,
+             pageNotBallooned: document.body.scrollHeight <= window.innerHeight + 4 }; })()`);
+  assert(bound.internalScroll,
+    `${label}: a long log scrolls internally, not by growing the box (logH ${bound.logH}, scrollH ${bound.logScrollH})`);
+  assert(bound.logFitsViewport && bound.pageNotBallooned,
+    `${label}: the log box stays within the viewport (logH ${bound.logH}, sideH ${bound.sideH}, bodyScrollH vs winH)`);
+  await page.send('Emulation.clearDeviceMetricsOverride');
+
   // --- level-up stat choice overlay ---
   await page.eval(`Delve.debug.game.player.pendingStat = 1`);
   await page.key('.', 'Period'); // postTurn spots the pending point
