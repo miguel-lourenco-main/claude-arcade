@@ -18,9 +18,9 @@
   const sound = new Sound(localStorage.getItem(AUDIO_KEY) !== 'off');
 
   let game = null;
-  let mode = 'title'; // title | play | inv | end
+  let mode = 'title'; // title | play | inv | aim | stat | end
   let invDrop = false;
-  let logRendered = 0;
+  let logRendered = 0; // cursor into game.logCount (not game.log indices)
 
   // read-only handles for the headless browser tests
   Delve.debug = {
@@ -70,11 +70,16 @@
     invDrop = false;
     logRendered = 0;
     $('log').textContent = '';
+    $('log-pip').classList.add('hidden');
+    $('aim-banner').classList.add('hidden');
     $('title-overlay').classList.remove('show');
     $('end-overlay').classList.remove('show');
     $('inv-overlay').classList.remove('show');
+    $('stat-overlay').classList.remove('show');
     updateSidebar();
     renderLog();
+    // a loaded save can carry unspent level-up points
+    if (game.player.pendingStat > 0) openStatChoice();
   }
 
   function showTitle() {
@@ -143,6 +148,10 @@
           renderer.addEffect({ kind: 'spit', fx: ev.fx, fy: ev.fy, tx: ev.tx, ty: ev.ty });
           sound.play('spit');
           break;
+        case 'throw':
+          renderer.addEffect({ kind: 'flash', x: ev.tx, y: ev.ty, color: '#9aa0a8' });
+          sound.play('miss');
+          break;
         case 'miss': sound.play('miss'); break;
         case 'pickup': sound.play('pickup'); break;
         case 'potion': sound.play('potion'); break;
@@ -167,6 +176,7 @@
     game.events.length = 0;
     updateSidebar();
     renderLog();
+    if (!game.over && mode === 'play' && game.player.pendingStat > 0) openStatChoice();
   }
 
   function updateSidebar() {
@@ -181,28 +191,63 @@
     $('xp-fill').style.width = `${Math.min(100, (p.xp / need) * 100)}%`;
     $('xp-text').textContent = `LVL ${p.level} · ${p.xp}/${need} xp`;
     const [d0, d1] = game.playerDmg();
-    $('v-atk').textContent = `${d0 + p.dmgBonus}–${d1 + p.dmgBonus} (acc ${p.acc})`;
-    $('v-def').textContent = `${p.armor ? ITEMS[p.armor].def : 0} (eva ${p.eva})`;
+    $('v-atk').textContent = `${d0 + p.dmgBonus}–${d1 + p.dmgBonus} (acc ${game.playerAcc()})`;
+    $('v-def').textContent = `${game.armorOf(p)} (eva ${game.playerEva()})`;
+    $('v-agi').textContent = `${game.playerAgi()}`;
     $('v-weapon').textContent = p.weapon ? ITEMS[p.weapon].name : 'bare hands';
     $('v-armor').textContent = p.armor ? ITEMS[p.armor].name : 'nothing';
+    $('v-trinket').textContent = p.trinket ? ITEMS[p.trinket].name : 'none';
     $('v-sack').textContent = `${p.inventory.length} / ${INV_MAX}`;
-    $('v-effects').textContent = p.haste > 0 ? `hasted (${p.haste})` : '';
+    const fx = [];
+    if (p.haste > 0) fx.push(`hasted (${p.haste})`);
+    if (p.salve > 0) fx.push(`✚${p.salve}`);
+    if (p.veil > 0) fx.push(`◐${p.veil}`);
+    if (p.hp < p.maxhp && !game.curFloor.monsters.some((m) => game.isVisible(m.x, m.y))) {
+      fx.push('· regen');
+    }
+    $('v-effects').textContent = fx.join(' ');
   }
 
+  // Auto-scrolls only while the reader is at the bottom; otherwise the scroll
+  // position holds and a "new" pip appears. game.logCount keeps the cursor
+  // valid even when the core trims old entries.
   function renderLog() {
     const el = $('log');
     const entries = game.log;
-    if (logRendered > entries.length) { el.textContent = ''; logRendered = 0; }
-    for (; logRendered < entries.length; logRendered++) {
-      const { t, c } = entries[logRendered];
+    const total = game.logCount;
+    if (logRendered > total) { el.textContent = ''; logRendered = 0; }
+    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 24;
+    const dropped = total - entries.length;
+    let appended = false;
+    for (let i = Math.max(0, logRendered - dropped); i < entries.length; i++) {
+      const { t, c } = entries[i];
       const div = document.createElement('div');
       div.className = `m-${c}`;
       div.textContent = t;
       el.appendChild(div);
+      appended = true;
     }
-    while (el.childNodes.length > 140) el.removeChild(el.firstChild);
-    el.scrollTop = el.scrollHeight;
+    logRendered = total;
+    while (el.childNodes.length > 400) el.removeChild(el.firstChild);
+    if (atBottom) {
+      el.scrollTop = el.scrollHeight;
+      $('log-pip').classList.add('hidden');
+    } else if (appended) {
+      $('log-pip').classList.remove('hidden');
+    }
   }
+
+  $('log').addEventListener('scroll', () => {
+    const el = $('log');
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 24) {
+      $('log-pip').classList.add('hidden');
+    }
+  });
+  $('log-pip').addEventListener('click', () => {
+    const el = $('log');
+    el.scrollTop = el.scrollHeight;
+    $('log-pip').classList.add('hidden');
+  });
 
   // ---- inventory overlay -----------------------------------------------------------
 
@@ -224,7 +269,8 @@
     const p = game.player;
     $('inv-title').textContent = invDrop ? 'Drop which item?' : 'Satchel';
     $('inv-equipped').textContent =
-      `wielding: ${p.weapon ? ITEMS[p.weapon].name : 'bare hands'} · wearing: ${p.armor ? ITEMS[p.armor].name : 'nothing'}`;
+      `wielding: ${p.weapon ? ITEMS[p.weapon].name : 'bare hands'} · wearing: ${p.armor ? ITEMS[p.armor].name : 'nothing'}` +
+      ` · charm: ${p.trinket ? ITEMS[p.trinket].name : 'none'}`;
     const list = $('inv-list');
     list.innerHTML = '';
     if (!p.inventory.length) {
@@ -244,10 +290,12 @@
       glyph.style.color = d.color;
       const name = document.createElement('span');
       let note = '';
-      if (d.kind === 'potion') note = ' — quaff';
+      if (d.kind === 'potion') note = d.effect === 'salve' ? ' — apply' : ' — quaff';
       else if (d.kind === 'scroll') note = ' — read';
       else if (d.kind === 'weapon') note = ` — wield (${d.dmg[0]}–${d.dmg[1]})`;
       else if (d.kind === 'armor') note = ` — wear (+${d.def} def)`;
+      else if (d.kind === 'trinket') note = ` — wear (${d.note})`;
+      else if (d.kind === 'thrown') note = ' — throw';
       name.textContent = ` ${d.name}${note}`;
       li.append(key, glyph, name);
       li.addEventListener('click', () => invPick(i));
@@ -260,9 +308,49 @@
 
   function invPick(i) {
     if (i >= game.player.inventory.length) return;
+    if (!invDrop && ITEMS[game.player.inventory[i]].kind === 'thrown') {
+      closeInventory();
+      enterAim();
+      return;
+    }
     const took = game.act({ type: invDrop ? 'drop' : 'use', index: i });
     closeInventory();
     if (took) postTurn();
+  }
+
+  // ---- pebble aim mode ---------------------------------------------------------
+
+  function enterAim() {
+    mode = 'aim';
+    $('aim-banner').classList.remove('hidden');
+  }
+
+  function exitAim() {
+    mode = 'play';
+    $('aim-banner').classList.add('hidden');
+  }
+
+  // ---- level-up stat choice ------------------------------------------------------
+
+  const STAT_KEYS = { 1: 'vigor', 2: 'might', 3: 'agility', 4: 'focus' };
+
+  function openStatChoice() {
+    mode = 'stat';
+    $('stat-overlay').classList.add('show');
+  }
+
+  function pickStat(name) {
+    if (!game.applyStat(name)) return;
+    updateSidebar();
+    renderLog();
+    if (game.player.pendingStat <= 0) {
+      mode = 'play';
+      $('stat-overlay').classList.remove('show');
+    }
+  }
+
+  for (const li of document.querySelectorAll('#stat-list li')) {
+    li.addEventListener('click', () => { if (mode === 'stat') pickStat(li.dataset.stat); });
   }
 
   // ---- input ----------------------------------------------------------------------
@@ -312,6 +400,26 @@
       return;
     }
 
+    if (mode === 'stat') {
+      if (k in STAT_KEYS) { pickStat(STAT_KEYS[k]); e.preventDefault(); }
+      return; // everything else is blocked until the boon is chosen
+    }
+
+    if (mode === 'aim') {
+      if (k === 'Escape' || k === 't' || k === 'T') { exitAim(); e.preventDefault(); return; }
+      let dir = null;
+      if (e.code in NUMPAD) dir = NUMPAD[e.code];
+      else if (k in MOVE_KEYS) dir = MOVE_KEYS[k];
+      if (dir) {
+        e.preventDefault();
+        exitAim();
+        const took = game.act({ type: 'throw', dx: dir[0], dy: dir[1] });
+        if (took) postTurn();
+        else renderLog();
+      }
+      return;
+    }
+
     // ---- play mode ----
     if (game.over) { showEnd(); return; }
     let action = null;
@@ -323,6 +431,12 @@
     else if (k === '>') action = { type: 'descend' };
     else if (k === '<') action = { type: 'ascend' };
     else if (k === 'i' || k === 'I') { openInventory(); e.preventDefault(); return; }
+    else if (k === 't' || k === 'T') {
+      e.preventDefault();
+      if (game.player.inventory.includes('pebble')) enterAim();
+      else { game.msg('You have no pebble to throw.', 'note'); renderLog(); }
+      return;
+    }
     if (!action) return;
     e.preventDefault();
     const took = game.act(action);

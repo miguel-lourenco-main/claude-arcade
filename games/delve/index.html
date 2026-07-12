@@ -34,9 +34,25 @@
             <div id="title-best" class="best"></div>
             <div class="keys">
               <div><b>&larr;&uarr;&darr;&rarr;</b> / <b>WASD</b> / <b>hjkl</b>+<b>yubn</b> / numpad &mdash; move &amp; bump-attack</div>
-              <div><b>.</b> wait &nbsp; <b>g</b> get &nbsp; <b>i</b> satchel &nbsp; <b>&gt;</b> descend &nbsp; <b>&lt;</b> ascend &nbsp; <b>m</b> sound</div>
+              <div><b>.</b> wait &nbsp; <b>g</b> get &nbsp; <b>i</b> satchel &nbsp; <b>t</b> throw pebble &nbsp; <b>&gt;</b> descend &nbsp; <b>&lt;</b> ascend &nbsp; <b>m</b> sound</div>
               <div class="dim">the run auto-saves on the stairs &mdash; death deletes it</div>
             </div>
+          </div>
+        </div>
+
+        <div id="aim-banner" class="hidden">throw which way? <span class="dim">(direction key &middot; esc cancels)</span></div>
+
+        <div id="stat-overlay" class="overlay">
+          <div class="panel">
+            <div class="small-title">You grow</div>
+            <div class="dim">choose a boon</div>
+            <ol id="stat-list">
+              <li data-stat="vigor"><b>1</b><span class="inv-glyph">&hearts;</span><span> vigor &mdash; +6 max HP</span></li>
+              <li data-stat="might"><b>2</b><span class="inv-glyph">&#9876;</span><span> might &mdash; +1 damage</span></li>
+              <li data-stat="agility"><b>3</b><span class="inv-glyph">&raquo;</span><span> agility &mdash; +1 agi (speed &amp; dodge)</span></li>
+              <li data-stat="focus"><b>4</b><span class="inv-glyph">&#8982;</span><span> focus &mdash; +1 accuracy</span></li>
+            </ol>
+            <div class="dim">press 1&ndash;4</div>
           </div>
         </div>
 
@@ -69,12 +85,17 @@
           <div class="bar xp"><div id="xp-fill"></div><span id="xp-text"></span></div>
           <div class="vrow"><span class="vlabel">atk</span><span id="v-atk"></span></div>
           <div class="vrow"><span class="vlabel">def</span><span id="v-def"></span></div>
+          <div class="vrow"><span class="vlabel">agi</span><span id="v-agi"></span></div>
           <div class="vrow"><span class="vlabel">wield</span><span id="v-weapon"></span></div>
           <div class="vrow"><span class="vlabel">wear</span><span id="v-armor"></span></div>
+          <div class="vrow"><span class="vlabel">charm</span><span id="v-trinket"></span></div>
           <div class="vrow"><span class="vlabel">satchel</span><span id="v-sack"></span></div>
           <div id="v-effects"></div>
         </div>
-        <div class="panel-box" id="log" aria-live="polite"></div>
+        <div id="log-wrap">
+          <div class="panel-box" id="log" aria-live="polite"></div>
+          <button id="log-pip" type="button" class="hidden">&#9660; new</button>
+        </div>
       </aside>
     </div>
 
@@ -83,6 +104,7 @@
       <span><b>.</b> wait</span>
       <span><b>g</b> get</span>
       <span><b>i</b> satchel</span>
+      <span><b>t</b> throw</span>
       <span><b>&gt;</b> down</span>
       <span><b>&lt;</b> up</span>
       <span><b>m</b> sound</span>

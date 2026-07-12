@@ -98,14 +98,26 @@
         }
       }
 
-      // monsters (visible tiles only)
+      // monsters (visible tiles only); sleepers render dim with a drowsy "z"
       for (const m of f.monsters) {
         const i = idx(m.x, m.y);
         if (!f.visible[i]) continue;
         const d = MONSTERS[m.type];
         const [cx, cy] = this.cellCenter(m.x, m.y);
-        ctx.fillStyle = d.color;
-        ctx.fillText(d.glyph, cx, cy);
+        if (m.state === 'sleep') {
+          ctx.fillStyle = shade(d.color, 0.45);
+          ctx.fillText(d.glyph, cx, cy);
+          if (Math.floor(now / 900) % 2 === 0) {
+            ctx.save();
+            ctx.font = `10px ui-monospace, "Cascadia Code", Menlo, Consolas, monospace`;
+            ctx.fillStyle = 'rgba(200, 210, 230, 0.75)';
+            ctx.fillText('z', cx + 6, cy - 7);
+            ctx.restore();
+          }
+        } else {
+          ctx.fillStyle = d.color;
+          ctx.fillText(d.glyph, cx, cy);
+        }
         if (m.hp < m.maxhp) {
           const frac = Math.max(0, m.hp / m.maxhp);
           const bw = CELL_W - 6;

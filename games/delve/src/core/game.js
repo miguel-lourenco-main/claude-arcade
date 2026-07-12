@@ -13,7 +13,13 @@
 
   const FOV_RADIUS = 8;
   const INV_MAX = 10;
-  const SAVE_VERSION = 1;
+  const SAVE_VERSION = 2;
+  const LOG_MAX = 500; // in-memory message cap; serialize() keeps slice(-80)
+  const PEBBLE_RANGE = 7; // max tiles a thrown pebble travels
+  const PEBBLE_NOISE = 8; // noise radius where a pebble lands
+  const VEIL_TURNS = 12; // duration of a scroll of dimming
+  const SALVE_TURNS = 6; // elderbark salve: +2 HP for this many turns
+  const SEARCH_TURNS = 5; // turns spent searching around the LKP after patience runs out
 
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const cheb = (ax, ay, bx, by) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
@@ -32,6 +38,7 @@
       this.nextId = 1;
       this.floors = {};
       this.log = [];
+      this.logCount = 0; // total messages ever pushed (survives log trimming)
       this.events = [];
       this.over = false;
       this.won = false;
@@ -39,10 +46,11 @@
       this.player = {
         x: 0, y: 0, hp: 24, maxhp: 24,
         level: 1, xp: 0,
-        acc: 3, eva: 2, dmgBonus: 0,
-        energy: 100, haste: 0,
+        acc: 3, eva: 2, dmgBonus: 0, agi: 1,
+        energy: 100, haste: 0, veil: 0, salve: 0,
+        pendingStat: 0,
         inventory: ['potion_heal'],
-        weapon: 'w_pick', armor: null,
+        weapon: 'w_pick', armor: null, trinket: null,
       };
       this.makeFloor(1);
       const f = this.floors[1];
@@ -57,10 +65,13 @@
 
     // ---- messages & helpers -------------------------------------------------
 
-    // The in-memory log is unbounded (a run's worth of short strings is tiny);
-    // serialize() persists only the tail and the DOM layer trims what it shows.
+    // The in-memory log is capped at LOG_MAX entries; logCount keeps counting
+    // so the DOM layer's render cursor stays valid across trims. serialize()
+    // persists only the tail and the DOM layer trims what it shows.
     msg(t, c = 'note') {
       this.log.push({ t, c });
+      this.logCount++;
+      if (this.log.length > LOG_MAX) this.log.splice(0, this.log.length - LOG_MAX);
     }
 
     tileAt(x, y) { return this.curFloor.tiles[idx(x, y)]; }
@@ -90,13 +101,15 @@
 
     populate(f, depth) {
       // budgets scale with depth
-      const nMon = 4 + depth + this.rng.int(3);
+      const nMon = 3 + depth + this.rng.int(2);
       const pool = monsterPool(depth);
       for (let i = 0; i < nMon; i++) {
         const type = this.rng.pick(pool);
         const spot = this.freeSpot(f, (x, y) => cheb(x, y, f.entry.x, f.entry.y) > 9);
         if (!spot) break;
-        f.monsters.push(this.spawnMonster(type, depth, spot.x, spot.y));
+        const m = this.spawnMonster(type, depth, spot.x, spot.y);
+        if (this.rng.chance(0.4)) m.state = 'sleep'; // stealth is an option
+        f.monsters.push(m);
       }
       const nItem = 3 + Math.floor(depth / 2) + this.rng.int(2);
       const table = itemPool(depth);
@@ -130,6 +143,7 @@
         speed: d.speed, xp: d.xp + 2 * sc,
         energy: this.rng.int(100),
         state: 'idle', tx: -1, ty: -1, fleeing: false,
+        patience: d.sight + 6, searchTurns: 0,
       };
     }
 
@@ -170,7 +184,22 @@
       const p = this.player;
       p.energy -= 100;
       if (p.haste > 0) p.haste--;
+      if (p.veil > 0) {
+        p.veil--;
+        if (p.veil === 0) this.msg('The dimness lifts.', 'magic');
+      }
+      if (p.salve > 0) {
+        p.salve--;
+        const healed = Math.min(p.maxhp, p.hp + 2) - p.hp;
+        p.hp += healed;
+        if (p.salve === 0) this.msg('The last of the salve soaks in.', 'note');
+      }
       this.turn++;
+      // out-of-combat regen: no monster in sight, on a slow clock
+      if (p.hp < p.maxhp && this.turn % this.regenInterval() === 0 &&
+          !this.curFloor.monsters.some((m) => this.isVisible(m.x, m.y))) {
+        p.hp++;
+      }
       this.runScheduler();
       this.refreshFOV();
       return true;
@@ -185,8 +214,31 @@
         case 'ascend': return this.ascend();
         case 'use': return this.useItem(a.index);
         case 'drop': return this.dropItem(a.index);
+        case 'throw': return this.throwPebble(a.dx, a.dy);
         default: return false;
       }
+    }
+
+    /** Throw a pocket pebble up to PEBBLE_RANGE tiles; it lands before the
+     *  first wall and makes a loud noise there — the lure. */
+    throwPebble(dx, dy) {
+      dx = clamp(dx, -1, 1); dy = clamp(dy, -1, 1);
+      if (!dx && !dy) return false;
+      const p = this.player;
+      const i = p.inventory.indexOf('pebble');
+      if (i < 0) { this.msg('You have no pebble to throw.', 'note'); return false; }
+      let lx = p.x, ly = p.y;
+      for (let step = 0; step < PEBBLE_RANGE; step++) {
+        const nx = lx + dx, ny = ly + dy;
+        if (!this.walkable(nx, ny)) break;
+        lx = nx; ly = ny;
+      }
+      p.inventory.splice(i, 1);
+      this.itemsUsed++;
+      this.msg('The pebble clatters away across the stone.', 'note');
+      this.events.push({ type: 'throw', fx: p.x, fy: p.y, tx: lx, ty: ly });
+      this.makeNoise(lx, ly, PEBBLE_NOISE);
+      return true;
     }
 
     tryMove(dx, dy) {
@@ -295,6 +347,13 @@
         } else if (d.effect === 'haste') {
           p.haste += this.rng.range(d.power[0], d.power[1]);
           this.msg('You drink the philtre. The world slows around you.', 'magic');
+        } else if (d.effect === 'salve') {
+          p.salve = SALVE_TURNS;
+          this.msg('You smear on the elderbark salve. It knits slowly — keep out of harm.', 'good');
+        } else if (d.effect === 'full') {
+          const healed = p.maxhp - p.hp;
+          p.hp = p.maxhp;
+          this.msg(`You drink the pearl-dew elixir. It mends ${healed} HP — all of it.`, 'good');
         }
         this.events.push({ type: 'potion' });
         return true;
@@ -310,6 +369,10 @@
         } else if (d.effect === 'map') {
           this.revealMap();
           this.msg('Lines of the delving etch themselves into your mind.', 'magic');
+          this.events.push({ type: 'scroll' });
+        } else if (d.effect === 'veil') {
+          p.veil = VEIL_TURNS;
+          this.msg('Shadow pools around you. Eyes slide off.', 'magic');
           this.events.push({ type: 'scroll' });
         }
         return true;
@@ -332,6 +395,21 @@
         this.events.push({ type: 'equip' });
         return true;
       }
+      if (d.kind === 'trinket') {
+        const old = p.trinket;
+        if (old === 't_vigorstone') { // its HP rides with it
+          p.maxhp -= 10;
+          p.hp = Math.min(p.hp, p.maxhp);
+        }
+        p.trinket = id;
+        p.inventory.splice(i, 1);
+        if (old) p.inventory.push(old);
+        if (id === 't_vigorstone') { p.maxhp += 10; p.hp += 10; }
+        this.msg(`You tie on the ${d.name}.`, 'good');
+        this.events.push({ type: 'equip' });
+        return true;
+      }
+      // 'thrown' items are not used from here — the UI routes them to aim mode
       return false;
     }
 
@@ -362,16 +440,20 @@
 
     // ---- energy scheduler ----------------------------------------------------
     // Every tick each actor gains its speed in energy; anyone at or above 100
-    // spends 100 and acts. The player at speed 100 acts once per tick; a
-    // skitterlimb at 150 gets three actions to the player's two; a stalkid at
-    // 75 gets three to the player's four. Hasted players run at 150.
+    // spends 100 and acts. The player gains 100 + 5*agi (base agi 1 -> 105),
+    // hasted x1.5, so agility literally outruns 90-speed murklings while a
+    // skitterlimb at 150 stays uncatchable. A stalkid at 75 lumbers behind.
+
+    playerSpeed() {
+      return Math.round((100 + 5 * this.playerAgi()) * (this.player.haste > 0 ? 1.5 : 1));
+    }
 
     runScheduler() {
       const p = this.player;
       let guard = 0;
       while (!this.over && guard++ < 500) {
         if (p.energy >= 100) return; // player's turn: wait for input
-        p.energy += p.haste > 0 ? 150 : 100;
+        p.energy += this.playerSpeed();
         const roster = this.curFloor.monsters.slice();
         for (const m of roster) {
           if (m.hp <= 0) continue;
@@ -386,6 +468,11 @@
 
     // ---- monster AI -----------------------------------------------------------
 
+    /** A monster's sight radius against the player, capped at 2 while veiled. */
+    effSight(d) {
+      return this.player.veil > 0 ? Math.min(d.sight, 2) : d.sight;
+    }
+
     monsterAct(m) {
       if (this.onMonsterAct) this.onMonsterAct(m); // test hook
       const p = this.player;
@@ -393,14 +480,28 @@
       const d = MONSTERS[m.type];
       const dist = cheb(m.x, m.y, p.x, p.y);
       const opaque = this.opaqueFn(f);
-      const sees = dist <= d.sight && hasLOS(m.x, m.y, p.x, p.y, opaque);
+
+      if (m.state === 'sleep') {
+        // sleepers skip their turns; they wake on noise (makeNoise), damage
+        // (alertMonster), or the player standing Chebyshev-adjacent
+        if (dist <= 1) {
+          if (this.isVisible(m.x, m.y)) this.msg(`The ${d.name} stirs awake!`, 'note');
+          m.state = 'hunt';
+          m.tx = p.x; m.ty = p.y;
+          m.patience = d.sight + 6;
+        }
+        return; // waking costs it the turn — one free swing for the player
+      }
+
+      const sees = dist <= this.effSight(d) && hasLOS(m.x, m.y, p.x, p.y, opaque);
 
       if (sees) {
-        if (m.state === 'idle' && this.isVisible(m.x, m.y)) {
+        if ((m.state === 'idle' || m.state === 'search') && this.isVisible(m.x, m.y)) {
           this.msg(`The ${d.name} notices you.`, 'note');
         }
         m.state = 'hunt';
         m.tx = p.x; m.ty = p.y; // last known position
+        m.patience = d.sight + 6; // eyes on you: patience refreshed
       }
 
       if (m.state === 'idle') {
@@ -409,6 +510,24 @@
           const dx = this.rng.int(3) - 1, dy = this.rng.int(3) - 1;
           this.stepMonster(m, m.x + dx, m.y + dy);
         }
+        return;
+      }
+
+      if (m.state === 'search') {
+        // poke around the last known position, then give up
+        m.searchTurns--;
+        if (m.searchTurns <= 0) { m.state = 'idle'; return; }
+        const jx = m.tx + this.rng.int(5) - 2, jy = m.ty + this.rng.int(5) - 2;
+        const s = greedyStep(m.x, m.y, jx, jy, (x, y) =>
+          this.walkable(x, y) && !this.monsterAt(x, y) && !(x === p.x && y === p.y));
+        if (s) this.stepMonster(m, s.x, s.y);
+        return;
+      }
+
+      // hunting blind: patience drains; at zero the hunt decays into a search
+      if (!sees && --m.patience <= 0) {
+        m.state = 'search';
+        m.searchTurns = SEARCH_TURNS;
         return;
       }
 
@@ -472,24 +591,68 @@
     }
 
     makeNoise(x, y, r) {
+      const p = this.player;
+      const opaque = this.opaqueFn(this.curFloor);
       for (const m of this.curFloor.monsters) {
-        if (m.state === 'idle' && cheb(m.x, m.y, x, y) <= r) {
+        if (cheb(m.x, m.y, x, y) > r) continue;
+        const d = MONSTERS[m.type];
+        if (m.state === 'idle' || m.state === 'sleep' || m.state === 'search') {
+          if (m.state === 'sleep' && this.isVisible(m.x, m.y)) {
+            this.msg(`The ${d.name} stirs awake!`, 'note');
+          }
           m.state = 'hunt';
           m.tx = x; m.ty = y;
+          m.patience = d.sight + 6;
+        } else if (m.state === 'hunt') {
+          // hunters that can't see you chase the newest sound instead — this
+          // is what makes a thrown pebble a lure
+          const sees = cheb(m.x, m.y, p.x, p.y) <= this.effSight(d) &&
+            hasLOS(m.x, m.y, p.x, p.y, opaque);
+          if (!sees) {
+            m.tx = x; m.ty = y;
+            m.patience = d.sight + 6;
+          }
         }
       }
     }
 
     // ---- combat ----------------------------------------------------------------
+    // All player acc/eva/agi/armor reads go through these helpers so trinkets
+    // (and anything else that layers a bonus on) compose in one place.
 
     playerDmg() {
       const p = this.player;
       return p.weapon ? ITEMS[p.weapon].dmg : [1, 2];
     }
 
+    playerAgi() {
+      return this.player.agi + (this.player.trinket === 't_stride' ? 1 : 0);
+    }
+
+    playerAcc() {
+      return this.player.acc + (this.player.trinket === 't_keeneye' ? 1 : 0);
+    }
+
+    playerEva() {
+      return this.player.eva + Math.floor(this.playerAgi() / 2);
+    }
+
+    regenInterval() {
+      return this.player.trinket === 't_mosskeeper' ? 3 : 6;
+    }
+
     armorOf(who) {
       if (who !== this.player) return 0;
-      return who.armor ? ITEMS[who.armor].def : 0;
+      return (who.armor ? ITEMS[who.armor].def : 0) +
+        (who.trinket === 't_barrowhide' ? 1 : 0);
+    }
+
+    /** Player took a hit: an unfinished salve is ruined. */
+    spoilSalve() {
+      if (this.player.salve > 0) {
+        this.player.salve = 0;
+        this.msg('The salve is spoiled.', 'bad');
+      }
     }
 
     attack(att, def) {
@@ -499,7 +662,9 @@
       const defName = defIsPlayer ? 'you' : `the ${MONSTERS[def.type].name}`;
       const visible = attIsPlayer || defIsPlayer || this.isVisible(att.x, att.y);
 
-      const hitP = clamp(0.72 + 0.06 * (att.acc - def.eva), 0.2, 0.95);
+      const acc = attIsPlayer ? this.playerAcc() : att.acc;
+      const eva = defIsPlayer ? this.playerEva() : def.eva;
+      const hitP = clamp(0.72 + 0.06 * (acc - eva), 0.2, 0.95);
       if (!this.rng.chance(hitP)) {
         if (visible) {
           this.msg(attIsPlayer ? `You miss ${defName}.` : `${cap(attName)} misses ${defIsPlayer ? 'you' : defName}.`, 'note');
@@ -519,6 +684,7 @@
       }
 
       def.hp -= dmg;
+      if (defIsPlayer) this.spoilSalve();
       if (visible) {
         if (attIsPlayer) this.msg(`You hit ${defName} for ${dmg}.`, 'combat');
         else this.msg(`${cap(attName)} hits you for ${dmg}.`, 'bad');
@@ -538,7 +704,7 @@
       const d = MONSTERS[m.type];
       this.events.push({ type: 'spit', fx: m.x, fy: m.y, tx: p.x, ty: p.y });
       this.makeNoise(m.x, m.y, 6);
-      const hitP = clamp(0.65 + 0.06 * (m.acc - p.eva), 0.2, 0.9);
+      const hitP = clamp(0.65 + 0.06 * (m.acc - this.playerEva()), 0.2, 0.9);
       if (!this.rng.chance(hitP)) {
         this.msg(`The ${d.name} spits at you and misses.`, 'note');
         this.events.push({ type: 'miss' });
@@ -550,15 +716,20 @@
         return;
       }
       p.hp -= dmg;
+      this.spoilSalve();
       this.msg(`The ${d.name} spits burning gall at you for ${dmg}.`, 'bad');
       this.events.push({ type: 'hurt', x: p.x, y: p.y });
       if (p.hp <= 0) this.die(d.name);
     }
 
     alertMonster(m) {
+      if (m.state === 'sleep' && this.isVisible(m.x, m.y)) {
+        this.msg(`The ${MONSTERS[m.type].name} jolts awake!`, 'note');
+      }
       m.state = 'hunt';
       m.tx = this.player.x;
       m.ty = this.player.y;
+      m.patience = MONSTERS[m.type].sight + 6;
     }
 
     killMonster(m) {
@@ -581,12 +752,33 @@
         p.level++;
         p.maxhp += 5;
         p.hp = Math.min(p.maxhp, p.hp + 5);
-        if (p.level % 2 === 0) p.dmgBonus++;
-        else p.acc++;
-        if (p.level % 3 === 0) p.eva++;
+        p.pendingStat++; // the player picks the rest: vigor/might/agility/focus
         this.msg(`You feel tougher. Welcome to level ${p.level}.`, 'big');
         this.events.push({ type: 'levelup' });
       }
+    }
+
+    /** Spend one pending level-up point: vigor / might / agility / focus. */
+    applyStat(name) {
+      const p = this.player;
+      if (p.pendingStat <= 0) return false;
+      if (name === 'vigor') {
+        p.maxhp += 6; p.hp += 6;
+        this.msg('Your frame thickens. (+6 max HP)', 'good');
+      } else if (name === 'might') {
+        p.dmgBonus++;
+        this.msg('Your blows land heavier. (+1 damage)', 'good');
+      } else if (name === 'agility') {
+        p.agi++;
+        this.msg('Your steps quicken. (+1 agility)', 'good');
+      } else if (name === 'focus') {
+        p.acc++;
+        this.msg('Your eye sharpens. (+1 accuracy)', 'good');
+      } else {
+        return false;
+      }
+      p.pendingStat--;
+      return true;
     }
 
     die(cause) {
@@ -658,6 +850,7 @@
       g.cause = d.cause;
       g.player = d.player;
       g.log = d.log;
+      g.logCount = g.log.length; // the tail is all we have; restart the counter
       g.events = [];
       g.floors = {};
       for (const [k, f] of Object.entries(d.floors)) {
@@ -669,6 +862,19 @@
           monsters: f.monsters,
           items: f.items,
         };
+      }
+      // defensive defaults: v2 saves carry all of these, but never trust a blob
+      const p = g.player;
+      if (p.agi === undefined) p.agi = 1;
+      if (p.veil === undefined) p.veil = 0;
+      if (p.salve === undefined) p.salve = 0;
+      if (p.pendingStat === undefined) p.pendingStat = 0;
+      if (p.trinket === undefined) p.trinket = null;
+      for (const f of Object.values(g.floors)) {
+        for (const m of f.monsters) {
+          if (m.patience === undefined) m.patience = MONSTERS[m.type].sight + 6;
+          if (m.searchTurns === undefined) m.searchTurns = 0;
+        }
       }
       g.refreshFOV();
       return g;

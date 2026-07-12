@@ -5,7 +5,9 @@
 // (no npm deps), asserts zero non-favicon console errors / page exceptions on
 // both origins, and exercises every user-facing feature in the README:
 // new run, movement (arrows + wasd), bump attack, wait, pickup, satchel
-// open/use/equip/drop/esc, the three FOV states, descend/ascend + auto-save,
+// open/use/equip/drop/esc, the three FOV states, log scroll-hold + "new" pip,
+// the level-up boon overlay, pebble aim mode (t / Esc / direction), HUD agi +
+// salve/veil badges, trinket equip, descend/ascend + auto-save,
 // reload-and-continue, death (save deleted, death screen), message log,
 // audio toggle (button + m), and R restart.
 
@@ -382,6 +384,82 @@ async function runSuite(page, url, label) {
   assert(fov.remembered > 0, `${label}: FOV has remembered (seen, not visible) tiles`);
   assert(fov.unseen > 0, `${label}: FOV has unseen tiles`);
   assert(fov.outOfRadius === 0, `${label}: visible tiles bounded by FOV radius`);
+
+  // --- message log: auto-scroll at bottom, scroll-hold + pip when reading back ---
+  await page.eval(`(() => { const g = Delve.debug.game; for (let i = 0; i < 60; i++) g.msg('echo of the delving ' + i); })()`);
+  await page.key('.', 'Period'); // a turn renders the backlog
+  let logState = await page.eval(`(() => { const el = document.getElementById('log');
+    return { atBottom: el.scrollTop + el.clientHeight >= el.scrollHeight - 24,
+             pip: !document.getElementById('log-pip').classList.contains('hidden') }; })()`);
+  assert(logState.atBottom && !logState.pip,
+    `${label}: log auto-scrolls (no pip) while the reader is at the bottom`);
+  await page.eval(`document.getElementById('log').scrollTop = 0`);
+  await page.eval(`(() => { const g = Delve.debug.game; for (let i = 0; i < 10; i++) g.msg('newer echo ' + i); })()`);
+  await page.key('.', 'Period');
+  logState = await page.eval(`(() => { const el = document.getElementById('log');
+    return { scrollTop: el.scrollTop,
+             pip: !document.getElementById('log-pip').classList.contains('hidden') }; })()`);
+  assert(logState.scrollTop <= 4, `${label}: log holds its place when scrolled up (scrollTop ${logState.scrollTop})`);
+  assert(logState.pip, `${label}: "new" pip appears for unseen messages`);
+  await page.click('log-pip');
+  logState = await page.eval(`(() => { const el = document.getElementById('log');
+    return { atBottom: el.scrollTop + el.clientHeight >= el.scrollHeight - 24,
+             pip: !document.getElementById('log-pip').classList.contains('hidden') }; })()`);
+  assert(logState.atBottom && !logState.pip, `${label}: clicking the pip jumps to the bottom and clears it`);
+
+  // --- level-up stat choice overlay ---
+  await page.eval(`Delve.debug.game.player.pendingStat = 1`);
+  await page.key('.', 'Period'); // postTurn spots the pending point
+  assert(await page.eval(`Delve.debug.mode === 'stat' && document.getElementById('stat-overlay').classList.contains('show')`),
+    `${label}: pending stat point opens the boon overlay`);
+  const turnInStat = await page.eval(`Delve.debug.game.turn`);
+  await page.key('ArrowRight', 'ArrowRight');
+  assert(await page.eval(`Delve.debug.game.turn`) === turnInStat,
+    `${label}: game input is blocked while choosing a boon`);
+  const dmgBefore = await page.eval(`Delve.debug.game.player.dmgBonus`);
+  await page.key('2', 'Digit2'); // might
+  assert(await page.eval(`Delve.debug.game.player.dmgBonus`) === dmgBefore + 1,
+    `${label}: picking might grants +1 damage`);
+  assert(await page.eval(`Delve.debug.game.player.pendingStat === 0 && Delve.debug.mode === 'play' && !document.getElementById('stat-overlay').classList.contains('show')`),
+    `${label}: spending the point closes the boon overlay`);
+
+  // --- pebble aim mode: esc cancels, direction throws ---
+  await page.eval(`Delve.debug.game.player.inventory.push('pebble')`);
+  await page.key('t', 'KeyT');
+  assert(await page.eval(`Delve.debug.mode === 'aim' && !document.getElementById('aim-banner').classList.contains('hidden')`),
+    `${label}: 't' with a pebble enters aim mode with a prompt`);
+  await page.key('Escape', 'Escape');
+  assert(await page.eval(`Delve.debug.mode === 'play' && document.getElementById('aim-banner').classList.contains('hidden') && Delve.debug.game.player.inventory.includes('pebble')`),
+    `${label}: Escape cancels aim mode and keeps the pebble`);
+  const turnBeforeThrow = await page.eval(`Delve.debug.game.turn`);
+  await page.key('t', 'KeyT');
+  await page.key('ArrowRight', 'ArrowRight');
+  assert(await page.eval(`!Delve.debug.game.player.inventory.includes('pebble')`),
+    `${label}: aiming a direction throws (and consumes) the pebble`);
+  assert(await page.eval(`Delve.debug.game.turn`) === turnBeforeThrow + 1,
+    `${label}: the throw costs a turn and returns to play mode`);
+
+  // --- HUD: agi row + salve/veil badges ---
+  assert(await page.eval(`document.getElementById('v-agi').textContent`) ===
+    String(await page.eval(`Delve.debug.game.playerAgi()`)),
+    `${label}: sidebar shows the agility stat`);
+  // nobody nearby: a hit would spoil the salve and hide its badge
+  await page.eval(`(() => { const g = Delve.debug.game; g.curFloor.monsters.length = 0; g.player.salve = 4; g.player.veil = 6; })()`);
+  await page.key('.', 'Period'); // tick + sidebar refresh
+  const fx = await page.eval(`document.getElementById('v-effects').textContent`);
+  assert(fx.includes('✚') && fx.includes('◐'), `${label}: active salve and veil show as HUD badges (${fx})`);
+  await page.eval(`(() => { const g = Delve.debug.game; g.player.salve = 0; g.player.veil = 0; })()`);
+  await page.key('.', 'Period');
+
+  // --- trinket equip from the satchel ---
+  await page.eval(`Delve.debug.game.player.inventory.push('t_keeneye')`);
+  await page.key('i', 'KeyI');
+  const charmSlot = await page.eval(`Delve.debug.game.player.inventory.indexOf('t_keeneye')`);
+  await page.key('1234567890'[charmSlot], `Digit${'1234567890'[charmSlot]}`);
+  assert(await page.eval(`Delve.debug.game.player.trinket`) === 't_keeneye',
+    `${label}: selecting a trinket in the satchel equips it`);
+  assert(await page.eval(`document.getElementById('v-trinket').textContent`) === 'keen-eye charm',
+    `${label}: sidebar shows the worn charm`);
 
   // --- descend stairs + auto-save ---
   await page.eval(`(() => { const g = Delve.debug.game; const d = g.curFloor.down; g.player.x = d.x; g.player.y = d.y; g.refreshFOV(); })()`);

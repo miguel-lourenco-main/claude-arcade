@@ -11,11 +11,12 @@
 
   // ai: 'melee' chases and bumps; 'craven' chases but flees below 25% HP;
   // 'ranged' keeps its distance and spits.  speed: energy gained per tick
-  // (the player gains 100, so 150 acts half again as often, 75 one-quarter less).
+  // (the player gains 100 + 5*agi, base 105 — so most monsters at 90-100 can
+  // be outrun over time; the skitterlimb at 150 can never be outrun).
   const MONSTERS = {
     murkling: {
       name: 'murkling', glyph: 'm', color: '#8b95d6',
-      hp: 6, dmg: [1, 3], acc: 2, eva: 2, speed: 100, xp: 4, sight: 7,
+      hp: 6, dmg: [1, 3], acc: 2, eva: 2, speed: 90, xp: 4, sight: 7,
       depths: [1, 4], ai: 'melee',
     },
     skitterlimb: { // the fast, weak one
@@ -35,7 +36,7 @@
     },
     gallspitter: { // ranged, keeps its distance
       name: 'gallspitter', glyph: 'g', color: '#b4e050',
-      hp: 8, dmg: [2, 4], acc: 3, eva: 2, speed: 100, xp: 10, sight: 9,
+      hp: 8, dmg: [2, 4], acc: 3, eva: 2, speed: 90, xp: 10, sight: 9,
       depths: [3, 8], ai: 'ranged', range: 6,
     },
     barrowight: {
@@ -45,7 +46,7 @@
     },
     oldskyhorror: {
       name: 'old-sky horror', glyph: 'H', color: '#e06a9a',
-      hp: 34, dmg: [5, 9], acc: 5, eva: 1, speed: 100, xp: 45, sight: 9,
+      hp: 34, dmg: [5, 9], acc: 5, eva: 1, speed: 95, xp: 45, sight: 9,
       depths: [7, 9], ai: 'melee',
     },
   };
@@ -66,6 +67,42 @@
     scroll_map: {
       name: "scroll of the surveyor", art: 'a', glyph: '?', color: '#c0a8ff',
       kind: 'scroll', effect: 'map',
+    },
+    scroll_veil: {
+      name: 'scroll of dimming', art: 'a', glyph: '?', color: '#8a93b8',
+      kind: 'scroll', effect: 'veil', power: 12,
+    },
+    salve: {
+      name: 'elderbark salve', art: 'an', glyph: '!', color: '#9fd0a0',
+      kind: 'potion', effect: 'salve', power: 6,
+    },
+    potion_elixir: {
+      name: 'pearl-dew elixir', art: 'a', glyph: '!', color: '#f2ead8',
+      kind: 'potion', effect: 'full',
+    },
+    pebble: {
+      name: 'pocket pebble', art: 'a', glyph: '(', color: '#9aa0a8',
+      kind: 'thrown',
+    },
+    t_keeneye: {
+      name: 'keen-eye charm', art: 'a', glyph: '"', color: '#e8d27a',
+      kind: 'trinket', note: '+1 acc',
+    },
+    t_mosskeeper: {
+      name: 'mosskeeper charm', art: 'a', glyph: '"', color: '#7ee787',
+      kind: 'trinket', note: 'regen every 3 turns',
+    },
+    t_barrowhide: {
+      name: 'barrow-hide wrap', art: 'a', glyph: '"', color: '#d8d2ea',
+      kind: 'trinket', note: '+1 armor',
+    },
+    t_stride: {
+      name: "strider's anklet", art: 'a', glyph: '"', color: '#7de0ff',
+      kind: 'trinket', note: '+1 agi',
+    },
+    t_vigorstone: {
+      name: 'vigorstone', art: 'a', glyph: '"', color: '#ff7d9c',
+      kind: 'trinket', note: '+10 max HP',
     },
     w_pick: { name: "delver's pick", art: 'a', glyph: ')', color: '#b0a795', kind: 'weapon', dmg: [1, 3], tier: 1 },
     w_blade: { name: 'iron shortblade', art: 'an', glyph: ')', color: '#c9d1d9', kind: 'weapon', dmg: [2, 5], tier: 2 },
@@ -88,12 +125,17 @@
 
   /** Weighted item table for a given depth: array of [id, weight]. */
   function itemPool(depth) {
-    const e = [['potion_heal', 6]];
-    if (depth >= 2) e.push(['potion_haste', 3]);
+    const e = [['potion_heal', 6], ['pebble', 4], ['salve', 4]];
+    if (depth >= 2) e.push(['potion_haste', 3], ['scroll_veil', 2]);
+    if (depth >= 5) e.push(['potion_elixir', 1]);
     e.push(['scroll_teleport', 2], ['scroll_map', 2]);
     if (depth <= 3) e.push(['w_pick', 1], ['a_tunic', 2]);
     if (depth >= 2 && depth <= 6) e.push(['w_blade', 2], ['a_hauberk', 2]);
     if (depth >= 5) e.push(['w_skyiron', 2], ['a_skyplate', 2]);
+    e.push(['t_keeneye', 2]);
+    if (depth >= 2) e.push(['t_mosskeeper', 2], ['t_barrowhide', 2]);
+    if (depth >= 3) e.push(['t_stride', 2]);
+    if (depth >= 4) e.push(['t_vigorstone', 1]);
     return e;
   }
 
