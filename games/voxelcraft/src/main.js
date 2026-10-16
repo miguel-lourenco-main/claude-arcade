@@ -2027,8 +2027,10 @@ function tick(now) {
   // riding: a simple crouch offset sinks the model to the bench, and the
   // seated pose kicks the legs forward (chosen over a real sit rig — cheap)
   const seated = !!player.riding;
+  // a crouch sinks the whole model by the same simple offset idea (the eye
+  // drop, eased) — no crouch rig, just a lower Wanderling
   playerModel.group.position.set(
-    player.pos.x, player.pos.y - (seated ? 0.5 : 0), player.pos.z);
+    player.pos.x, player.pos.y - (seated ? 0.5 : 0) - player.crouch * 0.3, player.pos.z);
   playerModel.group.rotation.y = player.yaw + Math.PI;
   playerModel.update(frameDt, {
     speed: horizSpeed,

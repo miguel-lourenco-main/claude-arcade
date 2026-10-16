@@ -196,7 +196,8 @@ moods with crossfades, plus rain and Prowl-pulse overlays).
 | double-tap W (or hold Ctrl) | sprint |
 | double-tap Space | toggle flight, creative only (Space/Shift = up/down) |
 | hold Space, falling | deploy the Wanderwing (worn) and glide |
-| Shift | sneak (slow, won't fall off edges; overrides right-click routing) |
+| Shift | sneak: crouch (lower eye, fits a slab-high gap), slow, won't fall off edges, grips a ladder; overrides right-click routing |
+| W / S on a ladder | climb / descend (idle slides down slowly) |
 | LMB / RMB / MMB | break / use-place / pick block |
 | hold RMB | eat food, draw the Springstave |
 | Q | toss one item |

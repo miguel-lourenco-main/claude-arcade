@@ -172,6 +172,9 @@ async function boot(page, url) {
   await page.navigate(url);
   const up = await page.waitFor("!!(window.voxelcraft && window.voxelcraft.world.chunks.size > 4)", 45000);
   assert(up, "game boots: test handle present and chunks streaming");
+  // dismiss the start screen so the fixed-step loop drives the player (in
+  // nolock mode the overlay state, not pointer lock, gates input)
+  await page.eval("window.voxelcraft.hud.paused && window.voxelcraft.hud.hidePause()");
   await sleep(1500); // let a few frames of the loop run
   return up;
 }
@@ -200,6 +203,23 @@ async function rarity(page) {
   assert(/ · (Underfoot|Everyday|Seamwise|Deepkept|Pearl-rare)$/.test(title), `a satchel slot's hover names its tier ("${title}")`);
 }
 
+// A3: sneaking lowers the live camera eye and the hitbox
+async function crouch(page) {
+  console.log("\n== crouch (A3)");
+  const before = await page.eval("window.voxelcraft.player.eyeY - window.voxelcraft.player.pos.y");
+  await page.eval("window.voxelcraft.player.keys.add('ShiftLeft')");
+  await sleep(600);
+  const during = await page.eval(`(() => { const p = window.voxelcraft.player;
+    return { eye: p.eyeY - p.pos.y, h: p.height, crouched: p.crouched, flying: p.flying, water: p.inWater }; })()`);
+  await page.eval("window.voxelcraft.player.keys.delete('ShiftLeft')");
+  if (during.flying || during.water) {
+    assert(true, "crouch probe skipped (spawned flying or in water)");
+    return;
+  }
+  assert(during.crouched && during.eye < before - 0.3 && during.h < 1.5,
+    `holding sneak crouches in-game (eye ${before.toFixed(2)} -> ${during.eye.toFixed(2)}, box ${during.h})`);
+}
+
 // ---------------------------------------------------------------------- main
 
 const hardTimeout = setTimeout(() => {
@@ -220,6 +240,7 @@ try {
   if (await boot(page, url)) {
     await smoke(page);
     await rarity(page);
+    await crouch(page);
   }
   console.log("\n== console errors / exceptions");
   assert(consoleErrors.length === 0,
