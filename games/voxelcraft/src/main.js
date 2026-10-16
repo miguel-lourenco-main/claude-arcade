@@ -99,7 +99,13 @@ const materials = buildMaterials(atlas.texture, buildWaterTexture(1337));
 // bindings, and every closure in this file reads through them — a Cinder
 // Door crossing re-points both (swapDimension) and the whole file follows.
 let world = new World(seed);
-const generator = makeGenerator(seed);
+// worldgen generation: 2 = settlements in spaced, tiered cells (settlements.js).
+// A save from before it (no `worldgen` field) keeps the legacy one-chunk
+// steads, so its steads — and every standing record keyed to them — stay
+// put. New worlds are always the current generation.
+const WORLDGEN = 2;
+const worldgen = save ? (Number.isInteger(save.worldgen) ? save.worldgen : 1) : WORLDGEN;
+const generator = makeGenerator(seed, { settlements: worldgen >= 2 ? "cells" : "legacy" });
 world.generator = generator;
 let terrain = generator.terrain;
 
@@ -1698,6 +1704,8 @@ const saveNow = () => writeSave(dims.overworld.world, player, sky, hud, inventor
   music: [music.enabled ? 1 : 0, Math.round(music.volume * 100) / 100],
   // additive: Gleam [jars, progress] — absent in older saves (a fresh jar)
   gleam: gleam.serialize(),
+  // additive: which worldgen generation this world was made under
+  worldgen,
   // additive: the Peddler's day [day, stock ledger, absent-until day]
   peddler: [peddlerState.day, ledgerToSave(peddlerState.ledger), peddlerState.absentUntil],
   // additive: the Whims in progress [[id, secondsLeft], ...]

@@ -73,6 +73,9 @@ export function writeSave(world, player, sky, hud, inventory, extra = {}) {
       // additive: the Whims in progress [[id, secondsLeft], ...] — absent in
       // older saves (no moods borrowed)
       effects: extra.effects || undefined,
+      // additive: the worldgen generation (2 = tiered settlements); absent
+      // in older saves, which keep generating the legacy one-chunk steads
+      worldgen: extra.worldgen || undefined,
       // additive: the Peddler's day [day, stockLedger, absentUntilDay] —
       // absent in older saves: a full pack and an unbroken welcome
       peddler: extra.peddler || undefined,

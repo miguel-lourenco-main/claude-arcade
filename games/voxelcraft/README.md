@@ -39,8 +39,14 @@ canvas atlas at boot, and every sound is synthesized with WebAudio.
   (buried timbered mining galleries with rung shafts up to collapsed
   head-frames). Both carry seeded loot chests and weathered Notice Post
   fragments, dealt exactly once per world. A rare few homesteads came
-  through the flip WHOLE: **the Living Steads** — intact cottages, a well,
-  a fenced meal-root patch, and 2-3 resident **Steadfolk** who potter the
+  through the flip WHOLE: **the Living Steads**, intact cottages around a
+  well with fenced meal-root patches. They come in three sizes: a
+  **hamlet** (one chunk, 2-3 cottages), a **village** (2x2 chunks, 4-6
+  cottages) and a **dense village** (3x3 chunks, 7-10). They are spaced at
+  least two chunks apart and follow a slow settlement-density field, so
+  they gather in settled country, the biggest among smaller neighbours,
+  and thin out to nothing in the remote wilds. Their resident **Steadfolk**
+  potter the
   courtyard by day, head indoors at dusk, each barter three goods a day
   from their job (grower/wright/keeper), and persist: the same folk are
   there when you come back, unless the dark got one while you were away.
@@ -260,6 +266,7 @@ src/portal.js      the Cinder Door: frame scan, film collapse, arrivals
 src/mesher.js      culled faces + AO + BFS block light -> 3 buckets + shader
 src/ruins.js       the Steads-Before: seeded surface ruins + loot
 src/delvings.js    the Delvings-Under: buried galleries + loot
+src/settlements.js where steads stand: spaced cells, density field, size tiers, city hook
 src/steads.js      the Living Steads: intact homesteads + resident manager
 src/standing.js    Standing: each stead's reputation axis, bands, gifts, turns
 src/stock.js       trader stock (rarity-driven cap + restock) and trader loot

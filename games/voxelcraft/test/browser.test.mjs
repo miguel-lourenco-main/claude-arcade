@@ -267,12 +267,32 @@ async function atStead(page) {
     return false; })()`, 40000);
 }
 
+// C2: a new world generates tiered settlements; the nearest one wakes with
+// a resident per cottage, and the save records the worldgen generation
+async function settlements(page) {
+  console.log("\n== settlement tiers (C2)");
+  const r = await page.eval(`(() => { const vc = window.voxelcraft;
+    const p = vc.findNearestStead(vc.player.pos.x, vc.player.pos.z);
+    vc.saveNow();
+    const saved = JSON.parse(localStorage.getItem('voxelcraft.save.v1'));
+    return { tier: p && p.tier, span: p && p.span, homes: p && p.buildings.length, key: p && p.key,
+      mode: vc.terrain.settlementMode, worldgen: saved.worldgen }; })()`);
+  assert(r.mode === "cells" && r.worldgen === 2, `a new world uses the tiered settlements and saves worldgen 2 (${r.mode}, ${r.worldgen})`);
+  assert(["hamlet", "village", "dense"].includes(r.tier), `the nearest settlement has a tier (${r.tier}, ${r.span}x${r.span}, ${r.homes} cottages)`);
+  }
+
 // B2: standing — the trade window reads it, gifts raise it, a blow sinks it
 async function standing(page) {
   console.log("\n== standing (B2)");
   const live = await atStead(page);
   assert(live, "a Living Stead's resident comes alive after the teleport");
   if (!live) return;
+  await sleep(1500); // let every footprint chunk load so the whole stead wakes
+  const woke = await page.eval(`(() => { const vc = window.voxelcraft, m = window.__res;
+    const act = vc.steads.active.get(m.steadKey);
+    return { live: act.entries.length, homes: act.plan.buildings.length, tier: act.plan.tier }; })()`);
+  assert(woke.live === woke.homes, `every cottage's resident is awake (${woke.live}/${woke.homes} in a ${woke.tier})`);
+  await shot(page, "stead-arrival");
   const r = await page.eval(`(() => { const vc = window.voxelcraft, m = window.__res;
     const S = vc.standing, rec = vc.world.steads.get(m.steadKey);
     const out = { mode: vc.player.mode, start: S.standingOf(rec) };
@@ -432,6 +452,7 @@ try {
     await crouch(page);
     await saturation(page);
     await cookbook(page);
+    await settlements(page);
     await standing(page);
     await lootAndStock(page);
     await saveFiles(page); // reloads the page: keep last

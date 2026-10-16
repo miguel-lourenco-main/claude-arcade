@@ -180,6 +180,15 @@ specific item vocabulary.
   fault — kick one and it flees and won't deal with you for a while — and, like
   the bondlings, they STAY: a stead's folk are the same folk when you come
   back, unless the dark got one while you were away.
+- **Hamlets, villages, and the dense ones** — the steads that came through
+  whole didn't come through alone. Where the ground settled first after the
+  turn, folk gathered: a hamlet of two or three doors, a village of half a
+  dozen around one well, and here and there a dense village of ten,
+  patches fenced on every side. Settled country has them close together,
+  the big ones with smaller ones nearby. The wild country between has
+  none, which is what makes it wild. Wanderlings say a stead is never
+  closer than a good walk to the next, because the folk who kept them
+  liked their neighbours best at a distance.
 - **Standing** — a stead keeps a long memory and a short list. Every turn
   you do it goes on the list: a fair barter, a gift the job is glad of (a
   grower for meadow flowers and pips, a wright for good metal and timber,
