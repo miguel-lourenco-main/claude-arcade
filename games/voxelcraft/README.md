@@ -145,7 +145,12 @@ canvas atlas at boot, and every sound is synthesized with WebAudio.
 ## Stations, blocks & fixtures
 
 Workbench cookbook + field recipes (no crafting grid — shapes would be
-ceremony), the Kiln (3-slot smelter with live progress and persistent burn),
+ceremony). The cookbook works backwards from what you hold: rest the pointer
+on a satchel item to preview everything it goes into, double-click it to pin
+it into the filter tray, and pin a second or third to narrow to the exact
+recipe (or "only these" to see what the pins alone make). It opens compact
+on what you can make right now, with category tabs and a search box as the
+secondary paths. Then the Kiln (3-slot smelter with live progress and persistent burn),
 chests, the Moss Cot (sleep to dawn, respawn anchor), Rung Ladders, two-block
 Plank Doors, Wattle Fences and Gates (neighbor-aware meshing), slabs and
 facing-baked stairs, writable Notice Posts, the Blast Keg (primed explosive
@@ -223,6 +228,7 @@ moods with crossfades, plus rain and Prowl-pulse overlays).
 | Q | toss one item |
 | 1–9 / wheel | hotbar selection |
 | E | Satchel / block picker |
+| rest on / double-click an item (Satchel, bench) | preview / pin it in the cookbook |
 | F3 / F5 | debug overlay / third person |
 | Esc | pause |
 
@@ -264,6 +270,7 @@ src/interact.js    voxel raycast, break/place/use routing, draw, particles
 src/inventory.js   slot inventory, stacks (dur + thread), save shapes
 src/slotui.js      slot-grid + cursor-stack UI engine
 src/craft.js       the recipe list (field + workbench)
+src/cookbook.js    the ingredient-filter cookbook: reverse index, pins, tabs
 src/kiln.js        smelting: per-kiln slots + burn/progress timers
 src/gleam.js       the XP model (jars + motes)
 src/loom.js        the Loomstone's threads (definitions + weaving)

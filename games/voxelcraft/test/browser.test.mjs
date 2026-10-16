@@ -130,6 +130,19 @@ class Page {
     }
     return res.result.value;
   }
+  // real pointer input (so dblclick/mouseenter fire the way a hand makes them)
+  async mouse(type, x, y, clickCount = 1) {
+    await this.send("Input.dispatchMouseEvent", {
+      type, x, y, button: type === "mouseMoved" ? "none" : "left", clickCount,
+      buttons: type === "mousePressed" ? 1 : 0,
+    });
+  }
+  async dblclick(x, y) {
+    await this.mouse("mouseMoved", x, y);
+    await this.mouse("mousePressed", x, y, 1); await this.mouse("mouseReleased", x, y, 1);
+    await this.mouse("mousePressed", x, y, 2); await this.mouse("mouseReleased", x, y, 2);
+    await sleep(60);
+  }
   async waitFor(expression, ms = 30000) {
     const t0 = Date.now();
     while (Date.now() - t0 < ms) {
@@ -164,6 +177,15 @@ async function openPage(cdp, errors, label) {
 }
 
 // ------------------------------------------------------------------- suites
+
+// VC_SHOTS=<dir> saves a PNG at named moments (for eyeballing UI changes)
+async function shot(page, name) {
+  const dir = process.env.VC_SHOTS;
+  if (!dir) return;
+  const { data } = await page.send("Page.captureScreenshot", { format: "png" });
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, `${name}.png`), Buffer.from(data, "base64"));
+}
 
 // boot a fresh world and wait for the test handle + some loaded terrain
 async function boot(page, url) {
@@ -343,6 +365,50 @@ async function saveFiles(page) {
     `every stead's standing and its dead came back (${JSON.stringify(after.steads).slice(0, 80)})`);
 }
 
+// B1: the cookbook, driven by real pointer events in the Satchel window
+async function cookbook(page) {
+  console.log("\n== cookbook (B1)");
+  const setup = await page.eval(`(() => { const vc = window.voxelcraft;
+    if (vc.player.mode !== 'survival') return null;
+    vc.inventory.set(12, { id: 7, count: 5 });   // knotwood logs
+    vc.inventory.set(13, { id: 86, count: 4 });  // sky-iron ingots
+    vc.inventory.set(14, { id: 65, count: 2 });  // sling stones
+    vc.hud.cookbook.pins = []; vc.hud.openPicker();
+    const at = (i) => { const r = document.querySelectorAll('#main-grid .inv-slot')[i].getBoundingClientRect();
+      return [r.left + r.width / 2, r.top + r.height / 2]; };
+    return { log: at(3), ingot: at(4), sling: at(5),
+      ready: document.querySelectorAll('#field-recipes .craft-row').length }; })()`);
+  if (!setup) { assert(true, "cookbook probe skipped (not survival)"); return; }
+  assert(setup.ready >= 1, `the compact default lists what the satchel can make now (${setup.ready})`);
+  await page.mouse("mouseMoved", ...setup.log); await sleep(60);
+  const hover = await page.eval(`({ head: document.querySelector('#field-recipes .cb-head').textContent,
+    rows: [...document.querySelectorAll('#field-recipes .craft-row b')].map((b) => b.textContent) })`);
+  assert(hover.head === "Uses Knotwood Log" && hover.rows.some((t) => /Planks/.test(t)),
+    `resting on a log previews its recipes (${hover.head}: ${hover.rows.join(", ")})`);
+  await shot(page, "cookbook-hover");
+  await page.dblclick(...setup.log);
+  const pinned = await page.eval(`(() => { const vc = window.voxelcraft, s = vc.inventory.get(12);
+    return { pins: vc.hud.cookbook.pins.slice(), slot: s && [s.id, s.count], cursor: vc.hud.slotUI.cursor,
+      chips: document.querySelectorAll('#field-recipes .cb-chip').length }; })()`);
+  assert(pinned.pins.length === 1 && pinned.pins[0] === 7 && pinned.chips === 1, "a double-click pins the log into the tray");
+  assert(pinned.slot && pinned.slot[0] === 7 && pinned.slot[1] === 5 && !pinned.cursor,
+    "...net-zero: the stack is back in its slot and nothing is on the cursor");
+  await page.dblclick(...setup.log);
+  await page.dblclick(...setup.ingot);
+  await page.dblclick(...setup.sling);
+  const narrowed = await page.eval(`(() => ({ pins: window.voxelcraft.hud.cookbook.pins.slice(),
+    rows: [...document.querySelectorAll('#field-recipes .craft-row b')].map((b) => b.textContent) }))()`);
+  assert(narrowed.pins.length === 2 && !narrowed.pins.includes(7), "double-clicking again unpins");
+  // the field list holds field recipes only, so a bench-only Needle must not show
+  assert(narrowed.rows.length === 0, `ingot + sling stone: no FIELD recipe uses both (${narrowed.rows.join(", ")})`);
+  await shot(page, "cookbook-pinned-field");
+  const bench = await page.eval(`(() => { const vc = window.voxelcraft; vc.hud.closePicker(); vc.hud.openBench();
+    return [...document.querySelectorAll('#craft-list .craft-row b')].map((b) => b.textContent); })()`);
+  await shot(page, "cookbook-pinned-bench");
+  await page.eval("window.voxelcraft.hud.closeBench(); window.voxelcraft.hud.cookbook.pins = []");
+  assert(bench.length === 1 && /Homeward Needle/.test(bench[0]), `at the bench the same pins narrow to exactly the Needle (${bench.join(", ")})`);
+}
+
 // ---------------------------------------------------------------------- main
 
 const hardTimeout = setTimeout(() => {
@@ -365,6 +431,7 @@ try {
     await rarity(page);
     await crouch(page);
     await saturation(page);
+    await cookbook(page);
     await standing(page);
     await lootAndStock(page);
     await saveFiles(page); // reloads the page: keep last
