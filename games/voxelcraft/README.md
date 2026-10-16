@@ -205,6 +205,16 @@ moods with crossfades, plus rain and Prowl-pulse overlays).
 | F3 / F5 | debug overlay / third person |
 | Esc | pause |
 
+## Docs & tests
+
+- [CLAUDE.md](CLAUDE.md): how to run, test and extend the game (agents and
+  humans alike), the save contract, the naming contract, the wave cadence.
+- [DIRECTION.md](DIRECTION.md): pillars, what the game is and isn't, roadmap.
+- [LORE.md](LORE.md): the Upturn, its folk, and the field glossary.
+- `test/`: node logic suites (`*.test.mjs`) and a headless-Chrome suite
+  (`browser.test.mjs`). Run them with `node run-tests.mjs voxelcraft` from the
+  repo root.
+
 ## Architecture
 
 ```
