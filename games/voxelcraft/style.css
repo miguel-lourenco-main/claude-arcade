@@ -570,3 +570,16 @@ body {
   border: 1px solid rgba(214, 176, 74, 0.5);
   border-radius: 3px; padding: 0 3px;
 }
+
+/* ---- errands (quests.js): the giver's panel + the pause-menu journal ---- */
+#trade-greeting { margin: 2px 0 8px; }
+#trade-greeting:empty { display: none; }
+#trade-errand {
+  border: 1px solid #3c4a3e; border-radius: 6px; padding: 8px 10px; margin-bottom: 10px;
+  background: rgba(126, 231, 135, 0.05); display: flex; flex-direction: column; gap: 4px;
+}
+#trade-errand .errand-text { color: #e8eaed; font-size: 13px; font-style: italic; }
+#trade-errand small { color: #7c8592; font-size: 11px; }
+#trade-errand .errand-buttons { display: flex; gap: 6px; }
+#journal { margin-top: 10px; text-align: left; }
+#journal-list div { color: #c9ced6; font-size: 12px; padding: 1px 0; }

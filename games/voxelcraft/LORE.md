@@ -200,6 +200,12 @@ specific item vocabulary.
   one shuts its doors to you, politely, and for a long time. Kindness is
   rationed by the day (a stead can only be so grateful before supper);
   harm is not.
+- **Errands** — every steadfolk has a thing that wants doing: coal for
+  the hearth, a few rows turned, the murklings that keep leaning on the
+  fence. Ask at the door and they'll say. Do it and come back, and they
+  pay in what they have, which is mostly what they make. They also
+  remember, which is worth more. A wary stead can be talked round this
+  way, one errand at a time. A hostile one won't ask you for anything.
 - **The shelf, and the other way** — a trader's pack is only so deep. The
   common goods come back by the afternoon; a good piece of ironmongery
   might take the week. There is a quicker way to empty a pack, and the

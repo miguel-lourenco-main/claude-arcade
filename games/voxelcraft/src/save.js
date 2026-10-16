@@ -73,6 +73,9 @@ export function writeSave(world, player, sky, hud, inventory, extra = {}) {
       // additive: the Whims in progress [[id, secondsLeft], ...] — absent in
       // older saves (no moods borrowed)
       effects: extra.effects || undefined,
+      // additive: errands being carried [[steadKey, resIdx, job, day,
+      // progress], ...] — absent in older saves (nothing owed)
+      quests: extra.quests || undefined,
       // additive: the worldgen generation (2 = tiered settlements); absent
       // in older saves, which keep generating the legacy one-chunk steads
       worldgen: extra.worldgen || undefined,

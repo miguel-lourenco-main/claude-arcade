@@ -74,6 +74,7 @@ import { resolveRarity, rarityOf, valueOf, rarityTier } from "./rarity.js";
 import {
   applyStanding, bandOf, standingOf, giftStanding, globalStanding, DAILY_GAIN_CAP,
 } from "./standing.js";
+import { QuestLog, questFor, describeQuest, dialogueFor, HARVEST_IDS } from "./quests.js";
 
 const MESH_RADIUS = 5;
 const GEN_RADIUS = MESH_RADIUS + 1;
@@ -329,6 +330,13 @@ if (save && save.ruinsU) uWorld.loadRuins(save.ruinsU);
 if (save && Array.isArray(save.bondlings)) mobs.loadBondlings(save.bondlings);
 // additive field: tamed Tuftlings — the other creatures that persist
 if (save && Array.isArray(save.pets)) mobs.loadPets(save.pets);
+// errands (quests.js): what the Wanderling has agreed to do. Additive save
+// field — absent in older saves (nothing owed to anyone).
+const quests = new QuestLog();
+if (save && Array.isArray(save.quests)) quests.load(save.quests, seed);
+// the pause menu's journal lines, refreshed whenever an errand moves
+const refreshJournal = () => hud.setJournal(quests.active.map(describeQuest));
+
 // the Peddler's day (stock.js): today's shelf, and how long he stays away
 // after being felled. Additive — absent in older saves (a full pack).
 const peddlerState = { day: -1, ledger: {}, absentUntil: -1 };
@@ -715,14 +723,17 @@ const hud = new Hud(atlas.canvas, {
   },
   onCraft: (recipe, max = false) => {
     let crafted = false;
+    let craftedUnits = 0;
     do {
       const leftover = craft(recipe, inventory); // -1 = missing inputs
       if (leftover < 0) break;
       crafted = true;
+      craftedUnits += recipe.out[1];
       if (leftover > 0) spillStack({ id: recipe.out[0], count: leftover });
     } while (max);
     if (crafted) {
       sfx.craft();
+      noteQuestEvent("craft", recipe.out[0], craftedUnits);
       // gleam clings to finished GEAR (tools, armor, stations) — never to
       // brick-spam, so bulk crafting can't farm it
       const outDef = BLOCKS[recipe.out[0]];
@@ -746,6 +757,7 @@ hud.setMovementLabel(player.moveMode);
 hud.setSensitivity(player.sensitivity);
 hud.setMusic(music.volume, music.enabled);
 hud.setMode(player.mode);
+refreshJournal(); // the pause menu lists any errands the save carried
 if (save && Number.isInteger(save.selected) && save.selected >= 0 && save.selected < 9) {
   hud.select(save.selected);
 }
@@ -923,6 +935,59 @@ function dropTraderLoot(m, job, sells, ledger) {
   }
 }
 
+// something the player did that an errand may be counting
+function noteQuestEvent(type, target, n = 1) {
+  const moved = quests.onEvent(type, target, n);
+  if (!moved.length) return;
+  for (const q of moved) {
+    const done = q.progress >= q.event[2];
+    hud.announce(done ? `Errand done — go and tell the ${q.giver.job}.` : `Errand: ${describeQuest(q)}`, 1800);
+  }
+  refreshJournal();
+}
+
+// the errand panel for a resident's window: today's ask (or the one
+// already taken from it), with accept / hand-in / let-go wired up.
+// `reopen` re-renders the window after a change.
+function errandPanel(m, steadRec, reopen) {
+  const key = m.steadKey, day = sky.day;
+  const taken = quests.fromGiver(key, m.resIdx);
+  const q = taken || questFor(world.seed, key, m.resIdx, m.job, day);
+  if (!q) return null;
+  if (!taken) {
+    return {
+      text: q.text, status: `pays ${q.reward.items.map(([id, n]) => `${n}× ${BLOCKS[id].name}`).join(" + ")}`,
+      action: quests.active.length < 3 ? "accept" : null,
+      onAction: () => {
+        if (quests.accept(q)) { hud.announce("You take the errand.", 1600); refreshJournal(); }
+        reopen();
+      },
+    };
+  }
+  const ready = quests.isReady(taken, inventory);
+  return {
+    text: taken.text,
+    status: ready ? "Ready to hand in." : describeQuest(taken),
+    action: ready ? "handin" : null,
+    onAction: () => {
+      const reward = quests.handIn(taken.id, inventory);
+      if (!reward) return;
+      for (const [id, n] of reward.items) {
+        const left = inventory.add(id, n);
+        if (left > 0) spillStack({ id, count: left });
+      }
+      awardGleam(reward.gleam);
+      const res = steadRec ? applyStanding(steadRec, "quest", sky.day) : null;
+      sfx.peddlerHm();
+      if (res && res.bandChanged) announceStanding(res);
+      else hud.announce(`The ${m.job} is grateful.`, 2200);
+      refreshJournal();
+      reopen();
+    },
+    onAbandon: () => { quests.abandon(taken.id); refreshJournal(); reopen(); },
+  };
+}
+
 // a steadfolk's trade window: the day's offers from its JOB table, priced by
 // the stead's STANDING (standing.js — the old per-day warmth lives at its
 // positive end). A hostile stead won't deal at all; a trade raises standing
@@ -949,7 +1014,11 @@ function openSteadTrade(m) {
       const res = steadRec ? applyStanding(steadRec, "trade", day) : null;
       if (res && res.bandChanged) { announceStanding(res); open(); } // re-deal at the new price
       return true;
-    }, { title: `The ${m.job}`, hint: `(a steadfolk; standing: ${b.name} — E to close)` });
+    }, {
+      title: `The ${m.job}`, hint: `(a steadfolk; standing: ${b.name} — E to close)`,
+      greeting: dialogueFor(m.job, b.id, !quests.fromGiver(m.steadKey, m.resIdx)),
+      errand: errandPanel(m, steadRec, open),
+    });
   };
   open();
 }
@@ -1022,6 +1091,14 @@ const interaction = new Interaction(world, player, scene, hud, {
       // breaking a Notice Post takes its writing with it (the board mesh
       // follows on the next signBoards.sync)
       if (isSign(info.broken)) world.signs.delete(`${info.x},${info.y},${info.z}`);
+      // errands count what the player does (never in creative): a natural
+      // block mined, a ripe crop harvested, a block placed
+      if (player.mode === "survival") {
+        if (info.broken != null && !info.wasPlaced) {
+          noteQuestEvent(HARVEST_IDS.has(info.broken) ? "harvest" : "mine", info.broken);
+        }
+        if (info.placed != null) noteQuestEvent("place", info.placed);
+      }
       // taking a Living Stead apart: its own walls (wreck) or a ripe crop
       // from its patch (steal) — never a block the player placed themselves
       if (info.broken != null && !info.wasPlaced && player.mode === "survival" &&
@@ -1470,6 +1547,7 @@ mobs.onBondlingDeath = () => {
 };
 mobs.onKill = (m) => {
   awardGleam(m.spec.gleam || 0);
+  if (player.mode === "survival") noteQuestEvent("kill", m.species);
   if (m.spec.deathLine) hud.announce(m.spec.deathLine, 4200);
 };
 mobs.onBossSplit = (spec) => hud.announce(spec.splitLine, 2600);
@@ -1704,6 +1782,8 @@ const saveNow = () => writeSave(dims.overworld.world, player, sky, hud, inventor
   music: [music.enabled ? 1 : 0, Math.round(music.volume * 100) / 100],
   // additive: Gleam [jars, progress] — absent in older saves (a fresh jar)
   gleam: gleam.serialize(),
+  // additive: errands being carried [[steadKey, resIdx, job, day, progress]...]
+  quests: quests.serialize(),
   // additive: which worldgen generation this world was made under
   worldgen,
   // additive: the Peddler's day [day, stock ledger, absent-until day]
@@ -2403,6 +2483,10 @@ if (NO_LOCK) {
     steadForChunk: (cx, cz) => steadForChunk(terrain, cx, cz),
     steadOffers: (m, standing) => steadOffers(m.steadSeed, m.resIdx, m.job, sky.day,
       standing ?? standingOf(world.steads.get(m.steadKey))),
+    // errands (quests.js): the log, the day's errand of a live resident,
+    // and the event feed (so tests can complete an event errand)
+    quests, questFor: (m) => questFor(world.seed, m.steadKey, m.resIdx, m.job, sky.day),
+    noteQuestEvent: (type, target, n) => noteQuestEvent(type, target, n),
     // save files: export (returns {name, text}) and a confirmed import
     exportSave: () => exportSaveNow(),
     importSaveText: (text) => importSaveText(text, "test", { confirmed: true }),
