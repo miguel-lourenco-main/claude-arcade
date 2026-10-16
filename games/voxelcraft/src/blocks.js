@@ -341,7 +341,10 @@ const def = (name, opts) => ({
   drops: undefined,  // survival drop: undefined = itself, null = nothing, id = that block
   tiles: null,       // {top, side, bottom}
   placeable: true,   // false = an item that can never be placed in the world
-  food: null,        // {restore: N} — edible; N hunger points on eating
+  food: null,        // {restore: N, saturation?: S} — edible; N hunger points
+                     // on eating, plus S hidden saturation (player.js; absent
+                     // = restore x FOOD_SATURATION_RATIO, a light bite)
+  desc: null,        // optional one-line description for the slot hover text
   sturdy: false,     // cross-kind that is NOT a plant: never replaced in place,
                      // never popped when the block under it breaks (ladder, door)
   hidden: false,     // internal id: kept out of the creative palette
@@ -504,7 +507,8 @@ BLOCKS[ROAST_LOIN] = def("Roast Loin", { hardness: 0.05,
   opaque: false,
   sound: "plant",
   placeable: false,
-  food: { restore: 8 },
+  food: { restore: 8, saturation: 12.8 },
+  desc: "Hearty: keeps you full a long while.",
 });
 // the bramble never drops itself — it hands over its berries instead
 BLOCKS[BERRY_BUSH] = def("Bog Bramble", { hardness: 0.15, drops: BERRIES,
@@ -761,7 +765,8 @@ BLOCKS[MEAL_ROOT] = def("Meal Root", cropCross({
 BLOCKS[BAKED_ROOT] = def("Baked Meal Root", cropCross({
   tiles: cube(TILE.BAKED_ROOT),
   placeable: false,
-  food: { restore: 7 },
+  food: { restore: 7, saturation: 8.4 },
+  desc: "Filling: sits well on a long walk.",
 }));
 
 // the Sling Stone: a knapped pebble, carried and thrown, never placed.
@@ -825,7 +830,8 @@ BLOCKS[SEARED_SILVERFIN] = def("Seared Silverfin", {
   hardness: 0.05,
   placeable: false,
   sound: "plant",
-  food: { restore: 6 },
+  food: { restore: 6, saturation: 7.2 },
+  desc: "Filling: sits well on a long walk.",
 });
 
 // --- bogbean farming: the second crop on the same three-stage clock -----------
@@ -866,7 +872,8 @@ BLOCKS[BOGBEAN] = def("Bogbean", cropCross({
 BLOCKS[POTTAGE] = def("Wanderer's Pottage", cropCross({
   tiles: cube(TILE.POTTAGE),
   placeable: false,
-  food: { restore: 10 },
+  food: { restore: 10, saturation: 16 },
+  desc: "The heartiest pot in the Upturn: keeps you full longest.",
 }));
 
 // --- the Whims' broths ---------------------------------------------------------
@@ -898,7 +905,8 @@ BLOCKS[KELPSALVE] = def("Kelpsalve", cropCross({
 BLOCKS[KELP_CRISP] = def("Kelp Crisp", cropCross({
   tiles: cube(TILE.KELP_CRISP),
   placeable: false,
-  food: { restore: 3 },
+  food: { restore: 3, saturation: 4.8 },
+  desc: "A delver's snack that holds you for a while.",
 }));
 BLOCKS[TIDE_BROTH] = def("Tidebreath Broth", cropCross({
   tiles: cube(TILE.TIDE_BROTH),

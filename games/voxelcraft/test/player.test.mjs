@@ -92,4 +92,57 @@ section("ladder grip-hold: sneak holds the rung, idle slides, back descends");
   check(p.pos.y < y2 - 0.8, "back descends at climbing speed");
 }
 
+section("saturation: a hidden buffer that drains before hunger");
+{
+  const { saturationOf, FOOD_SATURATION_RATIO, MAX_HUNGER } = P;
+  const p = new Player(fakeWorld());
+  p.hunger = 10; p.saturation = 0;
+  check(p.eat(8, 30) && p.hunger === 18 && p.saturation === 18, "eating caps saturation at the new hunger");
+  p.exhaust(5);
+  check(p.hunger === 18 && p.saturation === 13, "exertion spends saturation first");
+  p.exhaust(15);
+  check(p.saturation === 0 && p.hunger === 16, "...and only the remainder moves hunger");
+  p.hunger = MAX_HUNGER;
+  check(p.eat(4, 4) === false, "a full belly still refuses plain food");
+  near(saturationOf({ restore: 2 }), 2 * FOOD_SATURATION_RATIO, 1e-12, "a food with no stated saturation gets the light default");
+  check(saturationOf(B.BLOCKS[B.POTTAGE].food) === 16, "Wanderer's Pottage states its own saturation");
+}
+
+section("saturation: hearty food keeps you full longer in play");
+{
+  const { saturationOf } = P;
+  // walk in a straight line (survival) after eating, until hunger first moves
+  const secondsFull = (foodId) => {
+    const p = standing(fakeWorld());
+    p.mode = "survival";
+    p.hunger = 10; p.saturation = 0;
+    const f = B.BLOCKS[foodId].food;
+    p.eat(f.restore, saturationOf(f));
+    const h0 = p.hunger;
+    p.keys.add("KeyW");
+    let t = 0;
+    while (p.hunger >= h0 - 1e-9 && t < 4000) { p.update(1 / 20); t += 1 / 20; p.pos.z = 0.5; p.pos.x = 0.5; }
+    return t;
+  };
+  const berries = secondsFull(B.BERRIES), pottage = secondsFull(B.POTTAGE), roast = secondsFull(B.ROAST_LOIN);
+  check(pottage > berries * 10, `pottage holds hunger ${pottage.toFixed(0)}s vs berries ${berries.toFixed(0)}s`);
+  check(roast > 300, `a roast loin holds a walking Wanderling for minutes (${roast.toFixed(0)}s)`);
+  for (const id of [B.POTTAGE, B.ROAST_LOIN]) {
+    check(/full/i.test(B.BLOCKS[id].desc || ""), `${B.BLOCKS[id].name} says so in its description (no HUD)`);
+  }
+}
+
+section("hunger costs: jumping is cheaper than it was");
+{
+  const p = standing(fakeWorld());
+  p.mode = "survival"; p.hunger = 20; p.saturation = 0;
+  p.keys.add("Space");
+  // one jump, then hold still in the air (drain only applies while moving,
+  // and the jump itself is charged once on take-off)
+  p.update(1 / 60);
+  p.keys.delete("Space");
+  const spent = 20 - p.hunger;
+  check(spent > 0.05 && spent < 0.07, `a standing jump costs ~0.06 hunger (got ${spent.toFixed(4)})`);
+}
+
 done();

@@ -60,7 +60,7 @@ export const RECIPES = [
   { in: [[COAL_ORE, 1], [POPPY, 2]], out: [ROCKET_EMBER, 3], note: "coal wound with emberbell — a red bloom" },
   { in: [[COAL_ORE, 1], [GLEAM_MOSS, 2]], out: [ROCKET_GLEAM, 3], note: "coal wound with gleam moss — a green ring" },
   // Wanderer's Pottage: the mire and the meadow, in one pot (workbench)
-  { in: [[MEAL_ROOT, 1], [BOGBEAN, 2]], out: [POTTAGE, 1], note: "the mire and the meadow, in one pot" },
+  { in: [[MEAL_ROOT, 1], [BOGBEAN, 2]], out: [POTTAGE, 1], note: "the mire and the meadow, in one pot — it keeps you full longest" },
   { in: [[SAND, 4]], out: [SANDSTONE, 1] },
   { in: [[STONE, 4]], out: [BRICKS, 4] },
   // shaped blocks: 3 blocks -> 6 slabs, 6 blocks -> 4 stairs (workbench)

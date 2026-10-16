@@ -62,7 +62,8 @@ canvas atlas at boot, and every sound is synthesized with WebAudio.
 ## Survival
 
 - **The body** — 10 hearts, hunger with a real exertion economy (sprinting
-  and jumping eat), drowning with an air meter, fall damage, cactus, void,
+  and jumping eat, and a hearty cooked meal holds you far longer than a
+  handful of berries), drowning with an air meter, fall damage, cactus, void,
   lava burns, starvation (gnaws to half a heart), slow well-fed regen.
 - **Tools & tiers** — the Cracker (pick), Hewer (axe), Scoop (shovel), Shiv
   (blade), and **Furrower** (hoe) in plank → stone → sky-iron → **gloamgold**

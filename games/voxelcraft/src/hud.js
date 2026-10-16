@@ -22,7 +22,8 @@ export function describeStack(stack) {
   const def = BLOCKS[stack.id];
   if (!def) return "";
   const thread = threadName(stack);
-  return `${def.name}${thread ? ` — ${thread}` : ""} · ${rarityTier(stack.id).name}`;
+  const head = `${def.name}${thread ? ` — ${thread}` : ""} · ${rarityTier(stack.id).name}`;
+  return def.desc ? `${head}\n${def.desc}` : head;
 }
 
 // Draw a fake-iso cube (top + two sides) from atlas tiles onto a 2D canvas.

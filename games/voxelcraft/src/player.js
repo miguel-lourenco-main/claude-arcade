@@ -62,11 +62,26 @@ const REGEN_RATE = 0.5;           // HP per second, gated on a well-fed satchel
 const REGEN_MIN_HUNGER = 18;      // regen only while this fed or better
 const REGEN_HUNGER_COST = 0.4;    // hunger spent per HP healed
 const HUNGER_PASSIVE = 0.02;      // hunger per second while doing anything
-const HUNGER_SPRINT = 0.06;       // extra while sprinting (total 0.08 = 4x walking)
-const HUNGER_JUMP = 0.12;         // hunger per jump
-const SPRINT_JUMP_EXTRA = 0.2;    // additional cost of a jump taken at a sprint
+const HUNGER_SPRINT = 0.05;       // extra while sprinting (total 0.07 = 3.5x walking)
+const HUNGER_JUMP = 0.06;         // hunger per jump (was 0.12: hopping starved you)
+const SPRINT_JUMP_EXTRA = 0.1;    // additional cost of a jump taken at a sprint
 const SPRINT_MIN_HUNGER = 3;      // too hungry to run: sprint needs hunger > this
 const STARVE_INTERVAL = 2.5;      // seconds between starvation ticks at 0 hunger
+// saturation: a hidden buffer that every exertion drains BEFORE hunger moves.
+// Food grants it alongside its restore; it can never exceed the current
+// hunger (a full belly can only be so full). No HUD shows it — the hearty
+// foods say so in their description text instead (blocks.js `desc`).
+export const FOOD_SATURATION_RATIO = 0.3; // a food with no stated saturation
+const SATURATION_START = 5;       // a fresh (or respawned) Wanderling's buffer
+
+// the saturation a food def grants (blocks.js food.saturation, else a light
+// default from its restore)
+export function saturationOf(food) {
+  if (!food) return 0;
+  return Number.isFinite(food.saturation)
+    ? Math.max(0, food.saturation)
+    : food.restore * FOOD_SATURATION_RATIO;
+}
 
 // horizontal acceleration (blocks/s²): crisp starts, crisper stops on ground,
 // deliberately weaker steering in the air — replaces the old exponential
@@ -145,6 +160,7 @@ export class Player {
     this.spawnPoint = null;
     this.health = MAX_HEALTH;
     this.hunger = MAX_HUNGER;
+    this.saturation = SATURATION_START; // hidden; drains before hunger
     this.air = AIR_SECONDS;
     this.dead = false;
     this.onDamage = null;       // (amount, cause) => void
@@ -280,6 +296,7 @@ export class Player {
     this.vel.x = this.vel.y = this.vel.z = 0;
     this.health = MAX_HEALTH;
     this.hunger = MAX_HUNGER;
+    this.saturation = SATURATION_START;
     this.air = AIR_SECONDS;
     this.dead = false;
     this.flying = false;
@@ -679,8 +696,7 @@ export class Player {
         if (this.mode === "survival") {
           // a jump taken at a sprint costs extra — bunny-hopping is fast
           // but it eats
-          this.hunger = Math.max(0, this.hunger -
-            (HUNGER_JUMP + (this.sprintActive ? SPRINT_JUMP_EXTRA : 0)));
+          this.exhaust(HUNGER_JUMP + (this.sprintActive ? SPRINT_JUMP_EXTRA : 0));
         }
       }
     }
@@ -824,7 +840,7 @@ export class Player {
     if (!idle) {
       let drain = HUNGER_PASSIVE;
       if (this.sprintActive) drain += HUNGER_SPRINT;
-      this.hunger = Math.max(0, this.hunger - drain * dt);
+      this.exhaust(drain * dt);
     }
 
     // starvation: an empty satchel gnaws down to (never below) half a heart
@@ -843,14 +859,25 @@ export class Player {
         this.hunger >= REGEN_MIN_HUNGER) {
       const heal = Math.min(REGEN_RATE * dt, MAX_HEALTH - this.health);
       this.health += heal;
-      this.hunger = Math.max(0, this.hunger - heal * REGEN_HUNGER_COST);
+      this.exhaust(heal * REGEN_HUNGER_COST);
     }
   }
 
-  // eat a food item: restore hunger (clamped). Returns false at full hunger.
-  eat(restore) {
+  // spend food on an exertion: the saturation buffer pays first, and only
+  // what it can't cover moves the hunger meter
+  exhaust(amount) {
+    if (!(amount > 0)) return;
+    const fromSat = Math.min(this.saturation, amount);
+    this.saturation -= fromSat;
+    this.hunger = Math.max(0, this.hunger - (amount - fromSat));
+  }
+
+  // eat a food item: restore hunger (clamped) and top up the saturation
+  // buffer (capped at the new hunger). Returns false at full hunger.
+  eat(restore, saturation = 0) {
     if (this.hunger >= MAX_HUNGER - 1e-9) return false;
     this.hunger = Math.min(MAX_HUNGER, this.hunger + restore);
+    this.saturation = Math.min(this.hunger, this.saturation + Math.max(0, saturation));
     return true;
   }
 

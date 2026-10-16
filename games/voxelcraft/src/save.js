@@ -87,6 +87,9 @@ export function writeSave(world, player, sky, hud, inventory, extra = {}) {
       gameMode: player.mode,
       health: player.health,
       hunger: player.hunger,
+      // additive: the hidden saturation buffer (drains before hunger) —
+      // absent in older saves, which load with the fresh-start buffer
+      saturation: player.saturation,
       air: player.air,
       // additive: the Moss Cot respawn anchor (absent/null = world spawn)
       spawnPoint: player.spawnPoint || undefined,

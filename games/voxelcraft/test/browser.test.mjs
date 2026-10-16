@@ -220,6 +220,19 @@ async function crouch(page) {
     `holding sneak crouches in-game (eye ${before.toFixed(2)} -> ${during.eye.toFixed(2)}, box ${during.h})`);
 }
 
+// A4: the saturation buffer is live and persisted; hearty foods say so on hover
+async function saturation(page) {
+  console.log("\n== saturation (A4)");
+  const r = await page.eval(`(() => { const vc = window.voxelcraft, p = vc.player;
+    const h = p.hunger, s = p.saturation; p.hunger = 10; p.saturation = 0;
+    p.eat(10, 16); const out = { h: p.hunger, s: p.saturation }; p.hunger = h; p.saturation = s;
+    vc.inventory.add(127, 1); vc.hud.openPicker();
+    const cell = [...document.querySelectorAll('.inv-slot')].find((c) => c.title.startsWith("Wanderer's Pottage"));
+    out.title = cell ? cell.title : ''; vc.hud.closePicker(); return out; })()`);
+  assert(r.h === 20 && r.s === 16, "eating grants hidden saturation in-game");
+  assert(/\nThe heartiest pot/.test(r.title), "the pottage's hover text says it keeps you full");
+}
+
 // ---------------------------------------------------------------------- main
 
 const hardTimeout = setTimeout(() => {
@@ -241,6 +254,7 @@ try {
     await smoke(page);
     await rarity(page);
     await crouch(page);
+    await saturation(page);
   }
   console.log("\n== console errors / exceptions");
   assert(consoleErrors.length === 0,

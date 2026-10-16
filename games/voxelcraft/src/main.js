@@ -166,6 +166,10 @@ if (save && Number.isFinite(save.air)) {
 if (save && Number.isFinite(save.hunger)) {
   player.hunger = Math.min(20, Math.max(0, save.hunger));
 }
+// saturation is additive too: never above the loaded hunger
+if (save && Number.isFinite(save.saturation)) {
+  player.saturation = Math.min(player.hunger, Math.max(0, save.saturation));
+}
 // the Moss Cot respawn anchor (additive field): validated like the player pos;
 // whether the cot still stands is checked at respawn time, not here
 if (save && validPos(save.spawnPoint)) {
