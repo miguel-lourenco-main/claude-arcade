@@ -23,8 +23,11 @@ import {
   // job-table goods
   MEAL_ROOT, BERRIES, ROOT_SEED, POTTAGE, BOGBEAN, GRAVEL, STONE_PICK,
   IRON_INGOT, RAIL, DOOR, PLANK_STAIRS, COAL_ORE, SILVERFIN,
-  EMBER_BROTH, SUNWISP_BROTH, ROAST_LOIN,
+  EMBER_BROTH, SUNWISP_BROTH, ROAST_LOIN, SAND, BAKED_ROOT, LADDER, CHEST,
+  IRON_ORE, SEARED_SILVERFIN, SNUFFET_LOIN, POPPY, DANDELION, BOGBEAN_POD,
+  WISPCAP, SAPLING, IRON_PICK, COMPASS, CART, TIDE_BROTH, KELP_CRISP, STARGLASS,
 } from "./blocks.js";
+import { dealBoard, dispositionOf } from "./trade.js";
 
 const STEAD_RATE = 1 / 55;  // before the ruin/delve exclusion + terrain vetoes
                             // (~half the hits are lost to those), which lands
@@ -34,68 +37,60 @@ const STEADFOLK_HP = 10;
 const ACTIVATE_DIST = 72;   // residents come alive within this of the well
 const DEACTIVATE_DIST = 104;// ...and fold back to a saved record past this
 
-// the three trades a steadfolk works. give = what the player hands over, get
-// = what the steadfolk hands back (the Peddler's ledger idiom, trade.js).
+// the trades a steadfolk works: what each JOB sells, what it will take in
+// return, and (for a cherished customer) the rarer goods it keeps back. Any
+// sell can pair with any want; trade.js prices the pairing by fair value
+// (rarity.js) at the resident's disposition and the stead's standing.
 export const JOBS = ["grower", "wright", "keeper"];
-export const JOB_OFFERS = {
-  // the grower keeps the meal-root patch and the brambles; takes rubble and a
-  // spare tool for the digging, hands back the harvest and next year's pips
-  grower: [
-    { give: [[COBBLE, 10]], get: [MEAL_ROOT, 4] },
-    { give: [[GRAVEL, 10]], get: [BERRIES, 5] },
-    { give: [[COBBLE, 6]], get: [ROOT_SEED, 4] },
-    { give: [[STONE_PICK, 1]], get: [MEAL_ROOT, 8] },
-    { give: [[COBBLE, 14]], get: [BOGBEAN, 4] },
-    { give: [[GRAVEL, 8]], get: [POTTAGE, 1] },
-  ],
-  // the wright works the timber and the sky-iron: hands back planks, waybars,
-  // doors and stairs for an ingot or two
-  wright: [
-    { give: [[IRON_INGOT, 1]], get: [PLANKS, 12] },
-    { give: [[IRON_INGOT, 2]], get: [RAIL, 8] },
-    { give: [[IRON_INGOT, 1]], get: [DOOR, 2] },
-    { give: [[IRON_INGOT, 3]], get: [PLANK_STAIRS, 10] },
-    { give: [[IRON_INGOT, 1]], get: [FENCE, 8] },
-  ],
-  // the keeper minds the hearth and the pot: torches, broths, and a hot roast
-  // for coal and the day's catch
-  keeper: [
-    { give: [[COAL_ORE, 2]], get: [TORCH, 8] },
-    { give: [[SILVERFIN, 3]], get: [EMBER_BROTH, 1] },
-    { give: [[COAL_ORE, 3]], get: [SUNWISP_BROTH, 1] },
-    { give: [[SILVERFIN, 2]], get: [TORCH, 10] },
-    { give: [[COAL_ORE, 4]], get: [ROAST_LOIN, 1] },
-  ],
+export const JOB_GOODS = {
+  // the grower keeps the meal-root patch and the brambles; takes rubble,
+  // grit and the odd tool for the digging
+  grower: {
+    sells: [MEAL_ROOT, BERRIES, ROOT_SEED, BOGBEAN, POTTAGE, BAKED_ROOT],
+    wants: [COBBLE, GRAVEL, SAND, COAL_ORE, STONE_PICK, LOG],
+    rare: [BOGBEAN_POD, WISPCAP, SAPLING],
+  },
+  // the wright works the timber and the sky-iron
+  wright: {
+    sells: [PLANKS, RAIL, DOOR, PLANK_STAIRS, FENCE, LADDER, CHEST],
+    wants: [IRON_INGOT, IRON_ORE, LOG, COAL_ORE, COBBLE],
+    rare: [IRON_PICK, COMPASS, CART],
+  },
+  // the keeper minds the hearth and the pot
+  keeper: {
+    sells: [TORCH, EMBER_BROTH, SUNWISP_BROTH, ROAST_LOIN, SEARED_SILVERFIN],
+    wants: [COAL_ORE, SILVERFIN, SNUFFET_LOIN, POPPY, DANDELION, LOG],
+    rare: [TIDE_BROTH, KELP_CRISP, STARGLASS],
+  },
 };
 
 export const OFFERS_PER_DAY = 3;
 
-// a steadfolk's offers for the day, deterministic in (seed, resident, day) —
-// the Peddler's seeded Fisher-Yates, keyed so each resident rotates its own
-// board. The stead's STANDING (standing.js) prices the board: every give
-// side is scaled by the band's priceMul (never below one), and a friendly
-// stead deals a fourth line. (This is where the old per-day warmth went: the
-// positive end of the standing axis.)
+// a resident's disposition: fixed at its "birth" (the stead's seed + its
+// place in the stead), so the same steadfolk is always the same bargainer
+export function residentDisposition(steadSeed, resIdx) {
+  return dispositionOf((steadSeed ^ Math.imul(resIdx + 1, 0x9e3779b9)) >>> 0);
+}
+
+// a steadfolk's offers for the day, deterministic in (seed, resident, day):
+// value-fair pairings from its job's goods (trade.js dealBoard), at
+// ratio = disposition x the stead's standing band price (standing.js — the
+// old per-day warmth lives at its positive end). A friendly stead deals a
+// fourth line; a cherished one deals it from the job's rare goods.
 export function steadOffers(steadSeed, resIdx, job, day, standing = 0) {
   const band = bandOf(standing);
-  const pool = JOB_OFFERS[job] || JOB_OFFERS.grower;
+  const goods = JOB_GOODS[job] || JOB_GOODS.grower;
   const rand = mulberry32(
     (steadSeed ^ Math.imul(resIdx + 1, 0x9e3779b9) ^ Math.imul(day + 1, 0x85ebca77)) >>> 0);
-  const idx = pool.map((_, i) => i);
-  for (let i = idx.length - 1; i > 0; i--) {
-    const j = (rand() * (i + 1)) | 0;
-    [idx[i], idx[j]] = [idx[j], idx[i]];
+  const ratio = residentDisposition(steadSeed, resIdx) * band.priceMul;
+  const board = dealBoard(rand, goods.sells, goods.wants, OFFERS_PER_DAY, ratio);
+  if (band.extraOffer) {
+    const pool = band.id === "cherished"
+      ? goods.rare : goods.sells.filter((id) => !board.some((o) => o.get[0] === id));
+    board.push(...dealBoard(rand, pool, goods.wants, 1, ratio));
   }
-  const n = Math.min(pool.length, OFFERS_PER_DAY + (band.extraOffer ? 1 : 0));
-  return idx.slice(0, n).map((i) => {
-    const o = pool[i];
-    if (band.priceMul === 1) return o;
-    return {
-      give: o.give.map(([id, k]) => [id, Math.max(1, Math.round(k * band.priceMul))]),
-      get: o.get,
-      warmed: band.priceMul < 1, // the board shows a friendly price
-    };
-  });
+  for (const o of board) o.warmed = band.priceMul < 1; // the board shows a friendly price
+  return board;
 }
 
 // is this resident's stead friendly enough to deal its good prices?

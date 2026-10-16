@@ -41,6 +41,10 @@ canvas atlas at boot, and every sound is synthesized with WebAudio.
   courtyard by day, head indoors at dusk, each barter three goods a day
   from their job (grower/wright/keeper), and persist: the same folk are
   there when you come back, unless the dark got one while you were away.
+  Every barter in the Upturn is **fair by value**: each line pairs a good
+  with something the trader wants and prices it by the shared rarity value,
+  skewed by the trader's own disposition (some are born kinder bargainers)
+  and, at a stead, by your standing.
   Each stead keeps a **Standing** with you (-100..+100): trades and gifts
   (sneak + right-click a resident; each job has its likes) raise it, and
   kicks, killings, pulled crops and taken-apart walls sink it. A friendly
@@ -265,7 +269,7 @@ src/rails.js       the Waybar auto-shaper + track geometry oracle
 src/carts.js       Trundles: rolling physics, boarding, parking
 src/fishing.js     the Dib-Pole and the dib-float
 src/signs.js       Notice Post text boards
-src/trade.js       the Peddler's ledger + daily offers
+src/trade.js       fair-value pricing, dispositions, the Peddler's daily board
 src/wayfinding.js  Needle/Dial widgets + the Field Chart
 src/hud.js         hotbar, windows, meters, badges, boss bar (DOM)
 src/sky.js         day/night lights, stars, clouds, fog, weather machine

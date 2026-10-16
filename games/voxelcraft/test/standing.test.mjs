@@ -88,20 +88,22 @@ section("save: standing rides each stead entry (additive)");
 
 section("the stead's board reads standing (warmth folded in)");
 {
+  const T = await import("../src/trade.js");
   const neutral = ST.steadOffers(77, 0, "grower", 3, 0);
   const friendly = ST.steadOffers(77, 0, "grower", 3, 30);
-  const cherished = ST.steadOffers(77, 0, "grower", 3, 80);
-  const wary = ST.steadOffers(77, 0, "grower", 3, -40);
   check(neutral.length === 3 && friendly.length === 4, "neutral deals three, friendly a fourth");
-  const giveOf = (o) => o.give.reduce((a, [, n]) => a + n, 0);
-  let cheaper = true, dearer = true;
-  for (let i = 0; i < 3; i++) {
-    if (!(giveOf(cherished[i]) <= giveOf(friendly[i]) && giveOf(friendly[i]) <= giveOf(neutral[i]))) cheaper = false;
-    if (!(giveOf(wary[i]) >= giveOf(neutral[i]))) dearer = false;
-    if (neutral[i].get[0] !== friendly[i].get[0]) cheaper = false; // same day, same goods
-  }
-  check(cheaper, "friendlier means cheaper, same goods");
-  check(dearer, "a wary stead asks more");
+  check(neutral.every((o, i) => o.get[0] === friendly[i].get[0]), "same day, same goods whatever the standing");
+  // the realized price ratio, averaged over many days, falls as standing rises
+  const avg = (standing) => {
+    let sum = 0, n = 0;
+    for (let day = 0; day < 60; day++) for (const job of ST.JOBS) {
+      for (const o of ST.steadOffers(91, 1, job, day, standing).slice(0, 3)) { sum += T.offerRatio(o); n++; }
+    }
+    return sum / n;
+  };
+  const a = { wary: avg(-40), neutral: avg(0), friendly: avg(30), cherished: avg(80) };
+  check(a.wary > a.neutral && a.neutral > a.friendly && a.friendly > a.cherished,
+    `prices track standing (wary ${a.wary.toFixed(2)} > neutral ${a.neutral.toFixed(2)} > friendly ${a.friendly.toFixed(2)} > cherished ${a.cherished.toFixed(2)})`);
   check(ST.isWarmed({ standing: 25 }) && !ST.isWarmed({ standing: 5 }), "isWarmed is now 'friendly or better'");
 }
 

@@ -10,9 +10,88 @@ import {
   STONE_PICK, COMPASS, BARK_JERKIN, IRON_TREADS, IRON_INGOT, STARSTONE, RAIL,
   KELPSALVE, QUILL, PAIL, ROCKET_SUN, ROCKET_EMBER, ROCKET_GLEAM,
 } from "./blocks.js";
-import { mulberry32 } from "./noise.js";
+import { mulberry32, hash2 } from "./noise.js";
+import { valueOf } from "./rarity.js";
+import { maxStackFor } from "./inventory.js";
 
-// {give: [[id, n], ...], get: [id, n]} — give is what the player hands over
+// --- fair value (rarity.js) ---------------------------------------------------
+// Every barter is priced so what you hand over is worth what you get, by the
+// shared value table, times a RATIO: 1 is dead fair, above 1 the trader comes
+// out ahead. The ratio is the trader's disposition (set once, at "birth") x
+// the standing band's price (standing.js) x a small daily jitter inside the
+// fair band. Counts are whole units, so rounding is the only other slack.
+export const FAIR_BAND = 0.1;         // daily jitter: ±10% around the ratio
+export const DISPOSITION_MIN = 0.85;  // the kindest-born trader
+export const DISPOSITION_MAX = 1.2;   // the sharpest
+export const BUNDLE_VALUE = 12;       // what a typical offer's get side is worth
+const MAX_GET = 16;                   // never more than this many of a thing
+const MAX_GIVE = 64;                  // or ask for more than a stack
+
+// a trader's disposition, fixed at birth from a seed (a resident's seed, the
+// Peddler's world): uniform in [DISPOSITION_MIN, DISPOSITION_MAX]
+export function dispositionOf(seed) {
+  const u = hash2(seed | 0, 0x7ade, 0x5eed);
+  return DISPOSITION_MIN + u * (DISPOSITION_MAX - DISPOSITION_MIN);
+}
+
+// price one pairing: how many `giveId` for getN of `getId` at `ratio`. If
+// getN is omitted it is sized to BUNDLE_VALUE. Returns an offer
+// {give: [[giveId, n]], get: [getId, n], ratio} or null when no whole-unit
+// price fits (a pairing too lopsided to deal in a single stack).
+export function priceOffer(getId, giveId, ratio = 1, getN) {
+  const vGet = valueOf(getId), vGive = valueOf(giveId);
+  if (!(vGet > 0 && vGive > 0) || getId === giveId) return null;
+  const cap = Math.min(MAX_GET, maxStackFor(getId));
+  let n = getN ?? Math.max(1, Math.min(cap, Math.round(BUNDLE_VALUE / vGet)));
+  // a cheap good against a dear coin: bundle more of the good until the
+  // price reaches one whole coin
+  while (n < cap && (vGet * n * ratio) / vGive < 0.5) n++;
+  // still under half a coin at the most we'd sell: no fair price exists
+  if ((vGet * n * ratio) / vGive < 0.5) return null;
+  let give = Math.max(1, Math.round((vGet * n * ratio) / vGive));
+  // a dear good against a cheap coin: sell fewer until it fits in a stack
+  while (give > MAX_GIVE && n > 1) {
+    n--;
+    give = Math.max(1, Math.round((vGet * n * ratio) / vGive));
+  }
+  if (give > MAX_GIVE) return null;
+  return { give: [[giveId, give]], get: [getId, n], ratio };
+}
+
+// how fair an offer actually came out: what's handed over / what's got
+export function offerRatio(offer) {
+  const giveV = offer.give.reduce((a, [id, n]) => a + valueOf(id) * n, 0);
+  return giveV / (valueOf(offer.get[0]) * offer.get[1]);
+}
+
+// deal n offers from a trader's pools: each picks the next of the shuffled
+// `sells`, pairs it with a seeded pick from `wants`, and prices it at
+// ratio x jitter. Deterministic in `rand`.
+export function dealBoard(rand, sells, wants, n, ratio) {
+  const idx = sells.map((_, i) => i);
+  for (let i = idx.length - 1; i > 0; i--) {
+    const j = (rand() * (i + 1)) | 0;
+    [idx[i], idx[j]] = [idx[j], idx[i]];
+  }
+  const out = [];
+  for (const i of idx) {
+    if (out.length >= n) break;
+    const getId = sells[i];
+    const jitter = 1 + (rand() * 2 - 1) * FAIR_BAND;
+    // try the wants in a seeded rotation until one prices
+    const start = (rand() * wants.length) | 0;
+    for (let k = 0; k < wants.length; k++) {
+      const offer = priceOffer(getId, wants[(start + k) % wants.length], ratio * jitter);
+      if (offer) { out.push(offer); break; }
+    }
+  }
+  return out;
+}
+
+// {give: [[id, n], ...], get: [id, n]} — give is what the player hands over.
+// These are the Peddler's PAIRINGS and his get counts; the give counts here
+// are the original hand-set prices, kept for reference — dailyOffers reprices
+// every line by fair value (priceOffer) at his disposition.
 export const OFFERS = [
   // forage for ore: the peddler knows a seam you don't
   { give: [[BERRIES, 8]], get: [IRON_ORE, 2] },
@@ -82,7 +161,14 @@ export function dailyOffers(seed, day) {
     const j = (rand() * (i + 1)) | 0;
     [idx[i], idx[j]] = [idx[j], idx[i]];
   }
-  const picks = idx.slice(0, OFFERS_PER_DAY).map((i) => OFFERS[i]);
+  // reprice each pairing by value: the Peddler's disposition is his world's
+  // (one wanderer per world), with the day's jitter inside the fair band
+  const disp = dispositionOf(seed ^ 0x9edd1e);
+  const picks = idx.slice(0, OFFERS_PER_DAY).map((i) => {
+    const o = OFFERS[i];
+    const jitter = 1 + (rand() * 2 - 1) * FAIR_BAND;
+    return priceOffer(o.get[0], o.give[0][0], disp * jitter, o.get[1]) || o;
+  });
   // Fairday: the day's rocket takes the top slot (which variant rotates with
   // the same seeded stream, so the whole world sees the same festival board)
   if (isFairday(day)) {
