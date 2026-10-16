@@ -186,6 +186,20 @@ async function smoke(page) {
   assert(t1 !== t0, "the game loop is ticking (sky time advances)");
 }
 
+// A2: the shared worth table is live, and satchel slots name their tier
+async function rarity(page) {
+  console.log("\n== rarity -> value (A2)");
+  const r = await page.eval(`(() => { const R = window.voxelcraft.rarity;
+    return { dirt: R.valueOf(2), ore: R.rarityOf(22), tier: R.rarityTier(22).name }; })()`);
+  assert(Math.abs(r.dirt - 1) < 1e-9, "a dirt block is the unit of value in-game");
+  assert(r.ore > 0.3 && r.ore < 0.6 && typeof r.tier === "string", `sky-iron ore resolves (${r.ore.toFixed(3)}, ${r.tier})`);
+  const title = await page.eval(`(() => { const vc = window.voxelcraft;
+    vc.inventory.add(22, 1); vc.hud.openPicker();
+    const cell = [...document.querySelectorAll('#palette-grid .inv-slot, #main-grid .inv-slot, #hotbar-grid .inv-slot')]
+      .find((c) => c.title.startsWith('Sky-Iron Ore')); const t = cell ? cell.title : ''; vc.hud.closePicker(); return t; })()`);
+  assert(/ · (Underfoot|Everyday|Seamwise|Deepkept|Pearl-rare)$/.test(title), `a satchel slot's hover names its tier ("${title}")`);
+}
+
 // ---------------------------------------------------------------------- main
 
 const hardTimeout = setTimeout(() => {
@@ -205,6 +219,7 @@ try {
   const page = await openPage(cdp, consoleErrors, "http");
   if (await boot(page, url)) {
     await smoke(page);
+    await rarity(page);
   }
   console.log("\n== console errors / exceptions");
   assert(consoleErrors.length === 0,

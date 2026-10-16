@@ -360,6 +360,9 @@ const def = (name, opts) => ({
   needsPick: 0,      // survival: drops NOTHING unless mined with a pick of
                      // at least this tier (0 = drops for anyone, bare feet too)
   gleam: 0,          // motes of Gleam a successful survival mine awards
+  rarity: undefined, // override for the auto-seeded rarity (rarity.js): a
+                     // number in [0,1] or a display-tier id ("deepkept");
+                     // undefined = let the resolver seed it from its sources
   ...opts,
 });
 

@@ -64,6 +64,7 @@ import { Rain } from "./rain.js";
 import { Sfx } from "./audio.js";
 import { Music } from "./music.js";
 import { loadSave, writeSave, clearSave, startAutosave } from "./save.js";
+import { resolveRarity, rarityOf, valueOf, rarityTier } from "./rarity.js";
 
 const MESH_RADIUS = 5;
 const GEN_RADIUS = MESH_RADIUS + 1;
@@ -74,6 +75,10 @@ const FIXED_DT = 1 / 60;
 const NO_LOCK = new URLSearchParams(location.search).has("nolock");
 
 // --- boot -------------------------------------------------------------------
+
+// every item's rarity/value, resolved once from its sources (rarity.js) —
+// cached, so every economic system reads the same numbers all session
+resolveRarity();
 
 const save = loadSave();
 const seed = save ? save.seed : (Math.random() * 0xffffffff) >>> 0;
@@ -2165,6 +2170,8 @@ if (NO_LOCK) {
     getGrowthSeconds: () => growthSeconds,
     getPlayerBiome: () => playerBiome, // the slow-sampled biome underfoot
     dailyOffers, // (seed, day) — lets tests diff the Peddler's rotation
+    // the shared worth table (rarity.js): rarity in [0,1], value, display tier
+    rarity: { rarityOf, valueOf, rarityTier },
     // the Steads-Before: placement prediction, for ruin tests
     findNearestRuin: (x, z) => findNearestRuin(terrain, x, z),
     ruinForChunk: (cx, cz) => ruinForChunk(terrain, cx, cz),

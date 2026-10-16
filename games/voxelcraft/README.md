@@ -223,6 +223,7 @@ src/main.js        boot, chunk streaming, fixed-step game loop, all wiring
 src/noise.js       seeded Perlin 2D/3D + fBm + integer hashes
 src/textures.js    procedural 16px atlas (120+ tiles) + avg tile colors
 src/blocks.js      block/item registry (tiles, buckets, tools, armor, food)
+src/rarity.js      rarity -> value: every item's shared worth (seeded + overridable)
 src/world.js       chunk store, get/set, emitters, persistent edit overlay
 src/terrain.js     heightmap/biomes/caves/ores/lava — pure fn of (x,z,seed)
 src/undersky.js    the far side: pearlsand dunes, pearl-beds, starkelp
