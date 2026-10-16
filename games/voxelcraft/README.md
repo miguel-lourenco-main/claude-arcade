@@ -39,9 +39,13 @@ canvas atlas at boot, and every sound is synthesized with WebAudio.
   through the flip WHOLE: **the Living Steads** — intact cottages, a well,
   a fenced meal-root patch, and 2-3 resident **Steadfolk** who potter the
   courtyard by day, head indoors at dusk, each barter three goods a day
-  from their job (grower/wright/keeper), warm to a repeat customer, and
-  persist: the same folk are there when you come back, unless the dark
-  got one while you were away.
+  from their job (grower/wright/keeper), and persist: the same folk are
+  there when you come back, unless the dark got one while you were away.
+  Each stead keeps a **Standing** with you (-100..+100): trades and gifts
+  (sneak + right-click a resident; each job has its likes) raise it, and
+  kicks, killings, pulled crops and taken-apart walls sink it. A friendly
+  stead prices every barter lower and deals a fourth line; a wary one
+  asks more and steps away from you; a hostile one won't deal at all.
 - **The Undersky** — a second dimension: the drowned old floor of the
   flip, reached through a **Cinder Door** (below). Permanent dusk under
   close bright stars, pearlsand dunes over slate, glowing **Starkelp**,
@@ -203,6 +207,7 @@ moods with crossfades, plus rain and Prowl-pulse overlays).
 | W / S on a ladder | climb / descend (idle slides down slowly) |
 | LMB / RMB / MMB | break / use-place / pick block |
 | hold RMB | eat food, draw the Springstave |
+| Shift + RMB on a steadfolk | give it the held item (one unit) |
 | Q | toss one item |
 | 1–9 / wheel | hotbar selection |
 | E | Satchel / block picker |
@@ -237,6 +242,7 @@ src/mesher.js      culled faces + AO + BFS block light -> 3 buckets + shader
 src/ruins.js       the Steads-Before: seeded surface ruins + loot
 src/delvings.js    the Delvings-Under: buried galleries + loot
 src/steads.js      the Living Steads: intact homesteads + resident manager
+src/standing.js    Standing: each stead's reputation axis, bands, gifts, turns
 src/player.js      pointer-lock look, AABB physics, survival, the Whims
 src/player-model.js the Wanderling body, held tools, armor overlays
 src/player-viewer.js the Satchel's spinnable model viewer

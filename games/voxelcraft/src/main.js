@@ -49,7 +49,8 @@ import { sunkenForChunk, findNearestSunken } from "./sunken.js";
 import { findNearestRuin, ruinForChunk } from "./ruins.js";
 import { findNearestDelve, delveForChunk } from "./delvings.js";
 import {
-  Steads, findNearestStead, steadForChunk, steadOffers, isWarmed, recordTrade,
+  Steads, findNearestStead, steadForChunk, steadOffers, recordTrade, steadPartAt,
+  seedSteadState,
 } from "./steads.js";
 import {
   buildMaterials, meshChunk, disposeChunkMeshes, setDayLight, buildBlockGeometry,
@@ -65,6 +66,9 @@ import { Sfx } from "./audio.js";
 import { Music } from "./music.js";
 import { loadSave, writeSave, clearSave, startAutosave } from "./save.js";
 import { resolveRarity, rarityOf, valueOf, rarityTier } from "./rarity.js";
+import {
+  applyStanding, bandOf, standingOf, giftStanding, globalStanding, DAILY_GAIN_CAP,
+} from "./standing.js";
 
 const MESH_RADIUS = 5;
 const GEN_RADIUS = MESH_RADIUS + 1;
@@ -828,25 +832,90 @@ const fishing = new Fishing(scene, {
   poleSelected: () => hud.selectedId() === FISHING_POLE,
 });
 
-// a steadfolk's trade window: the day's three offers from its JOB table,
-// discounting the third once the resident has warmed to two trades today.
-// Re-deals the board live the moment warmth flips on, so the discount shows.
+// the stead record a live resident belongs to (standing lives there)
+const steadRecOf = (m) => (m && m.steadKey ? world.steads.get(m.steadKey) : null);
+
+// a standing change worth a line: only when the band itself moves
+function announceStanding(res) {
+  if (!res || !res.bandChanged) return;
+  const lines = {
+    hostile: "The stead has turned against you.",
+    wary: "The stead watches you warily now.",
+    neutral: "The stead takes you as it finds you.",
+    friendly: "The stead counts you a friend.",
+    cherished: "The stead holds you dear.",
+  };
+  hud.announce(lines[res.band.id] || "", 3200);
+}
+
+// a broken block inside a Living Stead's footprint (steads.js steadPartAt):
+// the patch's ripe crops count as stealing, the buildings/well/fence as
+// wrecking — each a turn on that stead's standing (seeded first, so a stead
+// wrecked before its folk ever woke still remembers)
+function noteSteadDamage(x, y, z, brokenId) {
+  const part = steadPartAt(terrain, x, y, z, brokenId);
+  if (!part) return;
+  const { plan, kind } = part;
+  if (!world.steads.has(plan.key)) seedSteadState(world, plan);
+  announceStanding(applyStanding(world.steads.get(plan.key), kind, sky.day));
+}
+
+// a steadfolk's trade window: the day's offers from its JOB table, priced by
+// the stead's STANDING (standing.js — the old per-day warmth lives at its
+// positive end). A hostile stead won't deal at all; a trade raises standing
+// (capped per day) and re-deals the board live if the band moves.
 function openSteadTrade(m) {
   const day = sky.day;
   const rec = m.record;
+  const steadRec = steadRecOf(m);
+  const band = bandOf(standingOf(steadRec));
+  if (band.refuseTrade) {
+    hud.announce("The steadfolk won't deal with you.", 2600);
+    return;
+  }
   const open = () => {
-    const warmed = isWarmed(rec, day);
-    const offers = steadOffers(m.steadSeed, m.resIdx, m.job, day, warmed);
+    const b = bandOf(standingOf(steadRec));
+    const offers = steadOffers(m.steadSeed, m.resIdx, m.job, day, standingOf(steadRec));
     hud.openTrade(offers, (offer) => {
       const leftover = executeTrade(offer, inventory); // -1 = can't pay
       if (leftover < 0) return false;
       if (leftover > 0) spillStack({ id: offer.get[0], count: leftover });
       sfx.peddlerHm();
-      if (rec && recordTrade(rec, day)) open(); // warmth just flipped: re-deal
+      if (rec) recordTrade(rec, day);
+      const res = steadRec ? applyStanding(steadRec, "trade", day) : null;
+      if (res && res.bandChanged) { announceStanding(res); open(); } // re-deal at the new price
       return true;
-    });
+    }, { title: `The ${m.job}`, hint: `(a steadfolk; standing: ${b.name} — E to close)` });
   };
   open();
+}
+
+// sneak + right-click a steadfolk with something in hand: a gift. One unit
+// is handed over; standing rises by its worth (doubled if the job likes it),
+// within the stead's daily cap for good turns. Over the cap the resident
+// politely declines and nothing is spent.
+function giftSteadfolk(m) {
+  const steadRec = steadRecOf(m);
+  if (!steadRec) return;
+  const id = hud.selectedId();
+  if (!id || !BLOCKS[id]) { hud.announce("Your hand-feet are empty.", 1600); return; }
+  if (m.grudgeT > 0 || bandOf(standingOf(steadRec)).refuseTrade) {
+    hud.announce("The steadfolk won't take anything from you.", 2600);
+    return;
+  }
+  const day = sky.day;
+  const used = steadRec.gainDay === day ? steadRec.gainToday || 0 : 0;
+  if (used >= DAILY_GAIN_CAP) {
+    hud.announce("They've had enough kindness for one day.", 2600);
+    return;
+  }
+  if (!interaction.canConsume(id)) return;
+  hud.refreshHotbarRow();
+  const amount = giftStanding(m.job, id);
+  const res = applyStanding(steadRec, "gift", day, amount);
+  sfx.peddlerHm();
+  if (res.bandChanged) announceStanding(res);
+  else hud.announce(amount >= 4 ? `The ${m.job} is delighted.` : `The ${m.job} thanks you.`, 2200);
 }
 
 const interaction = new Interaction(world, player, scene, hud, {
@@ -889,6 +958,12 @@ const interaction = new Interaction(world, player, scene, hud, {
       // breaking a Notice Post takes its writing with it (the board mesh
       // follows on the next signBoards.sync)
       if (isSign(info.broken)) world.signs.delete(`${info.x},${info.y},${info.z}`);
+      // taking a Living Stead apart: its own walls (wreck) or a ripe crop
+      // from its patch (steal) — never a block the player placed themselves
+      if (info.broken != null && !info.wasPlaced && player.mode === "survival" &&
+          dim.id === "overworld") {
+        noteSteadDamage(info.x, info.y, info.z, info.broken);
+      }
       // breaking the slept-in Moss Cot unhooks the respawn anchor
       const sp = player.spawnPoint;
       if (info.broken === BED && sp &&
@@ -1155,6 +1230,7 @@ const interaction = new Interaction(world, player, scene, hud, {
   boats,
   carts,
   fishing,
+  onGiftMob: (m) => giftSteadfolk(m),
   // right-click a trader — the Peddler, or a Living Stead's steadfolk. Both
   // open the same trade window (hud.openTrade) with the day's three offers,
   // and both nurse a 60-second grudge from a kick. The steadfolk pull their
@@ -1167,6 +1243,7 @@ const interaction = new Interaction(world, player, scene, hud, {
       return;
     }
     if (m.stead) { openSteadTrade(m); return; }
+    // the Peddler's board (a wanderer: no stead, so no standing)
     hud.openTrade(dailyOffers(world.seed, sky.day), (offer) => {
       const leftover = executeTrade(offer, inventory); // -1 = can't pay
       if (leftover < 0) return false;
@@ -1339,11 +1416,25 @@ mobs.onBreed = () => {
   awardGleam(1);
   hud.announce("A Snufflet! A loaf in training.", 2600);
 };
-// a fallen steadfolk: mark its record dead (it stays gone) and mourn it
+// a fallen steadfolk: mark its record dead (it stays gone) and mourn it.
+// If the player's hand was on it (blame from a recent hit), the stead
+// remembers: a killing is the heaviest turn on the standing axis.
 mobs.onSteadfolkDeath = (m) => {
   if (m.record) m.record.dead = true;
   sfx.mourn();
-  hud.announce("A steadfolk falls. The stead is quieter now.", 3600);
+  const steadRec = steadRecOf(m);
+  if (m.blameT > 0 && steadRec && player.mode === "survival") {
+    applyStanding(steadRec, "kill", sky.day);
+    hud.announce("A steadfolk falls by your hand. The stead will not forget.", 4200);
+  } else {
+    hud.announce("A steadfolk falls. The stead is quieter now.", 3600);
+  }
+};
+// a player-landed blow on a resident: the stead takes note
+mobs.onPlayerStrike = (m) => {
+  if (!m.stead || player.mode !== "survival") return;
+  const steadRec = steadRecOf(m);
+  if (steadRec) announceStanding(applyStanding(steadRec, "hit", sky.day));
 };
 // the door-chime: a soft knock as a resident passes its own doorway
 mobs.onSteadKnock = () => sfx.creature("knock");
@@ -2189,7 +2280,12 @@ if (NO_LOCK) {
     steads,
     findNearestStead: (x, z) => findNearestStead(terrain, x, z),
     steadForChunk: (cx, cz) => steadForChunk(terrain, cx, cz),
-    steadOffers: (m, warmed) => steadOffers(m.steadSeed, m.resIdx, m.job, sky.day, warmed),
+    steadOffers: (m, standing) => steadOffers(m.steadSeed, m.resIdx, m.job, sky.day,
+      standing ?? standingOf(world.steads.get(m.steadKey))),
+    // standing (standing.js): the band table + the live aggregate
+    standing: { bandOf, standingOf, applyStanding, giftStanding,
+      global: () => globalStanding(world.steads), gift: (m) => giftSteadfolk(m),
+      partAt: (x, y, z, id) => steadPartAt(terrain, x, y, z, id) },
     tradeWithMob: (m) => interaction.onTradeMob(m),
     // wear/model refresh + third-person toggle, so tests can equip the
     // Wanderwing straight into a wear slot and see the model dress + spread

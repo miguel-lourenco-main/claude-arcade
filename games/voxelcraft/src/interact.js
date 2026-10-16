@@ -515,7 +515,8 @@ export class Interaction {
       popped = above;
       this.world.setBlock(t.x, t.y + 1, t.z, AIR);
     }
-    this.onEdit(affected, { ids: [t.id, popped], x: t.x, y: t.y, z: t.z, broken: t.id, popped });
+    this.onEdit(affected, { ids: [t.id, popped], x: t.x, y: t.y, z: t.z, broken: t.id, popped,
+      wasPlaced });
     this.onSound("break", t.id);
     this.particles.burst(t.x, t.y, t.z, this.avgColor[BLOCKS[t.id].tiles.side] || [0.5, 0.5, 0.5]);
 
@@ -634,6 +635,7 @@ export class Interaction {
     const affected = new Set();
     const lower = this.world.getBlock(t.x, lowerY, t.z);
     const upper = this.world.getBlock(t.x, lowerY + 1, t.z);
+    const wasPlaced = this.world.hasEdit(t.x, lowerY, t.z);
     if (isDoor(lower)) for (const c of this.world.setBlock(t.x, lowerY, t.z, AIR)) affected.add(c);
     if (isDoor(upper)) for (const c of this.world.setBlock(t.x, lowerY + 1, t.z, AIR)) affected.add(c);
     if (affected.size === 0) return;
@@ -646,7 +648,7 @@ export class Interaction {
     // popped is reported at the UPPER half's cell so main.js's sapling
     // bookkeeping (info.y + 1) stays true when the top half was the target
     this.onEdit([...affected], {
-      ids: [t.id, popped], x: t.x, y: lowerY + 1, z: t.z, broken: t.id, popped,
+      ids: [t.id, popped], x: t.x, y: lowerY + 1, z: t.z, broken: t.id, popped, wasPlaced,
     });
     this.onSound("break", t.id);
     this.particles.burst(t.x, t.y, t.z, this.avgColor[BLOCKS[t.id].tiles.side] || [0.5, 0.5, 0.5]);
@@ -928,6 +930,16 @@ export class Interaction {
     // berries (the bonding path — main.js owns that routing); a Tuftling
     // weighs a Silverfin. A mob in the ray eats the click, so nothing ever
     // plants or places THROUGH a creature.
+    // sneak + right-click a steadfolk: offer the held item as a GIFT (the
+    // standing path, standing.js). Only a steadfolk in the ray eats the
+    // sneak-click; anything else falls through to the sneak block routing.
+    if (this.mobs && this.player._sneaking && this.onGiftMob &&
+        this.player.mode === "survival") {
+      const eye = { x: this.player.pos.x, y: this.player.eyeY, z: this.player.pos.z };
+      const dir = this.player.lookDir();
+      const m = this.mobs.rayHit(eye, dir, this._entityClamp(eye, dir));
+      if (m && m.stead) { this.onGiftMob(m); return; }
+    }
     if (this.mobs && !this.player._sneaking) {
       const eye = { x: this.player.pos.x, y: this.player.eyeY, z: this.player.pos.z };
       const dir = this.player.lookDir();

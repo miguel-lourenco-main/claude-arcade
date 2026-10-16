@@ -2,6 +2,7 @@
 
 import { AIR, BLOCKS } from "./blocks.js";
 import { makeStack, stackToSave } from "./inventory.js";
+import { standingToSave, standingFromSave } from "./standing.js";
 
 // container slot -> save entry: tools keep wear as a third element and a
 // woven thread as a fourth [id, count, dur, mod] (additive — older loaders
@@ -204,14 +205,16 @@ export class World {
   }
 
   // Living Stead resident records (additive save field): [["cx,cz",
-  // [[job, homeIdx, hp, trades, tradeDay, dead], ...]], ...]. The stead's
-  // BLOCKS regenerate from the seed; this is only the mutable resident state
-  // (which are dead, their warmth, their hurt), keyed per stead.
+  // [[job, homeIdx, hp, trades, tradeDay, dead], ...], standing?], ...].
+  // The stead's BLOCKS regenerate from the seed; this is only the mutable
+  // state (which are dead, their trades, their hurt), keyed per stead. The
+  // optional third element is the stead's standing (standing.js) — absent
+  // in older saves, which load every stead at a neutral 0.
   serializeSteads() {
     return [...this.steads].map(([key, rec]) => [key, rec.residents.map((r) => [
       r.job, r.homeIdx, Math.max(0, Math.round(r.hp)),
       r.trades | 0, r.tradeDay | 0, r.dead ? 1 : 0,
-    ])]);
+    ]), standingToSave(rec)]);
   }
 
   loadSteads(arr) {
@@ -232,7 +235,11 @@ export class World {
           dead: dead === 1 || dead === true,
         });
       }
-      if (residents.length) this.steads.set(pair[0], { residents });
+      if (residents.length) {
+        const rec = { residents };
+        standingFromSave(rec, pair[2]);
+        this.steads.set(pair[0], rec);
+      }
     }
   }
 

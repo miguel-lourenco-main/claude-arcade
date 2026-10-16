@@ -39,6 +39,9 @@ const FEUD_RANGE = 24;      // mob-vs-mob grudges lapse beyond this
 // behavior: passive (flees when hurt) | hostile (chases in aggro range)
 //           ambush (motionless until close, then hostile) | neutral
 //           (retaliates when punched; contactDamage hurts on touch)
+// seconds a player-landed hit stays "on the player" for a following death
+const BLAME_SECONDS = 8;
+
 export const SPECIES = {
   snuffet: {
     name: "Snuffet", hp: 3, speed: 1.4, behavior: "passive", habitat: "meadow",
@@ -700,6 +703,7 @@ export class Mobs {
       contactCd: 0,
       angryT: 0,           // neutral retaliation window
       grudgeT: 0,          // peddler: seconds left refusing to trade
+      blameT: 0,           // seconds a player-landed hit is still "on" them
       callT: 4 + Math.random() * 10,
       onGround: false,
       hitWall: false,
@@ -1203,6 +1207,7 @@ export class Mobs {
       m.contactCd = Math.max(0, m.contactCd - dt);
       m.angryT = Math.max(0, m.angryT - dt);
       m.grudgeT = Math.max(0, m.grudgeT - dt);
+      m.blameT = Math.max(0, (m.blameT || 0) - dt);
       m.breedCd = Math.max(0, m.breedCd - dt);
       m.dimT = Math.max(0, m.dimT - dt);
       m.lungeCd = Math.max(0, m.lungeCd - dt);
@@ -1734,6 +1739,11 @@ export class Mobs {
       this._petTarget = m;
     }
     if (opts.dim) m.dimT = 4; // the Dusk Thread hangs the dark on THEM
+    // a PLAYER-landed hit (not a pet's, not a feuding mob's) is remembered
+    // for a few seconds, so a death that follows is laid at the player's
+    // feet — a steadfolk the dark took is mourned, not blamed (standing.js)
+    const byPlayer = !opts.byPet && !opts.attacker;
+    if (byPlayer) m.blameT = BLAME_SECONDS;
     m.hp -= dmg;
     m.hurtT = 0.3;
     if (opts.crit) m.critT = 0.22; // the burst cue: a quick scale-pop
@@ -1765,6 +1775,7 @@ export class Mobs {
       this._setGuard(m);
     }
     this.onMobHurt?.(!!opts.crit);
+    if (byPlayer) this.onPlayerStrike?.(m);
   }
 
   // a Festival Rocket's burst overhead: nearby PASSIVE mobs bolt for a moment,

@@ -864,7 +864,11 @@ export class Hud {
   // the Peddler's trade window: the day's three offers as clickable rows
   // (craft-row idiom) over the usual satchel + belt. `onTrade(offer)` does
   // the inventory work in main.js and returns whether the barter landed.
-  openTrade(offers, onTrade) {
+  // opts: { title, hint } — the header (defaults to the Peddler's own)
+  openTrade(offers, onTrade, opts = {}) {
+    document.getElementById("trade-title").textContent = opts.title || "The Peddler";
+    document.getElementById("trade-hint").textContent = opts.hint ||
+      "(three offers a day, take them or leave them \u2014 E to close)";
     this.tradeOpen = true;
     this._tradeOffers = offers;
     this._onTrade = onTrade;

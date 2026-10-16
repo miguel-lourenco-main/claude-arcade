@@ -233,6 +233,49 @@ async function saturation(page) {
   assert(/\nThe heartiest pot/.test(r.title), "the pottage's hover text says it keeps you full");
 }
 
+// travel to the nearest Living Stead and wait for a live resident; returns
+// true once window.__res holds one (a steadfolk mob)
+async function atStead(page) {
+  const ok = await page.eval(`(() => { const vc = window.voxelcraft;
+    const r = vc.teleportTo('stead'); vc.hud.paused && vc.hud.hidePause(); return r.ok; })()`);
+  if (!ok) return false;
+  return page.waitFor(`(() => { const vc = window.voxelcraft;
+    for (const [, act] of vc.steads.active) for (const e of act.entries)
+      if (vc.mobs.mobs.includes(e.mob)) { window.__res = e.mob; return true; }
+    return false; })()`, 40000);
+}
+
+// B2: standing — the trade window reads it, gifts raise it, a blow sinks it
+async function standing(page) {
+  console.log("\n== standing (B2)");
+  const live = await atStead(page);
+  assert(live, "a Living Stead's resident comes alive after the teleport");
+  if (!live) return;
+  const r = await page.eval(`(() => { const vc = window.voxelcraft, m = window.__res;
+    const S = vc.standing, rec = vc.world.steads.get(m.steadKey);
+    const out = { mode: vc.player.mode, start: S.standingOf(rec) };
+    vc.tradeWithMob(m);
+    out.title = document.getElementById('trade-title').textContent;
+    out.hint = document.getElementById('trade-hint').textContent;
+    vc.hud.closeTrade();
+    vc.inventory.set(vc.hud.selected, { id: 86, count: 3 });
+    S.gift(m);
+    out.afterGift = S.standingOf(rec);
+    out.left = (vc.inventory.get(vc.hud.selected) || { count: 0 }).count;
+    vc.mobs.strike(m, 1, vc.player.pos);
+    out.afterHit = S.standingOf(rec);
+    out.blame = m.blameT;
+    out.global = S.global();
+    return out; })()`);
+  assert(r.title === `The ${await page.eval("window.__res.job")}` && /standing: Neutral/.test(r.hint),
+    `the stead's trade window names the job and the standing ("${r.title}" ${r.hint})`);
+  assert(r.afterGift > r.start && (r.mode !== "survival" || r.left === 2),
+    `a sneak-gift raises standing (${r.start} -> ${r.afterGift}) and hands over one ingot (${r.left} left)`);
+  assert(r.mode !== "survival" || (Math.abs(r.afterHit - (r.afterGift - 10)) < 1e-9 && r.blame > 0),
+    `a player's blow sinks standing by 10 and lays blame (${r.afterHit})`);
+  assert(Number.isFinite(r.global), `the global aggregate is live (${r.global.toFixed(1)})`);
+}
+
 // ---------------------------------------------------------------------- main
 
 const hardTimeout = setTimeout(() => {
@@ -255,6 +298,7 @@ try {
     await rarity(page);
     await crouch(page);
     await saturation(page);
+    await standing(page);
   }
   console.log("\n== console errors / exceptions");
   assert(consoleErrors.length === 0,
