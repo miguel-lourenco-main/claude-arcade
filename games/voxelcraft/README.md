@@ -250,6 +250,8 @@ moods with crossfades, plus rain and Prowl-pulse overlays).
   humans alike), the save contract, the naming contract, the wave cadence.
 - [DIRECTION.md](DIRECTION.md): pillars, what the game is and isn't, roadmap.
 - [LORE.md](LORE.md): the Upturn, its folk, and the field glossary.
+- [UPTURN-ARC.md](UPTURN-ARC.md): DRAFT proposal for the playable arc
+  (cities, story beats, an ending), awaiting the owner's voice.
 - `test/`: node logic suites (`*.test.mjs`) and a headless-Chrome suite
   (`browser.test.mjs`). Run them with `node run-tests.mjs voxelcraft` from the
   repo root.
