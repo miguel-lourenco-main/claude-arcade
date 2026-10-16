@@ -19,7 +19,7 @@ import { reshapeRails, railShape } from "./rails.js";
 import { Fishing } from "./fishing.js";
 import { SignBoards } from "./signs.js";
 import { craft } from "./craft.js";
-import { dailyOffers, executeTrade } from "./trade.js";
+import { dailyOffers, executeTrade, canAfford } from "./trade.js";
 import { makeKiln, tickKilns } from "./kiln.js";
 import { Gleam } from "./gleam.js";
 import {
@@ -50,7 +50,7 @@ import { findNearestRuin, ruinForChunk } from "./ruins.js";
 import { findNearestDelve, delveForChunk } from "./delvings.js";
 import {
   Steads, findNearestStead, steadForChunk, steadOffers, recordTrade, steadPartAt,
-  seedSteadState,
+  seedSteadState, JOB_GOODS,
 } from "./steads.js";
 import {
   buildMaterials, meshChunk, disposeChunkMeshes, setDayLight, buildBlockGeometry,
@@ -60,7 +60,10 @@ import { raycast } from "./interact.js";
 import { Player } from "./player.js";
 import { Interaction } from "./interact.js";
 import { Hud } from "./hud.js";
-import { Sky } from "./sky.js";
+import { Sky, DAY_LENGTH } from "./sky.js";
+import {
+  stockLeft, takeStock, traderLoot, ledgerToSave, ledgerFromSave,
+} from "./stock.js";
 import { Rain } from "./rain.js";
 import { Sfx } from "./audio.js";
 import { Music } from "./music.js";
@@ -318,6 +321,15 @@ if (save && save.ruinsU) uWorld.loadRuins(save.ruinsU);
 if (save && Array.isArray(save.bondlings)) mobs.loadBondlings(save.bondlings);
 // additive field: tamed Tuftlings — the other creatures that persist
 if (save && Array.isArray(save.pets)) mobs.loadPets(save.pets);
+// the Peddler's day (stock.js): today's shelf, and how long he stays away
+// after being felled. Additive — absent in older saves (a full pack).
+const peddlerState = { day: -1, ledger: {}, absentUntil: -1 };
+if (save && Array.isArray(save.peddler)) {
+  const [day, ledger, absentUntil] = save.peddler;
+  if (Number.isInteger(day)) peddlerState.day = day;
+  peddlerState.ledger = ledgerFromSave(ledger);
+  if (Number.isInteger(absentUntil)) peddlerState.absentUntil = absentUntil;
+}
 if (save && save.signs) world.loadSigns(save.signs); // additive v2 field
 // additive v2 field: ruin chunks whose loot was already dealt — must load
 // before any chunk generates, or a looted stead would re-seed its chest
@@ -860,6 +872,45 @@ function noteSteadDamage(x, y, z, brokenId) {
   announceStanding(applyStanding(world.steads.get(plan.key), kind, sky.day));
 }
 
+// world seconds since day 0 — the clock trader stock restocks against
+const worldNow = () => (sky.day + sky.time) * DAY_LENGTH;
+
+// the Peddler is a new wanderer every day, with a new pack
+function peddlerLedger() {
+  if (peddlerState.day !== sky.day) { peddlerState.day = sky.day; peddlerState.ledger = {}; }
+  return peddlerState.ledger;
+}
+
+// stamp each offer with what's left on the trader's shelf (the HUD greys a
+// sold-out line); mutating in place keeps the window's rows live
+function stampStock(offers, ledger) {
+  const now = worldNow();
+  for (const o of offers) o.stockLeft = stockLeft(ledger, o.get[0], now);
+  return offers;
+}
+
+// one barter against a finite shelf: affordable first, then the stock,
+// then the goods change hands. Returns true when the trade happened.
+function tradeFromShelf(offer, ledger) {
+  if (!canAfford(offer, inventory)) return false;
+  if (!takeStock(ledger, offer.get[0], worldNow())) {
+    hud.announce("Sold out — that comes back in time.", 1800);
+    return false;
+  }
+  const leftover = executeTrade(offer, inventory);
+  if (leftover > 0) spillStack({ id: offer.get[0], count: leftover });
+  offer.stockLeft = stockLeft(ledger, offer.get[0], worldNow());
+  return true;
+}
+
+// the raider path: a trader felled by the player drops its pocket goods and
+// a share of its unsold stock where it fell (stock.js traderLoot)
+function dropTraderLoot(m, job, sells, ledger) {
+  for (const [id, n] of traderLoot(job, sells, ledger || {}, worldNow())) {
+    drops.spawn(m.x, m.y + 0.4, m.z, id, n);
+  }
+}
+
 // a steadfolk's trade window: the day's offers from its JOB table, priced by
 // the stead's STANDING (standing.js — the old per-day warmth lives at its
 // positive end). A hostile stead won't deal at all; a trade raises standing
@@ -876,10 +927,11 @@ function openSteadTrade(m) {
   const open = () => {
     const b = bandOf(standingOf(steadRec));
     const offers = steadOffers(m.steadSeed, m.resIdx, m.job, day, standingOf(steadRec));
+    if (rec && !rec.stock) rec.stock = {};
+    const ledger = rec ? rec.stock : {};
+    stampStock(offers, ledger);
     hud.openTrade(offers, (offer) => {
-      const leftover = executeTrade(offer, inventory); // -1 = can't pay
-      if (leftover < 0) return false;
-      if (leftover > 0) spillStack({ id: offer.get[0], count: leftover });
+      if (!tradeFromShelf(offer, ledger)) return false;
       sfx.peddlerHm();
       if (rec) recordTrade(rec, day);
       const res = steadRec ? applyStanding(steadRec, "trade", day) : null;
@@ -1244,10 +1296,9 @@ const interaction = new Interaction(world, player, scene, hud, {
     }
     if (m.stead) { openSteadTrade(m); return; }
     // the Peddler's board (a wanderer: no stead, so no standing)
-    hud.openTrade(dailyOffers(world.seed, sky.day), (offer) => {
-      const leftover = executeTrade(offer, inventory); // -1 = can't pay
-      if (leftover < 0) return false;
-      if (leftover > 0) spillStack({ id: offer.get[0], count: leftover });
+    const ledger = peddlerLedger();
+    hud.openTrade(stampStock(dailyOffers(world.seed, sky.day), ledger), (offer) => {
+      if (!tradeFromShelf(offer, ledger)) return false;
       sfx.peddlerHm(); // satisfied
       return true;
     });
@@ -1425,9 +1476,27 @@ mobs.onSteadfolkDeath = (m) => {
   const steadRec = steadRecOf(m);
   if (m.blameT > 0 && steadRec && player.mode === "survival") {
     applyStanding(steadRec, "kill", sky.day);
+    // the raider's take: what it carried, and half its unsold shelf
+    const goods = JOB_GOODS[m.job] || JOB_GOODS.grower;
+    dropTraderLoot(m, m.job, goods.sells, m.record && m.record.stock);
     hud.announce("A steadfolk falls by your hand. The stead will not forget.", 4200);
   } else {
     hud.announce("A steadfolk falls. The stead is quieter now.", 3600);
+  }
+};
+// a fallen Peddler: by the player's hand, his pack spills (today's goods,
+// half of what's unsold) and no peddler walks these roads for a week; taken
+// by the dark, he's simply mourned
+const PEDDLER_ABSENCE_DAYS = 7;
+mobs.onTraderDeath = (m) => {
+  sfx.mourn();
+  if (m.blameT > 0 && player.mode === "survival") {
+    const sells = dailyOffers(world.seed, sky.day).map((o) => o.get[0]);
+    dropTraderLoot(m, "peddler", sells, peddlerLedger());
+    peddlerState.absentUntil = sky.day + PEDDLER_ABSENCE_DAYS;
+    hud.announce("The Peddler falls by your hand. The roads will be emptier for it.", 4200);
+  } else {
+    hud.announce("The Peddler is gone. The roads are quieter.", 3600);
   }
 };
 // a player-landed blow on a resident: the stead takes note
@@ -1623,6 +1692,8 @@ const stopAutosave = startAutosave(() => writeSave(dims.overworld.world, player,
   music: [music.enabled ? 1 : 0, Math.round(music.volume * 100) / 100],
   // additive: Gleam [jars, progress] — absent in older saves (a fresh jar)
   gleam: gleam.serialize(),
+  // additive: the Peddler's day [day, stock ledger, absent-until day]
+  peddler: [peddlerState.day, ledgerToSave(peddlerState.ledger), peddlerState.absentUntil],
   // additive: the Whims in progress [[id, secondsLeft], ...]
   effects: [...player.effects].map(([id, t]) => [id, Math.round(t * 10) / 10]),
   // additive: tamed Tuftlings [[x, y, z, hp, stay], ...]
@@ -2003,6 +2074,7 @@ function tick(now) {
       }
       return accepted; // a full inventory keeps the rest on the ground
     });
+    mobs.peddlerAway = sky.day < peddlerState.absentUntil;
     mobs.update(frameDt, { world, player, terrain, night: sky.lightLevel < 0.45, tod: sky.time });
     // the overworld's own institutions sleep while the player is under the
     // other sky: steads/prowl/meteors captured the overworld world+terrain

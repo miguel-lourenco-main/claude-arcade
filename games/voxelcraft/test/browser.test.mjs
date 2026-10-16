@@ -276,6 +276,38 @@ async function standing(page) {
   assert(Number.isFinite(r.global), `the global aggregate is live (${r.global.toFixed(1)})`);
 }
 
+// B4: finite stock on the board, and the raider's fork (run after standing,
+// on the same resident)
+async function lootAndStock(page) {
+  console.log("\n== trader stock + the raider path (B4)");
+  const alive = await page.eval("!!window.__res && window.voxelcraft.mobs.mobs.includes(window.__res)");
+  if (!alive) { assert(false, "the probe resident is still alive for B4"); return; }
+  const r = await page.eval(`(() => { const vc = window.voxelcraft, m = window.__res;
+    m.grudgeT = 0;
+    const rec = vc.world.steads.get(m.steadKey);
+    rec.standing = 0; // back to neutral so the window opens
+    vc.tradeWithMob(m);
+    const rows = [...document.querySelectorAll('#trade-list .craft-row small')].map((e) => e.textContent);
+    vc.hud.closeTrade();
+    const before = vc.drops.drops.length;
+    window.__before = { drops: before, standing: rec.standing };
+    vc.mobs.strike(m, 100, vc.player.pos);
+    return { rows, mode: vc.player.mode }; })()`);
+  assert(r.rows.length >= 3 && r.rows.every((t) => / left$| sold out$/.test(t)),
+    `every board line shows its shelf (${r.rows[0]})`);
+  const died = await page.waitFor("!window.voxelcraft.mobs.mobs.includes(window.__res)", 5000);
+  assert(died, "a lethal blow fells the resident");
+  const after = await page.eval(`(() => { const vc = window.voxelcraft, m = window.__res;
+    const rec = vc.world.steads.get(m.steadKey);
+    return { drops: vc.drops.drops.length, standing: rec.standing, dead: m.record.dead }; })()`);
+  const b = await page.eval("window.__before");
+  assert(after.dead, "the felled resident is marked dead (it stays gone)");
+  if (r.mode === "survival") {
+    assert(after.drops > b.drops, `the raider's take spills on the ground (${after.drops - b.drops} drops)`);
+    assert(after.standing <= b.standing - 40 + 1e-9, `and the stead remembers (standing ${b.standing} -> ${after.standing})`);
+  }
+}
+
 // ---------------------------------------------------------------------- main
 
 const hardTimeout = setTimeout(() => {
@@ -299,6 +331,7 @@ try {
     await crouch(page);
     await saturation(page);
     await standing(page);
+    await lootAndStock(page);
   }
   console.log("\n== console errors / exceptions");
   assert(consoleErrors.length === 0,

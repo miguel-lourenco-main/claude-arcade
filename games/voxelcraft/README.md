@@ -50,6 +50,11 @@ canvas atlas at boot, and every sound is synthesized with WebAudio.
   kicks, killings, pulled crops and taken-apart walls sink it. A friendly
   stead prices every barter lower and deals a fourth line; a wary one
   asks more and steps away from you; a hostile one won't deal at all.
+  Traders' goods are **finite**: each line holds a few trades (fewer for
+  rarer goods) and restocks over time (slower for rarer goods). Friend or
+  raider is your call: a trader felled by your hand drops its pockets and
+  half its unsold stock, its stead's standing craters, and the dead stay
+  dead. Fell the Peddler and no peddler walks the roads for a week.
 - **The Undersky** — a second dimension: the drowned old floor of the
   flip, reached through a **Cinder Door** (below). Permanent dusk under
   close bright stars, pearlsand dunes over slate, glowing **Starkelp**,
@@ -247,6 +252,7 @@ src/ruins.js       the Steads-Before: seeded surface ruins + loot
 src/delvings.js    the Delvings-Under: buried galleries + loot
 src/steads.js      the Living Steads: intact homesteads + resident manager
 src/standing.js    Standing: each stead's reputation axis, bands, gifts, turns
+src/stock.js       trader stock (rarity-driven cap + restock) and trader loot
 src/player.js      pointer-lock look, AABB physics, survival, the Whims
 src/player-model.js the Wanderling body, held tools, armor overlays
 src/player-viewer.js the Satchel's spinnable model viewer

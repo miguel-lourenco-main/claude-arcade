@@ -898,7 +898,10 @@ export class Hud {
     const list = document.getElementById("trade-list");
     list.innerHTML = "";
     for (const offer of this._tradeOffers) {
-      const ok = canAfford(offer, this.inventory);
+      // stockLeft (stock.js, stamped by main.js): 0 = sold out — the row
+      // stays on the board, greyed, until the shelf restocks
+      const soldOut = offer.stockLeft === 0;
+      const ok = !soldOut && canAfford(offer, this.inventory);
       const row = document.createElement("div");
       row.className = "craft-row" + (ok ? "" : " uncraftable");
 
@@ -911,8 +914,10 @@ export class Hud {
       const wants = offer.give
         .map(([id, n]) => `${n}× ${BLOCKS[id].name}`)
         .join(" + ");
+      const shelf = soldOut ? " — sold out"
+        : Number.isFinite(offer.stockLeft) ? ` — ${offer.stockLeft} left` : "";
       label.innerHTML =
-        `<b>${offer.get[1]}× ${BLOCKS[offer.get[0]].name}</b><small>for ${wants}</small>`;
+        `<b>${offer.get[1]}× ${BLOCKS[offer.get[0]].name}</b><small>for ${wants}${shelf}</small>`;
       row.appendChild(label);
 
       if (ok) {

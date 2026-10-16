@@ -321,6 +321,7 @@ export function seedSteadState(world, plan) {
     residents: plan.residents.map((r) => ({
       job: r.job, homeIdx: r.homeIdx, hp: STEADFOLK_HP,
       trades: 0, tradeDay: -1, dead: false,
+      stock: {}, // stock.js ledger — empty = a full shelf
     })),
   });
 }

@@ -175,6 +175,7 @@ export class Mobs {
     this.onDrop = null;      // (x, y, z, id, n)
     this.onSound = null;     // (soundKind)
     this.onBondlingDeath = null; // (mob) => the mourning chime + text
+    this.peddlerAway = false;    // true: the Peddler stays off the roads
     // the per-feed bond roll (1-in-3, MC-style repeat feeding). A mutable
     // property so the test handle can pin it to 1 (or 0) deterministically.
     this.bondChance = 1 / 3;
@@ -996,7 +997,9 @@ export class Mobs {
 
     if (!night && topId === GRASS) {
       candidates.push("snuffet");
-      candidates.push("peddler");  // rare: rareChance thins this out below
+      // rare: rareChance thins this out below — and none at all for a week
+      // after one was felled by the player (main.js sets peddlerAway)
+      if (!this.peddlerAway) candidates.push("peddler");
       candidates.push("tuftling"); // rare too, and only one wild at a time
     }
     if (night && isSolid(topId)) candidates.push("murkling");
@@ -1169,6 +1172,13 @@ export class Mobs {
         // it stays gone across saves, and mourns it like a bondling
         if (m.stead) {
           this.onSteadfolkDeath?.(m);
+          this._remove(i);
+          continue;
+        }
+        // a fallen Peddler: no fixed drops — main.js decides (the raider
+        // path drops his stock when the player's hand was on him)
+        if (spec.trades) {
+          this.onTraderDeath?.(m);
           this._remove(i);
           continue;
         }
