@@ -30,7 +30,10 @@ canvas atlas at boot, and every sound is synthesized with WebAudio.
   faint self-lit moss that presses onto any solid face — floor, wall, or
   ceiling). Ores run coal → **sky-iron** (below y28) → **gloamgold** (below
   y14, seamed through the lava's territory), plus a vanishingly rare buried
-  starstone in the deep cave skin.
+  starstone in the deep cave skin. Besides the long noise seams, each ore
+  also turns up in counted **veins** (blobs whose biggest size shrinks
+  exponentially with the ore's rarity: coal to ~9, sky-iron ~7, gloamgold
+  ~5).
 - **Structures** — **the Steads-Before** (surface homestead ruins: collapsed
   cottages, leaning watch posts, root cellars) and **the Delvings-Under**
   (buried timbered mining galleries with rung shafts up to collapsed
@@ -244,6 +247,7 @@ src/blocks.js      block/item registry (tiles, buckets, tools, armor, food)
 src/rarity.js      rarity -> value: every item's shared worth (seeded + overridable)
 src/world.js       chunk store, get/set, emitters, persistent edit overlay
 src/terrain.js     heightmap/biomes/caves/ores/lava — pure fn of (x,z,seed)
+src/veins.js       ore veins: per-cell seeded blobs, rarity-capped sizes
 src/undersky.js    the far side: pearlsand dunes, pearl-beds, starkelp
 src/sunken.js      the Sunken Steads: drowned wrecks + once-per-world loot
 src/portal.js      the Cinder Door: frame scan, film collapse, arrivals
