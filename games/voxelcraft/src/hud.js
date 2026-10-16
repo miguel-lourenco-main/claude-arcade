@@ -222,6 +222,8 @@ export class Hud {
     this.atlas = atlasCanvas;
     this.onResume = opts.onResume;
     this.onReset = opts.onReset;
+    this.onExportSave = opts.onExportSave; // () => download the save file
+    this.onImportSave = opts.onImportSave; // (text, name) => validate + load
     this.onTeleport = opts.onTeleport;             // (kind) => {ok, message}
     this.onToggleMovement = opts.onToggleMovement; // () => new mode string
     this.onSensitivity = opts.onSensitivity;       // (multiplier) => void
@@ -287,6 +289,17 @@ export class Hud {
     document.getElementById("resume").addEventListener("click", () => this.onResume());
     document.getElementById("reset").addEventListener("click", () => {
       if (confirm("Delete this world and generate a new one?")) this.onReset();
+    });
+    // save files: export downloads the current world; import picks a file,
+    // and main.js validates it before anything is overwritten
+    document.getElementById("save-export").addEventListener("click", () => this.onExportSave());
+    const fileEl = document.getElementById("save-file");
+    document.getElementById("save-import").addEventListener("click", () => fileEl.click());
+    fileEl.addEventListener("change", () => {
+      const f = fileEl.files && fileEl.files[0];
+      fileEl.value = "";
+      if (!f) return;
+      f.text().then((text) => this.onImportSave(text, f.name));
     });
 
     this.movementBtn = document.getElementById("movement-toggle");
@@ -564,6 +577,11 @@ export class Hud {
 
   setMusicToggle(on) {
     this.musicBtn.textContent = on ? "Music: On" : "Music: Off";
+  }
+
+  // the pause menu's save-file line (export/import results and errors)
+  setSaveStatus(text) {
+    document.getElementById("save-status").textContent = text;
   }
 
   _buildTeleports() {

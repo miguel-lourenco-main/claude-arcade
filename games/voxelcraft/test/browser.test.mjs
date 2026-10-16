@@ -308,6 +308,41 @@ async function lootAndStock(page) {
   }
 }
 
+// B6: export the live world to a file, import it back over a cleared
+// browser, and check the reloaded world is the same one (this reloads the
+// page, so it runs last). Also proves the additive fields this wave added
+// (saturation, standing, stock, dead residents) survive a real save.
+async function saveFiles(page) {
+  console.log("\n== save export/import (B6)");
+  const before = await page.eval(`(() => { const vc = window.voxelcraft;
+    vc.player.hunger = 15; vc.player.saturation = 7.25;
+    vc.inventory.set(20, { id: 98, count: 5 }); // starstone in the satchel
+    const steads = [...vc.world.steads].map(([k, r]) => [k, r.standing, r.residents.map((x) => x.dead)]);
+    const f = vc.exportSave();
+    window.__file = f ? f.text : null;
+    return { seed: vc.world.seed, name: f && f.name, steads,
+      status: document.getElementById('save-status').textContent }; })()`);
+  assert(/^voxelcraft-\d+-day\d+-\d{4}-\d\d-\d\d\.json$/.test(before.name || ""), `export names the file (${before.name})`);
+  assert(/Saved to/.test(before.status), "the pause menu reports the export");
+  const bad = await page.eval("window.voxelcraft.parseSaveFile('{nope').ok");
+  assert(bad === false, "a damaged file is refused before anything is touched");
+  await page.eval(`(() => { const text = window.__file; localStorage.clear();
+    window.__preImport = true; setTimeout(() => window.voxelcraft.importSaveText(text), 0); return true; })()`);
+  const back = await page.waitFor("!window.__preImport && !!(window.voxelcraft && window.voxelcraft.world.chunks.size > 4)", 45000);
+  assert(back, "importing reloads into the game");
+  if (!back) return;
+  const after = await page.eval(`(() => { const vc = window.voxelcraft;
+    const steads = [...vc.world.steads].map(([k, r]) => [k, r.standing, r.residents.map((x) => x.dead)]);
+    const s = vc.inventory.get(20);
+    return { seed: vc.world.seed, sat: vc.player.saturation, hunger: vc.player.hunger, steads,
+      star: s ? [s.id, s.count] : null }; })()`);
+  assert(after.seed === before.seed, "the same world (seed) came back");
+  assert(Math.abs(after.sat - 7.25) < 1e-6 && after.hunger === 15, `hunger + hidden saturation survive (${after.hunger}/${after.sat})`);
+  assert(after.star && after.star[0] === 98 && after.star[1] === 5, "the satchel came back");
+  assert(JSON.stringify(after.steads) === JSON.stringify(before.steads),
+    `every stead's standing and its dead came back (${JSON.stringify(after.steads).slice(0, 80)})`);
+}
+
 // ---------------------------------------------------------------------- main
 
 const hardTimeout = setTimeout(() => {
@@ -332,6 +367,7 @@ try {
     await saturation(page);
     await standing(page);
     await lootAndStock(page);
+    await saveFiles(page); // reloads the page: keep last
   }
   console.log("\n== console errors / exceptions");
   assert(consoleErrors.length === 0,

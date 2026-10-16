@@ -67,7 +67,9 @@ import {
 import { Rain } from "./rain.js";
 import { Sfx } from "./audio.js";
 import { Music } from "./music.js";
-import { loadSave, writeSave, clearSave, startAutosave } from "./save.js";
+import {
+  loadSave, writeSave, clearSave, startAutosave, exportSaveFile, parseSaveFile, importSave,
+} from "./save.js";
 import { resolveRarity, rarityOf, valueOf, rarityTier } from "./rarity.js";
 import {
   applyStanding, bandOf, standingOf, giftStanding, globalStanding, DAILY_GAIN_CAP,
@@ -668,6 +670,10 @@ function adjustToClearGround(pos) {
 const hud = new Hud(atlas.canvas, {
   onResume: () => requestLock(),
   onReset: () => { stopAutosave(); clearSave(); location.reload(); },
+  // save files (save.js): export writes a fresh save first so the file is
+  // this very moment; import validates, confirms, then swaps and reloads
+  onExportSave: () => exportSaveNow(),
+  onImportSave: (text, name) => importSaveText(text, name),
   onTeleport: teleportTo,
   onToggleMovement: () => {
     player.moveMode = player.moveMode === "static" ? "camera" : "static";
@@ -1649,7 +1655,7 @@ dim.cartsData = null;
 // the save's `world` is ALWAYS the overworld instance — never the live
 // binding, or a save written under the Undersky would pour its edits into
 // the overworld's fields. The far side rides its own *U extras below.
-const stopAutosave = startAutosave(() => writeSave(dims.overworld.world, player, sky, hud, inventory, {
+const saveNow = () => writeSave(dims.overworld.world, player, sky, hud, inventory, {
   saplings: [...saplings].map(([key, due]) => {
     const [x, y, z] = key.split(",").map(Number);
     return [x, y, z, Math.max(1, due - growthSeconds)];
@@ -1698,7 +1704,42 @@ const stopAutosave = startAutosave(() => writeSave(dims.overworld.world, player,
   effects: [...player.effects].map(([id, t]) => [id, Math.round(t * 10) / 10]),
   // additive: tamed Tuftlings [[x, y, z, hp, stay], ...]
   pets: mobs.serializePets(),
-}));
+});
+const stopAutosave = startAutosave(saveNow);
+
+// Export save: write a fresh save (so the file is this very moment), then
+// hand it to the browser as a download
+function exportSaveNow() {
+  saveNow();
+  const file = exportSaveFile();
+  if (!file) { hud.setSaveStatus("Nothing to export yet."); return null; }
+  const url = URL.createObjectURL(new Blob([file.text], { type: "application/json" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = file.name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  hud.setSaveStatus(`Saved to ${file.name}`);
+  return file;
+}
+
+// Import save: validate first (nothing is touched on a bad file), confirm the
+// overwrite, then swap the save and reload — the Reset-world sequence, with
+// the autosave stopped so the unload hook can't write the old world back
+function importSaveText(text, name = "the file", { confirmed = false } = {}) {
+  const res = parseSaveFile(text);
+  if (!res.ok) { hud.setSaveStatus(res.error); return res; }
+  if (!confirmed && !confirm(`Load the world from ${name}? It replaces this world — export first to keep it.`)) {
+    hud.setSaveStatus("Import cancelled.");
+    return { ok: false, error: "cancelled" };
+  }
+  stopAutosave();
+  importSave(res.save);
+  location.reload();
+  return res;
+}
 
 // --- held item (first-person hand) — its own scene + depth-cleared pass ------
 
@@ -2354,6 +2395,11 @@ if (NO_LOCK) {
     steadForChunk: (cx, cz) => steadForChunk(terrain, cx, cz),
     steadOffers: (m, standing) => steadOffers(m.steadSeed, m.resIdx, m.job, sky.day,
       standing ?? standingOf(world.steads.get(m.steadKey))),
+    // save files: export (returns {name, text}) and a confirmed import
+    exportSave: () => exportSaveNow(),
+    importSaveText: (text) => importSaveText(text, "test", { confirmed: true }),
+    parseSaveFile,
+    saveNow: () => saveNow(),
     // standing (standing.js): the band table + the live aggregate
     standing: { bandOf, standingOf, applyStanding, giftStanding,
       global: () => globalStanding(world.steads), gift: (m) => giftSteadfolk(m),

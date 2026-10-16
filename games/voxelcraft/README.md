@@ -286,8 +286,13 @@ src/sky.js         day/night lights, stars, clouds, fog, weather machine
 src/rain.js        rain/snow streak rendering + drift settling support
 src/audio.js       WebAudio synthesized SFX
 src/music.js       the Murmur: generative ambient moods
-src/save.js        localStorage save/load (additive fields, v1 migration)
+src/save.js        localStorage save/load (additive fields, v1 migration) + save files
 ```
+
+**Save files** — the pause menu's *Export save* downloads the current world
+as a plain JSON file (`voxelcraft-<seed>-day<n>-<date>.json`); *Import save*
+loads one back (validated first, confirmed, then the page reloads into it),
+so a world travels to any browser that has the site and the file.
 
 All world features (height, biome, trees, ores, ruins, delvings, pearl-beds)
 are pure functions of world coordinates and the seed, so chunks generate
