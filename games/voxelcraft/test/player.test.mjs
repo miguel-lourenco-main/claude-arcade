@@ -145,4 +145,26 @@ section("hunger costs: jumping is cheaper than it was");
   check(spent > 0.05 && spent < 0.07, `a standing jump costs ~0.06 hunger (got ${spent.toFixed(4)})`);
 }
 
+section("swimming: the water always pulls you down; Space is the counter");
+{
+  const cells = {};
+  for (let x = -30; x <= 30; x++) for (let z = -30; z <= 30; z++) for (let y = 1; y <= 20; y++) cells[`${x},${y},${z}`] = B.WATER;
+  const swim = (keys, seconds) => {
+    const p = new Player(fakeWorld(cells));
+    p.pos.x = 0.5; p.pos.y = 10; p.pos.z = 0.5; p.pitch = 0;
+    for (const k of keys) p.keys.add(k);
+    const y0 = p.pos.y;
+    run(p, seconds);
+    return p.pos.y - y0;
+  };
+  const stroking = swim(["KeyW"], 3);
+  check(stroking < -1, `stroking level still drifts down (${stroking.toFixed(2)} over 3 s)`);
+  const idle = swim([], 3);
+  check(idle < stroking, `idle sinks faster than stroking (${idle.toFixed(2)})`);
+  const rising = swim(["Space"], 2);
+  check(rising > 1.5, `Space rises against the pull (${rising.toFixed(2)} over 2 s)`);
+  const both = swim(["KeyW", "Space"], 2);
+  check(both > 0.5, `stroking with Space held still rises (${both.toFixed(2)})`);
+}
+
 done();

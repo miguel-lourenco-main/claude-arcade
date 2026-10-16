@@ -28,7 +28,13 @@ const FLY_SPEED = 11;
 const FLY_SPRINT_SPEED = 22;
 const SWIM_SPEED = 2.2;
 const SWIM_SPRINT_SPEED = 3.9;
-const SWIM_UP_MAX = 3.5;
+const SWIM_UP_MAX = 3.0;          // ceiling on upward swim speed (was 3.5)
+// the water's pull: water has no buoyancy in the Upturn, so a swimmer always
+// drifts down — even while stroking along. Staying up is Space (or looking
+// up as you swim); idle, the sink deepens toward SWIM_IDLE_SINK.
+const SWIM_DRIFT = 0.6;           // bl/s of downward drift folded into every stroke
+const SWIM_IDLE_SINK = 1.2;       // bl/s terminal sink with no input at all
+const SWIM_IDLE_ACCEL = 3;        // bl/s² toward that idle sink
 const WATER_EXIT_BOOST = 6;       // upward kick when swimming into a bank
 const LADDER_CLIMB = 2.3;         // blocks/s up (forward/jump) or down (back)
 const LADDER_SLIDE = 0.8;         // idle drift down the rungs (sneak grips: none)
@@ -642,7 +648,8 @@ export class Player {
       if (len > 1) { tx /= len; ty /= len; tz /= len; }
       const accel = ACCEL_WATER * dt;
       const dvx = tx * speed - this.vel.x;
-      const dvy = ty * speed - this.vel.y;
+      // the drift is part of the target, so the stroke itself can't cancel it
+      const dvy = ty * speed - SWIM_DRIFT - this.vel.y;
       const dvz = tz * speed - this.vel.z;
       const d = Math.hypot(dvx, dvy, dvz);
       if (d > 1e-9) {
@@ -650,7 +657,7 @@ export class Player {
         this.vel.x += dvx * s; this.vel.y += dvy * s; this.vel.z += dvz * s;
       }
       if (!hasInput && up === 0) {
-        this.vel.y = Math.max(-1.2, this.vel.y - 3 * dt); // idle sink
+        this.vel.y = Math.max(-SWIM_IDLE_SINK, this.vel.y - SWIM_IDLE_ACCEL * dt); // idle sink
       }
       this.vel.y = Math.max(-4.2, Math.min(Math.max(SWIM_UP_MAX, speed), this.vel.y));
       // boost out of the water at a bank: the jump path works from the

@@ -65,6 +65,8 @@ canvas atlas at boot, and every sound is synthesized with WebAudio.
   and jumping eat, and a hearty cooked meal holds you far longer than a
   handful of berries), drowning with an air meter, fall damage, cactus, void,
   lava burns, starvation (gnaws to half a heart), slow well-fed regen.
+  Water holds nobody up: a swimmer always drifts down, even mid-stroke,
+  and Space is how you stay at the surface.
 - **Tools & tiers** — the Cracker (pick), Hewer (axe), Scoop (shovel), Shiv
   (blade), and **Furrower** (hoe) in plank → stone → sky-iron → **gloamgold**
   tiers, plus the meteor-forged **Star-Edge Shiv**. Per-instance durability;
