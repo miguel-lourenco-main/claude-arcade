@@ -598,6 +598,50 @@ export class Hud {
     this.musicBtn.textContent = on ? "Music: On" : "Music: Off";
   }
 
+  // the errand panel in a steadfolk's window (quests.js): the ask, its
+  // status, and one button (accept / hand in), plus abandon once taken
+  _renderErrand(e) {
+    const el = document.getElementById("trade-errand");
+    el.innerHTML = "";
+    el.classList.toggle("hidden", !e);
+    if (!e) return;
+    const text = document.createElement("div");
+    text.className = "errand-text";
+    text.textContent = `\u201C${e.text}\u201D`;
+    const status = document.createElement("small");
+    status.textContent = e.status || "";
+    el.append(text, status);
+    const row = document.createElement("div");
+    row.className = "errand-buttons";
+    if (e.action) {
+      const b = document.createElement("button");
+      b.className = "secondary";
+      b.textContent = e.action === "accept" ? "Take the errand" : "Hand it in";
+      b.addEventListener("mousedown", (ev) => { ev.preventDefault(); e.onAction(); });
+      row.appendChild(b);
+    }
+    if (e.onAbandon) {
+      const b = document.createElement("button");
+      b.className = "secondary";
+      b.textContent = "Let it go";
+      b.addEventListener("mousedown", (ev) => { ev.preventDefault(); e.onAbandon(); });
+      row.appendChild(b);
+    }
+    el.appendChild(row);
+  }
+
+  // the pause menu's errand journal: one line per errand being carried
+  setJournal(lines) {
+    document.getElementById("journal").classList.toggle("hidden", !lines.length);
+    const list = document.getElementById("journal-list");
+    list.innerHTML = "";
+    for (const line of lines) {
+      const d = document.createElement("div");
+      d.textContent = line;
+      list.appendChild(d);
+    }
+  }
+
   // the pause menu's save-file line (export/import results and errors)
   setSaveStatus(text) {
     document.getElementById("save-status").textContent = text;
@@ -1034,10 +1078,14 @@ export class Hud {
   // (craft-row idiom) over the usual satchel + belt. `onTrade(offer)` does
   // the inventory work in main.js and returns whether the barter landed.
   // opts: { title, hint } — the header (defaults to the Peddler's own)
+  // opts.greeting: a line of dialogue; opts.errand: the giver's errand panel
+  //   { text, status, action: "accept" | "handin" | null, onAction, onAbandon }
   openTrade(offers, onTrade, opts = {}) {
     document.getElementById("trade-title").textContent = opts.title || "The Peddler";
     document.getElementById("trade-hint").textContent = opts.hint ||
       "(three offers a day, take them or leave them \u2014 E to close)";
+    document.getElementById("trade-greeting").textContent = opts.greeting || "";
+    this._renderErrand(opts.errand || null);
     this.tradeOpen = true;
     this._tradeOffers = offers;
     this._onTrade = onTrade;

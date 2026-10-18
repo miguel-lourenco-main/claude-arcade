@@ -12,9 +12,10 @@ import {
 import { CHUNK, HEIGHT, SEA_LEVEL } from "./world.js";
 import { Perlin, hash2 } from "./noise.js";
 import { Veins } from "./veins.js";
+import { settlementForCell, cellOfChunk } from "./settlements.js";
 import { ruinForChunk, stampRuin, seedRuinState } from "./ruins.js";
 import { delveForChunk, stampDelve, seedDelveState } from "./delvings.js";
-import { steadForChunk, stampStead, seedSteadState } from "./steads.js";
+import { steadsInChunk, stampStead, seedSteadState } from "./steads.js";
 
 const TREE_CELL = 5;   // one tree candidate per 5x5-column cell (grid jitter)
 const TREE_MARGIN = 3; // canopy radius 2 + 1 safety
@@ -196,6 +197,13 @@ export class Terrain {
     const h = this.heightAt(jx, jz);
     if (h <= SEA_LEVEL + 1 || h >= HEIGHT - 12) return null;
     if (this.mouthCarveAt(jx, jz)) return null; // no trunk over a cave mouth
+    // no trunk inside a settlement's footprint (or close enough for its
+    // canopy to reach a roof): the folk cleared the ground. Tiered worlds
+    // only — legacy worlds keep their trees exactly as they were.
+    if (this.settlementMode === "cells") {
+      const plan = settlementForCell(this, ...cellOfChunk(jx >> 4, jz >> 4));
+      if (plan && jx >= plan.x0 - 3 && jx <= plan.x1 + 3 && jz >= plan.z0 - 3 && jz <= plan.z1 + 3) return null;
+    }
     const biome = this.biomeAt(jx, jz, h);
     const density = biome === "forest" ? 0.55 : biome === "plains" ? 0.1
       : biome === "snow" ? 0.2 : biome === "bog" ? 0.06 : 0;
@@ -221,8 +229,11 @@ export class Terrain {
   }
 }
 
-export function makeGenerator(seed) {
+// opts.settlements: "cells" (spaced, tiered settlements — every new world)
+// or "legacy" (the original per-chunk steads, for worlds saved before them)
+export function makeGenerator(seed, opts = {}) {
   const t = new Terrain(seed);
+  t.settlementMode = opts.settlements === "legacy" ? "legacy" : "cells";
 
   const generate = (world, chunk) => {
     const x0 = chunk.cx * CHUNK, z0 = chunk.cz * CHUNK;
@@ -428,11 +439,11 @@ export function makeGenerator(seed) {
       stampRuin(chunk, ruin);
       seedRuinState(world, ruin);
     }
-    // the Living Stead stamps last: an intact homestead. steadForChunk is
-    // mutually exclusive with a ruin/delve chunk, so this never contends for
+    // the Living Stead stamps last: an intact homestead (or this chunk's
+    // share of a village's footprint — stampStead clips to the chunk). A
+    // settlement never covers a ruin/delve chunk, so this never contends for
     // the surface — it only fires on a chunk the other two declined.
-    const stead = steadForChunk(t, chunk.cx, chunk.cz);
-    if (stead) {
+    for (const stead of steadsInChunk(t, chunk.cx, chunk.cz)) {
       stampStead(chunk, stead);
       seedSteadState(world, stead);
     }

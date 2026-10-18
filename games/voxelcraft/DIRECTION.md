@@ -68,7 +68,8 @@ Tracked in GitLab epic #1. Three waves, ordered by dependency.
 
 ### Wave C: world and narrative
 - The Upturn's playable arc (#13), a **writing gate** that needs the owner's
-  voice. Cities and story quests wait on it.
+  voice. Cities and story quests wait on it. A draft proposal is in
+  [UPTURN-ARC.md](UPTURN-ARC.md); it isn't canon until the owner accepts it.
 - Settlement tiers and spacing: hamlets, villages, dense villages, clustered by
   a density field, with a reserved hook for cities (#14).
 - A quest engine with fetch and skill quests from steadfolk. Story and epic

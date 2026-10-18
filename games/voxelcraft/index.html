@@ -126,6 +126,8 @@
   <div id="trade-ui" class="hidden">
     <div id="trade-panel">
       <h2><span id="trade-title">The Peddler</span> <span class="hint" id="trade-hint">(three offers a day, take them or leave them &mdash; E to close)</span></h2>
+      <p id="trade-greeting" class="lore-blurb"></p>
+      <div id="trade-errand" class="hidden"></div>
       <h3>Today&rsquo;s offers</h3>
       <div id="trade-list"></div>
       <h3>Satchel</h3><div id="trade-main-grid" class="slot-grid"></div>
@@ -162,14 +164,18 @@
       <p class="sub">a voxel sandbox in the Upturn</p>
       <button id="resume">Click to play</button>
       <div id="controls">
-        <div><b>WASD</b> move · <b>Space</b> jump · <b>2×Space</b> fly · <b>2×W</b> sprint · <b>Shift</b> sneak/descend</div>
+        <div><b>WASD</b> move · <b>Space</b> jump · <b>2×Space</b> fly · <b>2×W</b> sprint · <b>Shift</b> sneak/crouch (grips a ladder)</div>
         <div><b>LMB</b> break · <b>RMB</b> place · <b>MMB</b> pick block · <b>Wheel/1-9</b> hotbar</div>
-        <div><b>E</b> block picker · <b>F3</b> debug · <b>Esc</b> pause</div>
+        <div><b>E</b> block picker · <b>F3</b> debug · <b>Esc</b> pause · <b>Shift+RMB</b> a steadfolk: gift the held item</div>
       </div>
       <div id="teleport">
         <div class="tp-title">Teleport</div>
         <div id="tp-buttons"></div>
         <div id="tp-status"></div>
+      </div>
+      <div id="journal" class="hidden">
+        <div class="tp-title">Errands</div>
+        <div id="journal-list"></div>
       </div>
       <div class="row">
         <label id="sens-setting">Mouse

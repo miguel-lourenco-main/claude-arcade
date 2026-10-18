@@ -261,11 +261,32 @@ async function atStead(page) {
   const ok = await page.eval(`(() => { const vc = window.voxelcraft;
     const r = vc.teleportTo('stead'); vc.hud.paused && vc.hud.hidePause(); return r.ok; })()`);
   if (!ok) return false;
-  return page.waitFor(`(() => { const vc = window.voxelcraft;
-    for (const [, act] of vc.steads.active) for (const e of act.entries)
-      if (vc.mobs.mobs.includes(e.mob)) { window.__res = e.mob; return true; }
-    return false; })()`, 40000);
+  // the NEAREST live stead (a neighbour's far footprint can unload and fold
+  // its folk away mid-probe)
+  return page.waitFor(`(() => { const vc = window.voxelcraft, p = vc.player.pos;
+    let best = null, bd = Infinity;
+    for (const [, act] of vc.steads.active) {
+      const d = Math.hypot(act.plan.x - p.x, act.plan.z - p.z);
+      const e = act.entries.find((x) => vc.mobs.mobs.includes(x.mob));
+      if (e && d < bd) { bd = d; best = e.mob; }
+    }
+    if (best) window.__res = best;
+    return !!best; })()`, 40000);
 }
+
+// C2: a new world generates tiered settlements; the nearest one wakes with
+// a resident per cottage, and the save records the worldgen generation
+async function settlements(page) {
+  console.log("\n== settlement tiers (C2)");
+  const r = await page.eval(`(() => { const vc = window.voxelcraft;
+    const p = vc.findNearestStead(vc.player.pos.x, vc.player.pos.z);
+    vc.saveNow();
+    const saved = JSON.parse(localStorage.getItem('voxelcraft.save.v1'));
+    return { tier: p && p.tier, span: p && p.span, homes: p && p.buildings.length, key: p && p.key,
+      mode: vc.terrain.settlementMode, worldgen: saved.worldgen }; })()`);
+  assert(r.mode === "cells" && r.worldgen === 2, `a new world uses the tiered settlements and saves worldgen 2 (${r.mode}, ${r.worldgen})`);
+  assert(["hamlet", "village", "dense"].includes(r.tier), `the nearest settlement has a tier (${r.tier}, ${r.span}x${r.span}, ${r.homes} cottages)`);
+  }
 
 // B2: standing — the trade window reads it, gifts raise it, a blow sinks it
 async function standing(page) {
@@ -273,6 +294,16 @@ async function standing(page) {
   const live = await atStead(page);
   assert(live, "a Living Stead's resident comes alive after the teleport");
   if (!live) return;
+  await sleep(1500); // let every footprint chunk load so the whole stead wakes
+  const wokeExpr = `(() => { const vc = window.voxelcraft, m = window.__res;
+    const act = vc.steads.active.get(m.steadKey);
+    if (!act || !vc.mobs.mobs.includes(m)) return null;
+    return { live: act.entries.length, homes: act.plan.buildings.length, tier: act.plan.tier }; })()`;
+  let woke = await page.eval(wokeExpr);
+  if (!woke && await atStead(page)) woke = await page.eval(wokeExpr);
+  if (!woke) { assert(false, "the probe stead stayed awake"); return; }
+  assert(woke.live === woke.homes, `every cottage's resident is awake (${woke.live}/${woke.homes} in a ${woke.tier})`);
+  await shot(page, "stead-arrival");
   const r = await page.eval(`(() => { const vc = window.voxelcraft, m = window.__res;
     const S = vc.standing, rec = vc.world.steads.get(m.steadKey);
     const out = { mode: vc.player.mode, start: S.standingOf(rec) };
@@ -296,6 +327,45 @@ async function standing(page) {
   assert(r.mode !== "survival" || (Math.abs(r.afterHit - (r.afterGift - 10)) < 1e-9 && r.blame > 0),
     `a player's blow sinks standing by 10 and lays blame (${r.afterHit})`);
   assert(Number.isFinite(r.global), `the global aggregate is live (${r.global.toFixed(1)})`);
+}
+
+// C3: a resident's errand, taken and handed in through its own window
+async function errands(page) {
+  console.log("\n== errands (C3)");
+  const alive = await page.eval("!!window.__res && window.voxelcraft.mobs.mobs.includes(window.__res)");
+  if (!alive) { assert(false, "the probe resident is alive for C3"); return; }
+  const r = await page.eval(`(() => { const vc = window.voxelcraft, m = window.__res;
+    m.grudgeT = 0; vc.world.steads.get(m.steadKey).standing = 0;
+    const q = vc.questFor(m);
+    vc.tradeWithMob(m);
+    const panel = document.getElementById('trade-errand');
+    const out = { kind: q.kind, text: q.text, shown: !panel.classList.contains('hidden'),
+      panelText: panel.textContent, greeting: document.getElementById('trade-greeting').textContent };
+    const take = [...panel.querySelectorAll('button')].find((b) => /Take/.test(b.textContent));
+    take && take.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    out.active = vc.quests.active.length;
+    // do the errand: report the deed, or put the goods in the satchel
+    if (q.kind === 'event') vc.noteQuestEvent(q.event[0], q.event[1], q.event[2]);
+    else vc.inventory.add(q.want[0], q.want[1]);
+    const before = vc.world.steads.get(m.steadKey).standing;
+    vc.hud.closeTrade(); vc.tradeWithMob(m);
+    const hand = [...document.querySelectorAll('#trade-errand button')].find((b) => /Hand/.test(b.textContent));
+    out.handable = !!hand;
+    const [rid] = q.reward.items[0];
+    const had = vc.inventory.count(rid);
+    hand && hand.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    out.paid = vc.inventory.count(rid) - had;
+    out.standing = vc.world.steads.get(m.steadKey).standing - before;
+    out.left = vc.quests.active.length;
+    out.journal = document.getElementById('journal-list').children.length;
+    vc.hud.closeTrade();
+    return out; })()`);
+  assert(r.shown && r.panelText.includes(r.text), `the resident's window offers its errand ("${r.text}")`);
+  assert(r.greeting.length > 0, `and greets you ("${r.greeting}")`);
+  assert(r.active === 1, "taking it puts it in the log");
+  assert(r.handable, `once done (${r.kind}), the window offers to hand it in`);
+  assert(r.paid > 0 && r.standing === 8 && r.left === 0 && r.journal === 0,
+    `handing in pays (${r.paid} goods), raises standing by 8 (${r.standing}) and clears the journal`);
 }
 
 // B4: finite stock on the board, and the raider's fork (run after standing,
@@ -432,7 +502,9 @@ try {
     await crouch(page);
     await saturation(page);
     await cookbook(page);
+    await settlements(page);
     await standing(page);
+    await errands(page);
     await lootAndStock(page);
     await saveFiles(page); // reloads the page: keep last
   }

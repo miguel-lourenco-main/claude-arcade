@@ -39,8 +39,14 @@ canvas atlas at boot, and every sound is synthesized with WebAudio.
   (buried timbered mining galleries with rung shafts up to collapsed
   head-frames). Both carry seeded loot chests and weathered Notice Post
   fragments, dealt exactly once per world. A rare few homesteads came
-  through the flip WHOLE: **the Living Steads** — intact cottages, a well,
-  a fenced meal-root patch, and 2-3 resident **Steadfolk** who potter the
+  through the flip WHOLE: **the Living Steads**, intact cottages around a
+  well with fenced meal-root patches. They come in three sizes: a
+  **hamlet** (one chunk, 2-3 cottages), a **village** (2x2 chunks, 4-6
+  cottages) and a **dense village** (3x3 chunks, 7-10). They are spaced at
+  least two chunks apart and follow a slow settlement-density field, so
+  they gather in settled country, the biggest among smaller neighbours,
+  and thin out to nothing in the remote wilds. Their resident **Steadfolk**
+  potter the
   courtyard by day, head indoors at dusk, each barter three goods a day
   from their job (grower/wright/keeper), and persist: the same folk are
   there when you come back, unless the dark got one while you were away.
@@ -53,6 +59,12 @@ canvas atlas at boot, and every sound is synthesized with WebAudio.
   kicks, killings, pulled crops and taken-apart walls sink it. A friendly
   stead prices every barter lower and deals a fourth line; a wary one
   asks more and steps away from you; a hostile one won't deal at all.
+  Residents have **errands**. Each has one a day from its job: fetch
+  something back, or go and do something (mine, farm, build, fight, craft)
+  and come back to say so. The resident's window offers it, and handing it
+  in pays in the resident's own goods (sized by value), a little gleam and
+  standing. You can carry three at once, and the pause menu keeps a
+  journal of them.
   Traders' goods are **finite**: each line holds a few trades (fewer for
   rarer goods) and restocks over time (slower for rarer goods). Friend or
   raider is your call: a trader felled by your hand drops its pockets and
@@ -238,6 +250,8 @@ moods with crossfades, plus rain and Prowl-pulse overlays).
   humans alike), the save contract, the naming contract, the wave cadence.
 - [DIRECTION.md](DIRECTION.md): pillars, what the game is and isn't, roadmap.
 - [LORE.md](LORE.md): the Upturn, its folk, and the field glossary.
+- [UPTURN-ARC.md](UPTURN-ARC.md): DRAFT proposal for the playable arc
+  (cities, story beats, an ending), awaiting the owner's voice.
 - `test/`: node logic suites (`*.test.mjs`) and a headless-Chrome suite
   (`browser.test.mjs`). Run them with `node run-tests.mjs voxelcraft` from the
   repo root.
@@ -260,9 +274,11 @@ src/portal.js      the Cinder Door: frame scan, film collapse, arrivals
 src/mesher.js      culled faces + AO + BFS block light -> 3 buckets + shader
 src/ruins.js       the Steads-Before: seeded surface ruins + loot
 src/delvings.js    the Delvings-Under: buried galleries + loot
+src/settlements.js where steads stand: spaced cells, density field, size tiers, city hook
 src/steads.js      the Living Steads: intact homesteads + resident manager
 src/standing.js    Standing: each stead's reputation axis, bands, gifts, turns
 src/stock.js       trader stock (rarity-driven cap + restock) and trader loot
+src/quests.js      errands: daily fetch/event quests, rewards, the log, dialogue
 src/player.js      pointer-lock look, AABB physics, survival, the Whims
 src/player-model.js the Wanderling body, held tools, armor overlays
 src/player-viewer.js the Satchel's spinnable model viewer

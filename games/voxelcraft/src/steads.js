@@ -28,6 +28,9 @@ import {
   WISPCAP, SAPLING, IRON_PICK, COMPASS, CART, TIDE_BROTH, KELP_CRISP, STARGLASS,
 } from "./blocks.js";
 import { dealBoard, dispositionOf } from "./trade.js";
+import {
+  JOBS, settlementForCell, cellOfChunk, planCoversChunk, TIERS,
+} from "./settlements.js";
 
 const STEAD_RATE = 1 / 55;  // before the ruin/delve exclusion + terrain vetoes
                             // (~half the hits are lost to those), which lands
@@ -41,7 +44,7 @@ const DEACTIVATE_DIST = 104;// ...and fold back to a saved record past this
 // return, and (for a cherished customer) the rarer goods it keeps back. Any
 // sell can pair with any want; trade.js prices the pairing by fair value
 // (rarity.js) at the resident's disposition and the stead's standing.
-export const JOBS = ["grower", "wright", "keeper"];
+export { JOBS };
 export const JOB_GOODS = {
   // the grower keeps the meal-root patch and the brambles; takes rubble,
   // grit and the odd tool for the digging
@@ -108,12 +111,52 @@ export function recordTrade(record, day) {
 
 // --- placement (pure function of seed + chunk) --------------------------------
 
+// Which placement a world uses (terrain.settlementMode, set by makeGenerator):
+//   "cells"  — settlements.js: spaced cells, a density field, size tiers
+//              (every world created from this version on)
+//   "legacy" — the original one-chunk stead on an independent per-chunk roll,
+//              kept for worlds saved before it, so their steads (and every
+//              standing record keyed to them) stay exactly where they were
+const modeOf = (terrain) => terrain.settlementMode || "cells";
+
+// the stead ANCHORED at chunk (cx, cz) — its key chunk — or null. In cells
+// mode a multi-chunk settlement answers only at its anchor (use steadsInChunk
+// for "what covers this chunk").
+export function steadForChunk(terrain, cx, cz) {
+  if (modeOf(terrain) === "legacy") return legacySteadForChunk(terrain, cx, cz);
+  const [gx, gz] = cellOfChunk(cx, cz);
+  const plan = settlementForCell(terrain, gx, gz);
+  return plan && plan.cx === cx && plan.cz === cz ? plan : null;
+}
+
+// every stead whose footprint covers chunk (cx, cz) — what the generator
+// stamps there (at most one: footprints keep inside their cell)
+export function steadsInChunk(terrain, cx, cz) {
+  if (modeOf(terrain) === "legacy") {
+    const p = legacySteadForChunk(terrain, cx, cz);
+    return p ? [p] : [];
+  }
+  const [gx, gz] = cellOfChunk(cx, cz);
+  const plan = settlementForCell(terrain, gx, gz);
+  return plan && planCoversChunk(plan, cx, cz) ? [plan] : [];
+}
+
 // Does this chunk carry a Living Stead, and its full build plan? Null on any
 // chunk a ruin or a delving already claims (honest mutual exclusion), on the
 // hash miss, or where the terrain won't hold it (drowned / against the
 // ceiling). Everything downstream — stamp, residents, the pause-menu finder —
 // derives from this one seeded plan.
-export function steadForChunk(terrain, cx, cz) {
+function legacySteadForChunk(terrain, cx, cz) {
+  const cache = terrain._legacyStead || (terrain._legacyStead = new Map());
+  const k = `${cx},${cz}`;
+  if (cache.has(k)) return cache.get(k);
+  if (cache.size > 4096) cache.clear();
+  const plan = legacyPlan(terrain, cx, cz);
+  cache.set(k, plan);
+  return plan;
+}
+
+function legacyPlan(terrain, cx, cz) {
   const seed = terrain.seed;
   // mutual exclusion: a stead never shares a chunk with a Steads-Before ruin
   // or a Delvings-Under head-frame (asked honestly, not re-rolled)
@@ -166,12 +209,14 @@ export function steadForChunk(terrain, cx, cz) {
     });
   }
 
+  const garden = { x0: ox + 10, x1: ox + 14, z0: oz + 10, z1: oz + 14, floorY: h,
+    gate: { x: ox + 12, z: oz + 10 } };
   return {
     cx, cz, x: wellX, z: wellZ, h, seed, key: `${cx},${cz}`,
+    tier: TIERS.hamlet.id, span: 1, chunks: [[cx, cz]],
+    x0: cx << 4, z0: cz << 4, x1: (cx << 4) + 15, z1: (cz << 4) + 15,
     well: { x: wellX, y: h, z: wellZ }, leash: LEASH,
-    residentCount, buildings, residents,
-    garden: { x0: ox + 10, x1: ox + 14, z0: oz + 10, z1: oz + 14, floorY: h,
-      gate: { x: ox + 12, z: oz + 10 } },
+    residentCount, buildings, residents, garden, gardens: [garden],
   };
 }
 
@@ -262,17 +307,19 @@ export function stampStead(chunk, plan) {
     put(wx + dx, h + 4, wz + dz, PLANK_SLAB); // the little roof
   }
 
-  // --- the fenced meal-root patch --------------------------------------------
-  const g = plan.garden;
-  pad(g.x0, g.x1, g.z0, g.z1, h + 3);
-  for (let wzz = g.z0; wzz <= g.z1; wzz++) for (let wxx = g.x0; wxx <= g.x1; wxx++) {
-    const edge = wxx === g.x0 || wxx === g.x1 || wzz === g.z0 || wzz === g.z1;
-    if (edge) {
-      if (wxx === g.gate.x && wzz === g.gate.z) put(wxx, h + 1, wzz, GATE);
-      else put(wxx, h + 1, wzz, FENCE);
-    } else {
-      put(wxx, h, wzz, FARMLAND);
-      put(wxx, h + 1, wzz, CROP_RIPE);
+  // --- the fenced meal-root patches (a hamlet keeps one, a village more) -----
+  for (const g of plan.gardens || [plan.garden]) {
+    if (!g) continue;
+    pad(g.x0, g.x1, g.z0, g.z1, h + 3);
+    for (let wzz = g.z0; wzz <= g.z1; wzz++) for (let wxx = g.x0; wxx <= g.x1; wxx++) {
+      const edge = wxx === g.x0 || wxx === g.x1 || wzz === g.z0 || wzz === g.z1;
+      if (edge) {
+        if (wxx === g.gate.x && wzz === g.gate.z) put(wxx, h + 1, wzz, GATE);
+        else put(wxx, h + 1, wzz, FENCE);
+      } else {
+        put(wxx, h, wzz, FARMLAND);
+        put(wxx, h + 1, wzz, CROP_RIPE);
+      }
     }
   }
 }
@@ -291,20 +338,19 @@ const CROP_IDS = new Set([CROP_RIPE]);
 // is world cell (x, y, z) — which held `brokenId` — part of a Living Stead?
 // Returns { plan, kind: "steal" | "wreck" } or null. Pure (seed + coords).
 export function steadPartAt(terrain, x, y, z, brokenId) {
-  const plan = steadForChunk(terrain, x >> 4, z >> 4);
+  const plan = steadsInChunk(terrain, x >> 4, z >> 4)[0];
   if (!plan) return null;
   const inBox = (x0, x1, z0, z1, y0, y1) =>
     x >= x0 && x <= x1 && z >= z0 && z <= z1 && y >= y0 && y <= y1;
-  const g = plan.garden;
-  if (CROP_IDS.has(brokenId) && inBox(g.x0, g.x1, g.z0, g.z1, plan.h, plan.h + 1)) {
-    return { plan, kind: "steal" };
-  }
+  const gardens = (plan.gardens || [plan.garden]).filter(Boolean);
+  const inPatch = gardens.some((g) => inBox(g.x0, g.x1, g.z0, g.z1, plan.h, plan.h + 1));
+  if (CROP_IDS.has(brokenId) && inPatch) return { plan, kind: "steal" };
   if (!STRUCTURE_IDS.has(brokenId) && !(brokenId >= DOOR && brokenId <= DOOR + 3)) return null;
   const w = plan.well;
   const inStead =
     plan.buildings.some((b) => inBox(b.x0, b.x1, b.z0, b.z1, b.floorY, b.roofY + 1)) ||
     inBox(w.x - 1, w.x + 1, w.z - 1, w.z + 1, plan.h - 3, plan.h + 4) ||
-    inBox(g.x0, g.x1, g.z0, g.z1, plan.h, plan.h + 1);
+    inPatch;
   return inStead ? { plan, kind: "wreck" } : null;
 }
 
@@ -373,13 +419,18 @@ export class Steads {
 
   update(dt, world, player) {
     const pcx = Math.floor(player.pos.x / CHUNK), pcz = Math.floor(player.pos.z / CHUNK);
-    // 1. which steads WANT to be live this frame?
+    // a footprint must be wholly generated before its folk wake (a resident
+    // standing over an unloaded chunk would hang there)
+    const ready = (plan) => (plan.chunks || [[plan.cx, plan.cz]])
+      .every(([cx, cz]) => world.isGenerated(cx, cz));
+    // 1. which steads WANT to be live this frame? (anchors within reach: a
+    // dense village's anchor sits up to ~1.5 chunks off its well)
     const want = new Map();
-    for (let dz = -3; dz <= 3; dz++) for (let dx = -3; dx <= 3; dx++) {
+    const R = this.terrain.settlementMode === "legacy" ? 3 : 6;
+    for (let dz = -R; dz <= R; dz++) for (let dx = -R; dx <= R; dx++) {
       const cx = pcx + dx, cz = pcz + dz;
-      if (!world.isGenerated(cx, cz)) continue;
       const plan = steadForChunk(this.terrain, cx, cz);
-      if (!plan) continue;
+      if (!plan || !ready(plan)) continue;
       const d = Math.hypot(plan.x - player.pos.x, plan.z - player.pos.z);
       if (d <= ACTIVATE_DIST) want.set(plan.key, plan);
     }
@@ -388,7 +439,7 @@ export class Steads {
     for (const [key, act] of this.active) {
       const plan = act.plan;
       const d = Math.hypot(plan.x - player.pos.x, plan.z - player.pos.z);
-      const gone = d > DEACTIVATE_DIST || !world.isGenerated(plan.cx, plan.cz);
+      const gone = d > DEACTIVATE_DIST || !ready(plan);
       if (want.has(key) && !gone) continue;
       const rec = world.steads.get(key);
       for (const e of act.entries) {
