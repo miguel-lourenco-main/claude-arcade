@@ -512,6 +512,30 @@ body {
 }
 #field-recipes:not(:empty) { border-top: 1px solid #2a2f38; padding-top: 10px; }
 
+/* ---- the ingredient-filter cookbook (cookbook.js) ---- */
+.cookbook { display: flex; flex-direction: column; gap: 6px; }
+.cb-tray { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-height: 26px; }
+.cb-tray.empty { color: #5d6672; font-size: 11px; font-style: italic; }
+.cb-chip, .cb-toggle, .cb-tabs button {
+  font: inherit; font-size: 11px; color: #c9ced6; cursor: pointer;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid #2a2f38; border-radius: 4px;
+  padding: 2px 6px; display: inline-flex; align-items: center; gap: 4px;
+}
+.cb-chip { border-color: #4f7a55; background: rgba(126, 231, 135, 0.08); }
+.cb-chip canvas { width: 18px; height: 18px; image-rendering: pixelated; }
+.cb-chip:hover { border-color: #c56a6a; }
+.cb-toggle.on, .cb-tabs button.on { border-color: #7ee787; color: #e8eaed; }
+.cb-tabs button.idle { opacity: 0.45; }
+.cb-bar { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.cb-tabs { display: flex; flex-wrap: wrap; gap: 3px; }
+.cb-search {
+  flex: 1; min-width: 70px; font: inherit; font-size: 11px; color: #e8eaed;
+  background: rgba(0, 0, 0, 0.3); border: 1px solid #2a2f38; border-radius: 4px; padding: 2px 6px;
+}
+.cb-head { color: #7ee787; font-size: 11px; min-height: 0; }
+.cb-head:empty { display: none; }
+.cb-empty { color: #5d6672; font-size: 11px; padding: 4px 2px; }
+
 #inv-cols { display: grid; grid-template-columns: 240px 1fr; gap: 20px; }
 #inv-you { display: flex; flex-direction: column; }
 /* the viewer and the wear column share the "You" panel side by side */

@@ -130,6 +130,19 @@ class Page {
     }
     return res.result.value;
   }
+  // real pointer input (so dblclick/mouseenter fire the way a hand makes them)
+  async mouse(type, x, y, clickCount = 1) {
+    await this.send("Input.dispatchMouseEvent", {
+      type, x, y, button: type === "mouseMoved" ? "none" : "left", clickCount,
+      buttons: type === "mousePressed" ? 1 : 0,
+    });
+  }
+  async dblclick(x, y) {
+    await this.mouse("mouseMoved", x, y);
+    await this.mouse("mousePressed", x, y, 1); await this.mouse("mouseReleased", x, y, 1);
+    await this.mouse("mousePressed", x, y, 2); await this.mouse("mouseReleased", x, y, 2);
+    await sleep(60);
+  }
   async waitFor(expression, ms = 30000) {
     const t0 = Date.now();
     while (Date.now() - t0 < ms) {
@@ -164,6 +177,15 @@ async function openPage(cdp, errors, label) {
 }
 
 // ------------------------------------------------------------------- suites
+
+// VC_SHOTS=<dir> saves a PNG at named moments (for eyeballing UI changes)
+async function shot(page, name) {
+  const dir = process.env.VC_SHOTS;
+  if (!dir) return;
+  const { data } = await page.send("Page.captureScreenshot", { format: "png" });
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, `${name}.png`), Buffer.from(data, "base64"));
+}
 
 // boot a fresh world and wait for the test handle + some loaded terrain
 async function boot(page, url) {
@@ -233,6 +255,160 @@ async function saturation(page) {
   assert(/\nThe heartiest pot/.test(r.title), "the pottage's hover text says it keeps you full");
 }
 
+// travel to the nearest Living Stead and wait for a live resident; returns
+// true once window.__res holds one (a steadfolk mob)
+async function atStead(page) {
+  const ok = await page.eval(`(() => { const vc = window.voxelcraft;
+    const r = vc.teleportTo('stead'); vc.hud.paused && vc.hud.hidePause(); return r.ok; })()`);
+  if (!ok) return false;
+  return page.waitFor(`(() => { const vc = window.voxelcraft;
+    for (const [, act] of vc.steads.active) for (const e of act.entries)
+      if (vc.mobs.mobs.includes(e.mob)) { window.__res = e.mob; return true; }
+    return false; })()`, 40000);
+}
+
+// B2: standing — the trade window reads it, gifts raise it, a blow sinks it
+async function standing(page) {
+  console.log("\n== standing (B2)");
+  const live = await atStead(page);
+  assert(live, "a Living Stead's resident comes alive after the teleport");
+  if (!live) return;
+  const r = await page.eval(`(() => { const vc = window.voxelcraft, m = window.__res;
+    const S = vc.standing, rec = vc.world.steads.get(m.steadKey);
+    const out = { mode: vc.player.mode, start: S.standingOf(rec) };
+    vc.tradeWithMob(m);
+    out.title = document.getElementById('trade-title').textContent;
+    out.hint = document.getElementById('trade-hint').textContent;
+    vc.hud.closeTrade();
+    vc.inventory.set(vc.hud.selected, { id: 86, count: 3 });
+    S.gift(m);
+    out.afterGift = S.standingOf(rec);
+    out.left = (vc.inventory.get(vc.hud.selected) || { count: 0 }).count;
+    vc.mobs.strike(m, 1, vc.player.pos);
+    out.afterHit = S.standingOf(rec);
+    out.blame = m.blameT;
+    out.global = S.global();
+    return out; })()`);
+  assert(r.title === `The ${await page.eval("window.__res.job")}` && /standing: Neutral/.test(r.hint),
+    `the stead's trade window names the job and the standing ("${r.title}" ${r.hint})`);
+  assert(r.afterGift > r.start && (r.mode !== "survival" || r.left === 2),
+    `a sneak-gift raises standing (${r.start} -> ${r.afterGift}) and hands over one ingot (${r.left} left)`);
+  assert(r.mode !== "survival" || (Math.abs(r.afterHit - (r.afterGift - 10)) < 1e-9 && r.blame > 0),
+    `a player's blow sinks standing by 10 and lays blame (${r.afterHit})`);
+  assert(Number.isFinite(r.global), `the global aggregate is live (${r.global.toFixed(1)})`);
+}
+
+// B4: finite stock on the board, and the raider's fork (run after standing,
+// on the same resident)
+async function lootAndStock(page) {
+  console.log("\n== trader stock + the raider path (B4)");
+  const alive = await page.eval("!!window.__res && window.voxelcraft.mobs.mobs.includes(window.__res)");
+  if (!alive) { assert(false, "the probe resident is still alive for B4"); return; }
+  const r = await page.eval(`(() => { const vc = window.voxelcraft, m = window.__res;
+    m.grudgeT = 0;
+    const rec = vc.world.steads.get(m.steadKey);
+    rec.standing = 0; // back to neutral so the window opens
+    vc.tradeWithMob(m);
+    const rows = [...document.querySelectorAll('#trade-list .craft-row small')].map((e) => e.textContent);
+    vc.hud.closeTrade();
+    const before = vc.drops.drops.length;
+    window.__before = { drops: before, standing: rec.standing };
+    vc.mobs.strike(m, 100, vc.player.pos);
+    return { rows, mode: vc.player.mode }; })()`);
+  assert(r.rows.length >= 3 && r.rows.every((t) => / left$| sold out$/.test(t)),
+    `every board line shows its shelf (${r.rows[0]})`);
+  const died = await page.waitFor("!window.voxelcraft.mobs.mobs.includes(window.__res)", 5000);
+  assert(died, "a lethal blow fells the resident");
+  const after = await page.eval(`(() => { const vc = window.voxelcraft, m = window.__res;
+    const rec = vc.world.steads.get(m.steadKey);
+    return { drops: vc.drops.drops.length, standing: rec.standing, dead: m.record.dead }; })()`);
+  const b = await page.eval("window.__before");
+  assert(after.dead, "the felled resident is marked dead (it stays gone)");
+  if (r.mode === "survival") {
+    assert(after.drops > b.drops, `the raider's take spills on the ground (${after.drops - b.drops} drops)`);
+    assert(after.standing <= b.standing - 40 + 1e-9, `and the stead remembers (standing ${b.standing} -> ${after.standing})`);
+  }
+}
+
+// B6: export the live world to a file, import it back over a cleared
+// browser, and check the reloaded world is the same one (this reloads the
+// page, so it runs last). Also proves the additive fields this wave added
+// (saturation, standing, stock, dead residents) survive a real save.
+async function saveFiles(page) {
+  console.log("\n== save export/import (B6)");
+  const before = await page.eval(`(() => { const vc = window.voxelcraft;
+    vc.player.hunger = 15; vc.player.saturation = 7.25;
+    vc.inventory.set(20, { id: 98, count: 5 }); // starstone in the satchel
+    const steads = [...vc.world.steads].map(([k, r]) => [k, r.standing, r.residents.map((x) => x.dead)]);
+    const f = vc.exportSave();
+    window.__file = f ? f.text : null;
+    return { seed: vc.world.seed, name: f && f.name, steads,
+      status: document.getElementById('save-status').textContent }; })()`);
+  assert(/^voxelcraft-\d+-day\d+-\d{4}-\d\d-\d\d\.json$/.test(before.name || ""), `export names the file (${before.name})`);
+  assert(/Saved to/.test(before.status), "the pause menu reports the export");
+  const bad = await page.eval("window.voxelcraft.parseSaveFile('{nope').ok");
+  assert(bad === false, "a damaged file is refused before anything is touched");
+  await page.eval(`(() => { const text = window.__file; localStorage.clear();
+    window.__preImport = true; setTimeout(() => window.voxelcraft.importSaveText(text), 0); return true; })()`);
+  const back = await page.waitFor("!window.__preImport && !!(window.voxelcraft && window.voxelcraft.world.chunks.size > 4)", 45000);
+  assert(back, "importing reloads into the game");
+  if (!back) return;
+  const after = await page.eval(`(() => { const vc = window.voxelcraft;
+    const steads = [...vc.world.steads].map(([k, r]) => [k, r.standing, r.residents.map((x) => x.dead)]);
+    const s = vc.inventory.get(20);
+    return { seed: vc.world.seed, sat: vc.player.saturation, hunger: vc.player.hunger, steads,
+      star: s ? [s.id, s.count] : null }; })()`);
+  assert(after.seed === before.seed, "the same world (seed) came back");
+  assert(Math.abs(after.sat - 7.25) < 1e-6 && after.hunger === 15, `hunger + hidden saturation survive (${after.hunger}/${after.sat})`);
+  assert(after.star && after.star[0] === 98 && after.star[1] === 5, "the satchel came back");
+  assert(JSON.stringify(after.steads) === JSON.stringify(before.steads),
+    `every stead's standing and its dead came back (${JSON.stringify(after.steads).slice(0, 80)})`);
+}
+
+// B1: the cookbook, driven by real pointer events in the Satchel window
+async function cookbook(page) {
+  console.log("\n== cookbook (B1)");
+  const setup = await page.eval(`(() => { const vc = window.voxelcraft;
+    if (vc.player.mode !== 'survival') return null;
+    vc.inventory.set(12, { id: 7, count: 5 });   // knotwood logs
+    vc.inventory.set(13, { id: 86, count: 4 });  // sky-iron ingots
+    vc.inventory.set(14, { id: 65, count: 2 });  // sling stones
+    vc.hud.cookbook.pins = []; vc.hud.openPicker();
+    const at = (i) => { const r = document.querySelectorAll('#main-grid .inv-slot')[i].getBoundingClientRect();
+      return [r.left + r.width / 2, r.top + r.height / 2]; };
+    return { log: at(3), ingot: at(4), sling: at(5),
+      ready: document.querySelectorAll('#field-recipes .craft-row').length }; })()`);
+  if (!setup) { assert(true, "cookbook probe skipped (not survival)"); return; }
+  assert(setup.ready >= 1, `the compact default lists what the satchel can make now (${setup.ready})`);
+  await page.mouse("mouseMoved", ...setup.log); await sleep(60);
+  const hover = await page.eval(`({ head: document.querySelector('#field-recipes .cb-head').textContent,
+    rows: [...document.querySelectorAll('#field-recipes .craft-row b')].map((b) => b.textContent) })`);
+  assert(hover.head === "Uses Knotwood Log" && hover.rows.some((t) => /Planks/.test(t)),
+    `resting on a log previews its recipes (${hover.head}: ${hover.rows.join(", ")})`);
+  await shot(page, "cookbook-hover");
+  await page.dblclick(...setup.log);
+  const pinned = await page.eval(`(() => { const vc = window.voxelcraft, s = vc.inventory.get(12);
+    return { pins: vc.hud.cookbook.pins.slice(), slot: s && [s.id, s.count], cursor: vc.hud.slotUI.cursor,
+      chips: document.querySelectorAll('#field-recipes .cb-chip').length }; })()`);
+  assert(pinned.pins.length === 1 && pinned.pins[0] === 7 && pinned.chips === 1, "a double-click pins the log into the tray");
+  assert(pinned.slot && pinned.slot[0] === 7 && pinned.slot[1] === 5 && !pinned.cursor,
+    "...net-zero: the stack is back in its slot and nothing is on the cursor");
+  await page.dblclick(...setup.log);
+  await page.dblclick(...setup.ingot);
+  await page.dblclick(...setup.sling);
+  const narrowed = await page.eval(`(() => ({ pins: window.voxelcraft.hud.cookbook.pins.slice(),
+    rows: [...document.querySelectorAll('#field-recipes .craft-row b')].map((b) => b.textContent) }))()`);
+  assert(narrowed.pins.length === 2 && !narrowed.pins.includes(7), "double-clicking again unpins");
+  // the field list holds field recipes only, so a bench-only Needle must not show
+  assert(narrowed.rows.length === 0, `ingot + sling stone: no FIELD recipe uses both (${narrowed.rows.join(", ")})`);
+  await shot(page, "cookbook-pinned-field");
+  const bench = await page.eval(`(() => { const vc = window.voxelcraft; vc.hud.closePicker(); vc.hud.openBench();
+    return [...document.querySelectorAll('#craft-list .craft-row b')].map((b) => b.textContent); })()`);
+  await shot(page, "cookbook-pinned-bench");
+  await page.eval("window.voxelcraft.hud.closeBench(); window.voxelcraft.hud.cookbook.pins = []");
+  assert(bench.length === 1 && /Homeward Needle/.test(bench[0]), `at the bench the same pins narrow to exactly the Needle (${bench.join(", ")})`);
+}
+
 // ---------------------------------------------------------------------- main
 
 const hardTimeout = setTimeout(() => {
@@ -255,6 +431,10 @@ try {
     await rarity(page);
     await crouch(page);
     await saturation(page);
+    await cookbook(page);
+    await standing(page);
+    await lootAndStock(page);
+    await saveFiles(page); // reloads the page: keep last
   }
   console.log("\n== console errors / exceptions");
   assert(consoleErrors.length === 0,

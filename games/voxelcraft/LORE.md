@@ -180,6 +180,25 @@ specific item vocabulary.
   fault — kick one and it flees and won't deal with you for a while — and, like
   the bondlings, they STAY: a stead's folk are the same folk when you come
   back, unless the dark got one while you were away.
+- **Standing** — a stead keeps a long memory and a short list. Every turn
+  you do it goes on the list: a fair barter, a gift the job is glad of (a
+  grower for meadow flowers and pips, a wright for good metal and timber,
+  a keeper for the catch and the coal), an errand run. So does every bad
+  one: a kick, a pulled crop from the patch, a plank prised out of a wall,
+  and — heaviest of all — a resident who doesn't come home because of you.
+  A stead that counts you a friend shaves its prices and finds one more
+  thing to offer; a wary one asks more and keeps its distance; a hostile
+  one shuts its doors to you, politely, and for a long time. Kindness is
+  rationed by the day (a stead can only be so grateful before supper);
+  harm is not.
+- **The shelf, and the other way** — a trader's pack is only so deep. The
+  common goods come back by the afternoon; a good piece of ironmongery
+  might take the week. There is a quicker way to empty a pack, and the
+  Upturn will not stop you: a felled trader's pockets and half its shelf
+  are yours where it fell. The stead keeps the rest — the empty door, the
+  board nobody chalks again, and a very long memory. The Peddler's road
+  goes quiet for a week, which is how long it takes the next one to
+  hear.
 - **The Unshaken** — when the world flipped, every shadow was shaken off
   its owner and most of them politely dispersed. One did not. It has
   been down there since, in the gloam under the gloam, growing fat on

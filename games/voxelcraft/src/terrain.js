@@ -11,6 +11,7 @@ import {
 } from "./blocks.js";
 import { CHUNK, HEIGHT, SEA_LEVEL } from "./world.js";
 import { Perlin, hash2 } from "./noise.js";
+import { Veins } from "./veins.js";
 import { ruinForChunk, stampRuin, seedRuinState } from "./ruins.js";
 import { delveForChunk, stampDelve, seedDelveState } from "./delvings.js";
 import { steadForChunk, stampStead, seedSteadState } from "./steads.js";
@@ -40,6 +41,7 @@ function smoothstep(a, b, t) {
 export class Terrain {
   constructor(seed) {
     this.seed = seed;
+    this.veins = new Veins(seed); // explicit ore clusters (veins.js)
     this.continent = new Perlin(seed ^ 0x1a2b3c);
     this.hills = new Perlin(seed ^ 0x4d5e6f);
     this.mountainMask = new Perlin(seed ^ 0x70819a);
@@ -172,6 +174,10 @@ export class Terrain {
         (nearCave ? 0.44 : 0.58)) return COAL_ORE;
     if (y < 28 && this.cave2.fbm3(x * 0.15 - 911, y * 0.15, z * 0.15 + 911, 2) >
         (nearCave ? 0.48 : 0.62)) return IRON_ORE;
+    // the veins: counted clusters on top of the seams (veins.js), sized by
+    // rarity — about +10% of each ore, in blobs whose cap falls with rarity
+    const vein = this.veins.oreAt(x, y, z);
+    if (vein) return vein;
     // a very rare starstone singleton in the deep cave skin — a pearl the
     // flip buried, the patient delver's alternative to a Pearlfall night
     if (nearCave && y < 14 &&

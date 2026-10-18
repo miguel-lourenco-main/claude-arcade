@@ -8,6 +8,7 @@ import { clampSignText, SIGN_LINES, SIGN_COLS } from "./world.js";
 import { shapeBoxes } from "./mesher.js";
 import { ATLAS_TILES, TILE_PX } from "./textures.js";
 import { RECIPES, BASIC_RECIPES, canCraft } from "./craft.js";
+import { CATEGORIES, cookbookQuery, togglePin } from "./cookbook.js";
 import { canAfford } from "./trade.js";
 import { SMELTS, FUEL_SECONDS, SMELT_SECONDS } from "./kiln.js";
 import { threadName } from "./loom.js";
@@ -222,6 +223,8 @@ export class Hud {
     this.atlas = atlasCanvas;
     this.onResume = opts.onResume;
     this.onReset = opts.onReset;
+    this.onExportSave = opts.onExportSave; // () => download the save file
+    this.onImportSave = opts.onImportSave; // (text, name) => validate + load
     this.onTeleport = opts.onTeleport;             // (kind) => {ok, message}
     this.onToggleMovement = opts.onToggleMovement; // () => new mode string
     this.onSensitivity = opts.onSensitivity;       // (multiplier) => void
@@ -256,18 +259,36 @@ export class Hud {
     // the 4 wear slots (main.js owns the array; shared with player.wear)
     this.wearSlots = opts.wearSlots || [null, null, null, null];
 
+    // the cookbook's filter state, shared by the field list and the bench
+    // (pins persist between window visits for the session)
+    this.cookbook = { pins: [], hover: null, onlyThese: false, search: "", category: "ready" };
+
     // one cursor-stack engine powers the inventory/chest/workbench windows
     this.slotUI = new SlotUI({
       drawIcon: (ctx, stack) => drawBlockIcon(ctx, this.atlas, stack),
       describe: (stack) => describeStack(stack),
+      // the cookbook (cookbook.js): rest on an item to preview what it
+      // makes; double-click it to pin it into the filter tray. Hovering an
+      // empty slot clears the preview; leaving a slot does NOT (so the
+      // pointer can travel to the list without the list moving under it).
+      onHover: (region, i, stack) => {
+        if (!this._cookbookOpen()) return;
+        const id = stack ? stack.id : null;
+        if (this.cookbook.hover === id) return;
+        this.cookbook.hover = id;
+        this._renderCookbooks();
+      },
+      onDoubleClick: (region, i, stack) => {
+        if (!this._cookbookOpen() || !stack || region.palette) return;
+        this.cookbook.pins = togglePin(this.cookbook.pins, stack.id);
+        this.cookbook.hover = null;
+        this._renderCookbooks();
+      },
       onChange: () => {
         this.refreshHotbarRow();
         // craftability depends on slot counts (a stack on the cursor doesn't
         // count) — keep the lists live, with their per-visit order frozen
-        if (this.pickerOpen) this._renderFieldRecipes();
-        if (this.benchOpen) {
-          this._renderCraftList(document.getElementById("craft-list"), this._benchOrder);
-        }
+        this._renderCookbooks();
         // affordability is slot-count-based too (cursor stacks don't count)
         if (this.tradeOpen) this._renderTradeList();
         if (this.onSlotsChanged) this.onSlotsChanged();
@@ -287,6 +308,17 @@ export class Hud {
     document.getElementById("resume").addEventListener("click", () => this.onResume());
     document.getElementById("reset").addEventListener("click", () => {
       if (confirm("Delete this world and generate a new one?")) this.onReset();
+    });
+    // save files: export downloads the current world; import picks a file,
+    // and main.js validates it before anything is overwritten
+    document.getElementById("save-export").addEventListener("click", () => this.onExportSave());
+    const fileEl = document.getElementById("save-file");
+    document.getElementById("save-import").addEventListener("click", () => fileEl.click());
+    fileEl.addEventListener("change", () => {
+      const f = fileEl.files && fileEl.files[0];
+      fileEl.value = "";
+      if (!f) return;
+      f.text().then((text) => this.onImportSave(text, f.name));
     });
 
     this.movementBtn = document.getElementById("movement-toggle");
@@ -566,6 +598,11 @@ export class Hud {
     this.musicBtn.textContent = on ? "Music: On" : "Music: Off";
   }
 
+  // the pause menu's save-file line (export/import results and errors)
+  setSaveStatus(text) {
+    document.getElementById("save-status").textContent = text;
+  }
+
   _buildTeleports() {
     const row = document.getElementById("tp-buttons");
     const status = document.getElementById("tp-status");
@@ -692,16 +729,92 @@ export class Hud {
   // the compact "field recipes" list shown in the inventory window (survival)
   _renderFieldRecipes() {
     const el = document.getElementById("field-recipes");
-    if (this.gameMode !== "survival") { el.innerHTML = ""; return; }
+    if (this.gameMode !== "survival") { el.innerHTML = ""; el._cb = null; return; }
     this._renderCraftList(el, this._fieldOrder);
   }
 
-  // craft list: one row per recipe, from a pre-sorted order that is FROZEN
-  // per window visit — re-sorting after a craft would slide a different
-  // recipe under the cursor mid-double-click.
-  _renderCraftList(list, order) {
+  _cookbookOpen() {
+    return (this.pickerOpen && this.gameMode === "survival") || this.benchOpen;
+  }
+
+  // re-render whichever cookbook(s) are showing
+  _renderCookbooks() {
+    if (this.pickerOpen) this._renderFieldRecipes();
+    if (this.benchOpen) this._renderCraftList(document.getElementById("craft-list"), this._benchOrder);
+  }
+
+  // the cookbook (cookbook.js): the filter tray of pins, the tabs + search,
+  // a line naming the active filter, and the rows. `order` is the window's
+  // recipes, pre-sorted craftable-first and FROZEN per window visit —
+  // re-sorting after a craft would slide a different recipe under the
+  // cursor mid-double-click; filtering only ever hides rows.
+  _renderCraftList(el, order) {
+    const st = this.cookbook;
+    const ui = this._cookbookShell(el);
+    const { recipes, mode, ids } = cookbookQuery(order, st, (r) => canCraft(r, this.inventory));
+    const name = (id) => (BLOCKS[id] ? BLOCKS[id].name : "?");
+
+    // the tray: one chip per pin (click to unpin), "only these", clear
+    ui.tray.innerHTML = "";
+    if (st.pins.length === 0) {
+      ui.tray.classList.add("empty");
+      ui.tray.textContent = "Rest on an item to see what it makes · double-click to pin it here";
+    } else {
+      ui.tray.classList.remove("empty");
+      for (const id of st.pins) {
+        const chip = document.createElement("button");
+        chip.className = "cb-chip";
+        chip.title = `Unpin ${name(id)}`;
+        const c = document.createElement("canvas");
+        c.width = ICON; c.height = ICON;
+        drawBlockIcon(c.getContext("2d"), this.atlas, id);
+        chip.appendChild(c);
+        chip.appendChild(document.createTextNode(name(id)));
+        chip.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          st.pins = togglePin(st.pins, id);
+          this._renderCookbooks();
+        });
+        ui.tray.appendChild(chip);
+      }
+      const only = document.createElement("button");
+      only.className = "cb-toggle" + (st.onlyThese ? " on" : "");
+      only.textContent = "only these";
+      only.title = "Show only what can be made from just the pinned items";
+      only.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        st.onlyThese = !st.onlyThese;
+        this._renderCookbooks();
+      });
+      ui.tray.appendChild(only);
+      const clear = document.createElement("button");
+      clear.className = "cb-toggle";
+      clear.textContent = "clear";
+      clear.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        st.pins = []; st.onlyThese = false;
+        this._renderCookbooks();
+      });
+      ui.tray.appendChild(clear);
+    }
+
+    // tabs: the secondary path (dimmed while a pin/hover filter is active)
+    for (const btn of ui.tabs.children) {
+      btn.classList.toggle("on", btn.dataset.cat === st.category);
+      btn.classList.toggle("idle", mode !== "tab");
+    }
+    if (ui.search.value !== st.search) ui.search.value = st.search;
+
+    // the filter line
+    const joined = ids.map(name).join(" + ");
+    ui.head.textContent = mode === "hover" && !st.pins.length ? `Uses ${joined}`
+      : mode === "pins" ? (st.onlyThese ? `Made from only ${joined}` : `Uses ${joined}`)
+      : "";
+
+    // the rows
+    const list = ui.list;
     list.innerHTML = "";
-    for (const recipe of order) {
+    for (const recipe of recipes) {
       const ok = canCraft(recipe, this.inventory);
       const row = document.createElement("div");
       row.className = "craft-row" + (ok ? "" : " uncraftable");
@@ -724,13 +837,67 @@ export class Hud {
         row.addEventListener("mousedown", (e) => {
           e.preventDefault();
           this.onCraft(recipe, e.shiftKey); // shift-click crafts max
-          this._renderCraftList(list, order);
+          this._renderCookbooks();
           this.slotUI.renderAll();
           this.refreshHotbarRow();
         });
       }
       list.appendChild(row);
     }
+    if (recipes.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "cb-empty";
+      empty.textContent = mode === "tab" && st.category === "ready" && !st.search
+        ? "Nothing to make from the satchel yet — try All, or rest on an item."
+        : "No recipe matches.";
+      list.appendChild(empty);
+    }
+  }
+
+  // the persistent parts of a cookbook container (built once, so the search
+  // box keeps its focus and caret across re-renders)
+  _cookbookShell(el) {
+    if (el._cb) return el._cb;
+    el.innerHTML = "";
+    el.classList.add("cookbook");
+    const tray = document.createElement("div");
+    tray.className = "cb-tray";
+    const bar = document.createElement("div");
+    bar.className = "cb-bar";
+    const tabs = document.createElement("div");
+    tabs.className = "cb-tabs";
+    for (const cat of CATEGORIES) {
+      const b = document.createElement("button");
+      b.dataset.cat = cat.id;
+      b.textContent = cat.name;
+      b.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        this.cookbook.category = cat.id;
+        this.cookbook.hover = null;
+        this._renderCookbooks();
+      });
+      tabs.appendChild(b);
+    }
+    const search = document.createElement("input");
+    search.type = "search";
+    search.className = "cb-search";
+    search.placeholder = "search…";
+    // typing belongs to the box: keep the game's keys (E closes the
+    // window, digits pick the belt) out of it — Escape still closes
+    search.addEventListener("keydown", (e) => { if (e.code !== "Escape") e.stopPropagation(); });
+    search.addEventListener("input", () => {
+      this.cookbook.search = search.value;
+      this._renderCookbooks();
+    });
+    bar.appendChild(tabs);
+    bar.appendChild(search);
+    const head = document.createElement("div");
+    head.className = "cb-head";
+    const list = document.createElement("div");
+    list.className = "cb-list";
+    el.append(tray, bar, head, list);
+    el._cb = { tray, tabs, search, head, list };
+    return el._cb;
   }
 
   _sortedRecipes(recipes) {
@@ -812,6 +979,7 @@ export class Hud {
   closePicker() {
     if (!this.pickerOpen) return;
     this.pickerOpen = false;
+    this.cookbook.hover = null; // a preview never outlives its window
     this.slotUI.close(); // spills any held cursor stack
     this.pickerEl.classList.add("hidden");
     if (this.playerViewer) this.playerViewer.stop();
@@ -857,6 +1025,7 @@ export class Hud {
   closeBench() {
     if (!this.benchOpen) return;
     this.benchOpen = false;
+    this.cookbook.hover = null;
     this.slotUI.close();
     document.getElementById("bench-ui").classList.add("hidden");
   }
@@ -864,7 +1033,11 @@ export class Hud {
   // the Peddler's trade window: the day's three offers as clickable rows
   // (craft-row idiom) over the usual satchel + belt. `onTrade(offer)` does
   // the inventory work in main.js and returns whether the barter landed.
-  openTrade(offers, onTrade) {
+  // opts: { title, hint } — the header (defaults to the Peddler's own)
+  openTrade(offers, onTrade, opts = {}) {
+    document.getElementById("trade-title").textContent = opts.title || "The Peddler";
+    document.getElementById("trade-hint").textContent = opts.hint ||
+      "(three offers a day, take them or leave them \u2014 E to close)";
     this.tradeOpen = true;
     this._tradeOffers = offers;
     this._onTrade = onTrade;
@@ -894,7 +1067,10 @@ export class Hud {
     const list = document.getElementById("trade-list");
     list.innerHTML = "";
     for (const offer of this._tradeOffers) {
-      const ok = canAfford(offer, this.inventory);
+      // stockLeft (stock.js, stamped by main.js): 0 = sold out — the row
+      // stays on the board, greyed, until the shelf restocks
+      const soldOut = offer.stockLeft === 0;
+      const ok = !soldOut && canAfford(offer, this.inventory);
       const row = document.createElement("div");
       row.className = "craft-row" + (ok ? "" : " uncraftable");
 
@@ -907,8 +1083,10 @@ export class Hud {
       const wants = offer.give
         .map(([id, n]) => `${n}× ${BLOCKS[id].name}`)
         .join(" + ");
+      const shelf = soldOut ? " — sold out"
+        : Number.isFinite(offer.stockLeft) ? ` — ${offer.stockLeft} left` : "";
       label.innerHTML =
-        `<b>${offer.get[1]}× ${BLOCKS[offer.get[0]].name}</b><small>for ${wants}</small>`;
+        `<b>${offer.get[1]}× ${BLOCKS[offer.get[0]].name}</b><small>for ${wants}${shelf}</small>`;
       row.appendChild(label);
 
       if (ok) {

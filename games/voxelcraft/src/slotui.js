@@ -61,7 +61,14 @@ export function paletteRegion(name, ids) {
 }
 
 export class SlotUI {
-  constructor({ drawIcon, onChange, onSpill, describe }) {
+  constructor({ drawIcon, onChange, onSpill, describe, onHover, onDoubleClick }) {
+    // the cookbook's ways in (hud.js): resting on a slot previews, and a
+    // left double-click on the same slot pins. A double-click is net-zero
+    // on the stack: the first click lifts it to the cursor, the second puts
+    // the whole stack straight back, and THEN the dblclick fires on a slot
+    // that holds exactly what it held before.
+    this.onHover = onHover || null;             // (region, i, stack|null)
+    this.onDoubleClick = onDoubleClick || null; // (region, i, stack|null)
     this.drawIcon = drawIcon;   // (canvasCtx, stack) => void
     this.describe = describe || null; // (stack) => hover text for a filled slot
     this.onChange = onChange;   // () => refresh hotbar/hud after any mutation
@@ -130,6 +137,13 @@ export class SlotUI {
         this.click(region, i, e.button, e.shiftKey);
       });
       cell.addEventListener("contextmenu", (e) => e.preventDefault());
+      cell.addEventListener("mouseenter", () => {
+        if (this.onHover) this.onHover(region, i, region.get(i));
+      });
+      cell.addEventListener("dblclick", (e) => {
+        if (e.button !== 0 || !this.onDoubleClick) return;
+        this.onDoubleClick(region, i, region.get(i));
+      });
       gridEl.appendChild(cell);
       view.cells.push({ cell, canvas, n });
     }

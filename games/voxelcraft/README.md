@@ -30,7 +30,10 @@ canvas atlas at boot, and every sound is synthesized with WebAudio.
   faint self-lit moss that presses onto any solid face — floor, wall, or
   ceiling). Ores run coal → **sky-iron** (below y28) → **gloamgold** (below
   y14, seamed through the lava's territory), plus a vanishingly rare buried
-  starstone in the deep cave skin.
+  starstone in the deep cave skin. Besides the long noise seams, each ore
+  also turns up in counted **veins** (blobs whose biggest size shrinks
+  exponentially with the ore's rarity: coal to ~9, sky-iron ~7, gloamgold
+  ~5).
 - **Structures** — **the Steads-Before** (surface homestead ruins: collapsed
   cottages, leaning watch posts, root cellars) and **the Delvings-Under**
   (buried timbered mining galleries with rung shafts up to collapsed
@@ -39,9 +42,22 @@ canvas atlas at boot, and every sound is synthesized with WebAudio.
   through the flip WHOLE: **the Living Steads** — intact cottages, a well,
   a fenced meal-root patch, and 2-3 resident **Steadfolk** who potter the
   courtyard by day, head indoors at dusk, each barter three goods a day
-  from their job (grower/wright/keeper), warm to a repeat customer, and
-  persist: the same folk are there when you come back, unless the dark
-  got one while you were away.
+  from their job (grower/wright/keeper), and persist: the same folk are
+  there when you come back, unless the dark got one while you were away.
+  Every barter in the Upturn is **fair by value**: each line pairs a good
+  with something the trader wants and prices it by the shared rarity value,
+  skewed by the trader's own disposition (some are born kinder bargainers)
+  and, at a stead, by your standing.
+  Each stead keeps a **Standing** with you (-100..+100): trades and gifts
+  (sneak + right-click a resident; each job has its likes) raise it, and
+  kicks, killings, pulled crops and taken-apart walls sink it. A friendly
+  stead prices every barter lower and deals a fourth line; a wary one
+  asks more and steps away from you; a hostile one won't deal at all.
+  Traders' goods are **finite**: each line holds a few trades (fewer for
+  rarer goods) and restocks over time (slower for rarer goods). Friend or
+  raider is your call: a trader felled by your hand drops its pockets and
+  half its unsold stock, its stead's standing craters, and the dead stay
+  dead. Fell the Peddler and no peddler walks the roads for a week.
 - **The Undersky** — a second dimension: the drowned old floor of the
   flip, reached through a **Cinder Door** (below). Permanent dusk under
   close bright stars, pearlsand dunes over slate, glowing **Starkelp**,
@@ -129,7 +145,12 @@ canvas atlas at boot, and every sound is synthesized with WebAudio.
 ## Stations, blocks & fixtures
 
 Workbench cookbook + field recipes (no crafting grid — shapes would be
-ceremony), the Kiln (3-slot smelter with live progress and persistent burn),
+ceremony). The cookbook works backwards from what you hold: rest the pointer
+on a satchel item to preview everything it goes into, double-click it to pin
+it into the filter tray, and pin a second or third to narrow to the exact
+recipe (or "only these" to see what the pins alone make). It opens compact
+on what you can make right now, with category tabs and a search box as the
+secondary paths. Then the Kiln (3-slot smelter with live progress and persistent burn),
 chests, the Moss Cot (sleep to dawn, respawn anchor), Rung Ladders, two-block
 Plank Doors, Wattle Fences and Gates (neighbor-aware meshing), slabs and
 facing-baked stairs, writable Notice Posts, the Blast Keg (primed explosive
@@ -203,9 +224,11 @@ moods with crossfades, plus rain and Prowl-pulse overlays).
 | W / S on a ladder | climb / descend (idle slides down slowly) |
 | LMB / RMB / MMB | break / use-place / pick block |
 | hold RMB | eat food, draw the Springstave |
+| Shift + RMB on a steadfolk | give it the held item (one unit) |
 | Q | toss one item |
 | 1–9 / wheel | hotbar selection |
 | E | Satchel / block picker |
+| rest on / double-click an item (Satchel, bench) | preview / pin it in the cookbook |
 | F3 / F5 | debug overlay / third person |
 | Esc | pause |
 
@@ -230,6 +253,7 @@ src/blocks.js      block/item registry (tiles, buckets, tools, armor, food)
 src/rarity.js      rarity -> value: every item's shared worth (seeded + overridable)
 src/world.js       chunk store, get/set, emitters, persistent edit overlay
 src/terrain.js     heightmap/biomes/caves/ores/lava — pure fn of (x,z,seed)
+src/veins.js       ore veins: per-cell seeded blobs, rarity-capped sizes
 src/undersky.js    the far side: pearlsand dunes, pearl-beds, starkelp
 src/sunken.js      the Sunken Steads: drowned wrecks + once-per-world loot
 src/portal.js      the Cinder Door: frame scan, film collapse, arrivals
@@ -237,6 +261,8 @@ src/mesher.js      culled faces + AO + BFS block light -> 3 buckets + shader
 src/ruins.js       the Steads-Before: seeded surface ruins + loot
 src/delvings.js    the Delvings-Under: buried galleries + loot
 src/steads.js      the Living Steads: intact homesteads + resident manager
+src/standing.js    Standing: each stead's reputation axis, bands, gifts, turns
+src/stock.js       trader stock (rarity-driven cap + restock) and trader loot
 src/player.js      pointer-lock look, AABB physics, survival, the Whims
 src/player-model.js the Wanderling body, held tools, armor overlays
 src/player-viewer.js the Satchel's spinnable model viewer
@@ -244,6 +270,7 @@ src/interact.js    voxel raycast, break/place/use routing, draw, particles
 src/inventory.js   slot inventory, stacks (dur + thread), save shapes
 src/slotui.js      slot-grid + cursor-stack UI engine
 src/craft.js       the recipe list (field + workbench)
+src/cookbook.js    the ingredient-filter cookbook: reverse index, pins, tabs
 src/kiln.js        smelting: per-kiln slots + burn/progress timers
 src/gleam.js       the XP model (jars + motes)
 src/loom.js        the Loomstone's threads (definitions + weaving)
@@ -259,15 +286,20 @@ src/rails.js       the Waybar auto-shaper + track geometry oracle
 src/carts.js       Trundles: rolling physics, boarding, parking
 src/fishing.js     the Dib-Pole and the dib-float
 src/signs.js       Notice Post text boards
-src/trade.js       the Peddler's ledger + daily offers
+src/trade.js       fair-value pricing, dispositions, the Peddler's daily board
 src/wayfinding.js  Needle/Dial widgets + the Field Chart
 src/hud.js         hotbar, windows, meters, badges, boss bar (DOM)
 src/sky.js         day/night lights, stars, clouds, fog, weather machine
 src/rain.js        rain/snow streak rendering + drift settling support
 src/audio.js       WebAudio synthesized SFX
 src/music.js       the Murmur: generative ambient moods
-src/save.js        localStorage save/load (additive fields, v1 migration)
+src/save.js        localStorage save/load (additive fields, v1 migration) + save files
 ```
+
+**Save files** — the pause menu's *Export save* downloads the current world
+as a plain JSON file (`voxelcraft-<seed>-day<n>-<date>.json`); *Import save*
+loads one back (validated first, confirmed, then the page reloads into it),
+so a world travels to any browser that has the site and the file.
 
 All world features (height, biome, trees, ores, ruins, delvings, pearl-beds)
 are pure functions of world coordinates and the seed, so chunks generate

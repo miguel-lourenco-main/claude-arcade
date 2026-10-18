@@ -19,7 +19,7 @@ import { reshapeRails, railShape } from "./rails.js";
 import { Fishing } from "./fishing.js";
 import { SignBoards } from "./signs.js";
 import { craft } from "./craft.js";
-import { dailyOffers, executeTrade } from "./trade.js";
+import { dailyOffers, executeTrade, canAfford } from "./trade.js";
 import { makeKiln, tickKilns } from "./kiln.js";
 import { Gleam } from "./gleam.js";
 import {
@@ -49,7 +49,8 @@ import { sunkenForChunk, findNearestSunken } from "./sunken.js";
 import { findNearestRuin, ruinForChunk } from "./ruins.js";
 import { findNearestDelve, delveForChunk } from "./delvings.js";
 import {
-  Steads, findNearestStead, steadForChunk, steadOffers, isWarmed, recordTrade,
+  Steads, findNearestStead, steadForChunk, steadOffers, recordTrade, steadPartAt,
+  seedSteadState, JOB_GOODS,
 } from "./steads.js";
 import {
   buildMaterials, meshChunk, disposeChunkMeshes, setDayLight, buildBlockGeometry,
@@ -59,12 +60,20 @@ import { raycast } from "./interact.js";
 import { Player } from "./player.js";
 import { Interaction } from "./interact.js";
 import { Hud } from "./hud.js";
-import { Sky } from "./sky.js";
+import { Sky, DAY_LENGTH } from "./sky.js";
+import {
+  stockLeft, takeStock, traderLoot, ledgerToSave, ledgerFromSave,
+} from "./stock.js";
 import { Rain } from "./rain.js";
 import { Sfx } from "./audio.js";
 import { Music } from "./music.js";
-import { loadSave, writeSave, clearSave, startAutosave } from "./save.js";
+import {
+  loadSave, writeSave, clearSave, startAutosave, exportSaveFile, parseSaveFile, importSave,
+} from "./save.js";
 import { resolveRarity, rarityOf, valueOf, rarityTier } from "./rarity.js";
+import {
+  applyStanding, bandOf, standingOf, giftStanding, globalStanding, DAILY_GAIN_CAP,
+} from "./standing.js";
 
 const MESH_RADIUS = 5;
 const GEN_RADIUS = MESH_RADIUS + 1;
@@ -314,6 +323,15 @@ if (save && save.ruinsU) uWorld.loadRuins(save.ruinsU);
 if (save && Array.isArray(save.bondlings)) mobs.loadBondlings(save.bondlings);
 // additive field: tamed Tuftlings — the other creatures that persist
 if (save && Array.isArray(save.pets)) mobs.loadPets(save.pets);
+// the Peddler's day (stock.js): today's shelf, and how long he stays away
+// after being felled. Additive — absent in older saves (a full pack).
+const peddlerState = { day: -1, ledger: {}, absentUntil: -1 };
+if (save && Array.isArray(save.peddler)) {
+  const [day, ledger, absentUntil] = save.peddler;
+  if (Number.isInteger(day)) peddlerState.day = day;
+  peddlerState.ledger = ledgerFromSave(ledger);
+  if (Number.isInteger(absentUntil)) peddlerState.absentUntil = absentUntil;
+}
 if (save && save.signs) world.loadSigns(save.signs); // additive v2 field
 // additive v2 field: ruin chunks whose loot was already dealt — must load
 // before any chunk generates, or a looted stead would re-seed its chest
@@ -652,6 +670,10 @@ function adjustToClearGround(pos) {
 const hud = new Hud(atlas.canvas, {
   onResume: () => requestLock(),
   onReset: () => { stopAutosave(); clearSave(); location.reload(); },
+  // save files (save.js): export writes a fresh save first so the file is
+  // this very moment; import validates, confirms, then swaps and reloads
+  onExportSave: () => exportSaveNow(),
+  onImportSave: (text, name) => importSaveText(text, name),
   onTeleport: teleportTo,
   onToggleMovement: () => {
     player.moveMode = player.moveMode === "static" ? "camera" : "static";
@@ -828,25 +850,130 @@ const fishing = new Fishing(scene, {
   poleSelected: () => hud.selectedId() === FISHING_POLE,
 });
 
-// a steadfolk's trade window: the day's three offers from its JOB table,
-// discounting the third once the resident has warmed to two trades today.
-// Re-deals the board live the moment warmth flips on, so the discount shows.
+// the stead record a live resident belongs to (standing lives there)
+const steadRecOf = (m) => (m && m.steadKey ? world.steads.get(m.steadKey) : null);
+
+// a standing change worth a line: only when the band itself moves
+function announceStanding(res) {
+  if (!res || !res.bandChanged) return;
+  const lines = {
+    hostile: "The stead has turned against you.",
+    wary: "The stead watches you warily now.",
+    neutral: "The stead takes you as it finds you.",
+    friendly: "The stead counts you a friend.",
+    cherished: "The stead holds you dear.",
+  };
+  hud.announce(lines[res.band.id] || "", 3200);
+}
+
+// a broken block inside a Living Stead's footprint (steads.js steadPartAt):
+// the patch's ripe crops count as stealing, the buildings/well/fence as
+// wrecking — each a turn on that stead's standing (seeded first, so a stead
+// wrecked before its folk ever woke still remembers)
+function noteSteadDamage(x, y, z, brokenId) {
+  const part = steadPartAt(terrain, x, y, z, brokenId);
+  if (!part) return;
+  const { plan, kind } = part;
+  if (!world.steads.has(plan.key)) seedSteadState(world, plan);
+  announceStanding(applyStanding(world.steads.get(plan.key), kind, sky.day));
+}
+
+// world seconds since day 0 — the clock trader stock restocks against
+const worldNow = () => (sky.day + sky.time) * DAY_LENGTH;
+
+// the Peddler is a new wanderer every day, with a new pack
+function peddlerLedger() {
+  if (peddlerState.day !== sky.day) { peddlerState.day = sky.day; peddlerState.ledger = {}; }
+  return peddlerState.ledger;
+}
+
+// stamp each offer with what's left on the trader's shelf (the HUD greys a
+// sold-out line); mutating in place keeps the window's rows live
+function stampStock(offers, ledger) {
+  const now = worldNow();
+  for (const o of offers) o.stockLeft = stockLeft(ledger, o.get[0], now);
+  return offers;
+}
+
+// one barter against a finite shelf: affordable first, then the stock,
+// then the goods change hands. Returns true when the trade happened.
+function tradeFromShelf(offer, ledger) {
+  if (!canAfford(offer, inventory)) return false;
+  if (!takeStock(ledger, offer.get[0], worldNow())) {
+    hud.announce("Sold out — that comes back in time.", 1800);
+    return false;
+  }
+  const leftover = executeTrade(offer, inventory);
+  if (leftover > 0) spillStack({ id: offer.get[0], count: leftover });
+  offer.stockLeft = stockLeft(ledger, offer.get[0], worldNow());
+  return true;
+}
+
+// the raider path: a trader felled by the player drops its pocket goods and
+// a share of its unsold stock where it fell (stock.js traderLoot)
+function dropTraderLoot(m, job, sells, ledger) {
+  for (const [id, n] of traderLoot(job, sells, ledger || {}, worldNow())) {
+    drops.spawn(m.x, m.y + 0.4, m.z, id, n);
+  }
+}
+
+// a steadfolk's trade window: the day's offers from its JOB table, priced by
+// the stead's STANDING (standing.js — the old per-day warmth lives at its
+// positive end). A hostile stead won't deal at all; a trade raises standing
+// (capped per day) and re-deals the board live if the band moves.
 function openSteadTrade(m) {
   const day = sky.day;
   const rec = m.record;
+  const steadRec = steadRecOf(m);
+  const band = bandOf(standingOf(steadRec));
+  if (band.refuseTrade) {
+    hud.announce("The steadfolk won't deal with you.", 2600);
+    return;
+  }
   const open = () => {
-    const warmed = isWarmed(rec, day);
-    const offers = steadOffers(m.steadSeed, m.resIdx, m.job, day, warmed);
+    const b = bandOf(standingOf(steadRec));
+    const offers = steadOffers(m.steadSeed, m.resIdx, m.job, day, standingOf(steadRec));
+    if (rec && !rec.stock) rec.stock = {};
+    const ledger = rec ? rec.stock : {};
+    stampStock(offers, ledger);
     hud.openTrade(offers, (offer) => {
-      const leftover = executeTrade(offer, inventory); // -1 = can't pay
-      if (leftover < 0) return false;
-      if (leftover > 0) spillStack({ id: offer.get[0], count: leftover });
+      if (!tradeFromShelf(offer, ledger)) return false;
       sfx.peddlerHm();
-      if (rec && recordTrade(rec, day)) open(); // warmth just flipped: re-deal
+      if (rec) recordTrade(rec, day);
+      const res = steadRec ? applyStanding(steadRec, "trade", day) : null;
+      if (res && res.bandChanged) { announceStanding(res); open(); } // re-deal at the new price
       return true;
-    });
+    }, { title: `The ${m.job}`, hint: `(a steadfolk; standing: ${b.name} — E to close)` });
   };
   open();
+}
+
+// sneak + right-click a steadfolk with something in hand: a gift. One unit
+// is handed over; standing rises by its worth (doubled if the job likes it),
+// within the stead's daily cap for good turns. Over the cap the resident
+// politely declines and nothing is spent.
+function giftSteadfolk(m) {
+  const steadRec = steadRecOf(m);
+  if (!steadRec) return;
+  const id = hud.selectedId();
+  if (!id || !BLOCKS[id]) { hud.announce("Your hand-feet are empty.", 1600); return; }
+  if (m.grudgeT > 0 || bandOf(standingOf(steadRec)).refuseTrade) {
+    hud.announce("The steadfolk won't take anything from you.", 2600);
+    return;
+  }
+  const day = sky.day;
+  const used = steadRec.gainDay === day ? steadRec.gainToday || 0 : 0;
+  if (used >= DAILY_GAIN_CAP) {
+    hud.announce("They've had enough kindness for one day.", 2600);
+    return;
+  }
+  if (!interaction.canConsume(id)) return;
+  hud.refreshHotbarRow();
+  const amount = giftStanding(m.job, id);
+  const res = applyStanding(steadRec, "gift", day, amount);
+  sfx.peddlerHm();
+  if (res.bandChanged) announceStanding(res);
+  else hud.announce(amount >= 4 ? `The ${m.job} is delighted.` : `The ${m.job} thanks you.`, 2200);
 }
 
 const interaction = new Interaction(world, player, scene, hud, {
@@ -889,6 +1016,12 @@ const interaction = new Interaction(world, player, scene, hud, {
       // breaking a Notice Post takes its writing with it (the board mesh
       // follows on the next signBoards.sync)
       if (isSign(info.broken)) world.signs.delete(`${info.x},${info.y},${info.z}`);
+      // taking a Living Stead apart: its own walls (wreck) or a ripe crop
+      // from its patch (steal) — never a block the player placed themselves
+      if (info.broken != null && !info.wasPlaced && player.mode === "survival" &&
+          dim.id === "overworld") {
+        noteSteadDamage(info.x, info.y, info.z, info.broken);
+      }
       // breaking the slept-in Moss Cot unhooks the respawn anchor
       const sp = player.spawnPoint;
       if (info.broken === BED && sp &&
@@ -1155,6 +1288,7 @@ const interaction = new Interaction(world, player, scene, hud, {
   boats,
   carts,
   fishing,
+  onGiftMob: (m) => giftSteadfolk(m),
   // right-click a trader — the Peddler, or a Living Stead's steadfolk. Both
   // open the same trade window (hud.openTrade) with the day's three offers,
   // and both nurse a 60-second grudge from a kick. The steadfolk pull their
@@ -1167,10 +1301,10 @@ const interaction = new Interaction(world, player, scene, hud, {
       return;
     }
     if (m.stead) { openSteadTrade(m); return; }
-    hud.openTrade(dailyOffers(world.seed, sky.day), (offer) => {
-      const leftover = executeTrade(offer, inventory); // -1 = can't pay
-      if (leftover < 0) return false;
-      if (leftover > 0) spillStack({ id: offer.get[0], count: leftover });
+    // the Peddler's board (a wanderer: no stead, so no standing)
+    const ledger = peddlerLedger();
+    hud.openTrade(stampStock(dailyOffers(world.seed, sky.day), ledger), (offer) => {
+      if (!tradeFromShelf(offer, ledger)) return false;
       sfx.peddlerHm(); // satisfied
       return true;
     });
@@ -1339,11 +1473,43 @@ mobs.onBreed = () => {
   awardGleam(1);
   hud.announce("A Snufflet! A loaf in training.", 2600);
 };
-// a fallen steadfolk: mark its record dead (it stays gone) and mourn it
+// a fallen steadfolk: mark its record dead (it stays gone) and mourn it.
+// If the player's hand was on it (blame from a recent hit), the stead
+// remembers: a killing is the heaviest turn on the standing axis.
 mobs.onSteadfolkDeath = (m) => {
   if (m.record) m.record.dead = true;
   sfx.mourn();
-  hud.announce("A steadfolk falls. The stead is quieter now.", 3600);
+  const steadRec = steadRecOf(m);
+  if (m.blameT > 0 && steadRec && player.mode === "survival") {
+    applyStanding(steadRec, "kill", sky.day);
+    // the raider's take: what it carried, and half its unsold shelf
+    const goods = JOB_GOODS[m.job] || JOB_GOODS.grower;
+    dropTraderLoot(m, m.job, goods.sells, m.record && m.record.stock);
+    hud.announce("A steadfolk falls by your hand. The stead will not forget.", 4200);
+  } else {
+    hud.announce("A steadfolk falls. The stead is quieter now.", 3600);
+  }
+};
+// a fallen Peddler: by the player's hand, his pack spills (today's goods,
+// half of what's unsold) and no peddler walks these roads for a week; taken
+// by the dark, he's simply mourned
+const PEDDLER_ABSENCE_DAYS = 7;
+mobs.onTraderDeath = (m) => {
+  sfx.mourn();
+  if (m.blameT > 0 && player.mode === "survival") {
+    const sells = dailyOffers(world.seed, sky.day).map((o) => o.get[0]);
+    dropTraderLoot(m, "peddler", sells, peddlerLedger());
+    peddlerState.absentUntil = sky.day + PEDDLER_ABSENCE_DAYS;
+    hud.announce("The Peddler falls by your hand. The roads will be emptier for it.", 4200);
+  } else {
+    hud.announce("The Peddler is gone. The roads are quieter.", 3600);
+  }
+};
+// a player-landed blow on a resident: the stead takes note
+mobs.onPlayerStrike = (m) => {
+  if (!m.stead || player.mode !== "survival") return;
+  const steadRec = steadRecOf(m);
+  if (steadRec) announceStanding(applyStanding(steadRec, "hit", sky.day));
 };
 // the door-chime: a soft knock as a resident passes its own doorway
 mobs.onSteadKnock = () => sfx.creature("knock");
@@ -1489,7 +1655,7 @@ dim.cartsData = null;
 // the save's `world` is ALWAYS the overworld instance — never the live
 // binding, or a save written under the Undersky would pour its edits into
 // the overworld's fields. The far side rides its own *U extras below.
-const stopAutosave = startAutosave(() => writeSave(dims.overworld.world, player, sky, hud, inventory, {
+const saveNow = () => writeSave(dims.overworld.world, player, sky, hud, inventory, {
   saplings: [...saplings].map(([key, due]) => {
     const [x, y, z] = key.split(",").map(Number);
     return [x, y, z, Math.max(1, due - growthSeconds)];
@@ -1532,11 +1698,48 @@ const stopAutosave = startAutosave(() => writeSave(dims.overworld.world, player,
   music: [music.enabled ? 1 : 0, Math.round(music.volume * 100) / 100],
   // additive: Gleam [jars, progress] — absent in older saves (a fresh jar)
   gleam: gleam.serialize(),
+  // additive: the Peddler's day [day, stock ledger, absent-until day]
+  peddler: [peddlerState.day, ledgerToSave(peddlerState.ledger), peddlerState.absentUntil],
   // additive: the Whims in progress [[id, secondsLeft], ...]
   effects: [...player.effects].map(([id, t]) => [id, Math.round(t * 10) / 10]),
   // additive: tamed Tuftlings [[x, y, z, hp, stay], ...]
   pets: mobs.serializePets(),
-}));
+});
+const stopAutosave = startAutosave(saveNow);
+
+// Export save: write a fresh save (so the file is this very moment), then
+// hand it to the browser as a download
+function exportSaveNow() {
+  saveNow();
+  const file = exportSaveFile();
+  if (!file) { hud.setSaveStatus("Nothing to export yet."); return null; }
+  const url = URL.createObjectURL(new Blob([file.text], { type: "application/json" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = file.name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  hud.setSaveStatus(`Saved to ${file.name}`);
+  return file;
+}
+
+// Import save: validate first (nothing is touched on a bad file), confirm the
+// overwrite, then swap the save and reload — the Reset-world sequence, with
+// the autosave stopped so the unload hook can't write the old world back
+function importSaveText(text, name = "the file", { confirmed = false } = {}) {
+  const res = parseSaveFile(text);
+  if (!res.ok) { hud.setSaveStatus(res.error); return res; }
+  if (!confirmed && !confirm(`Load the world from ${name}? It replaces this world — export first to keep it.`)) {
+    hud.setSaveStatus("Import cancelled.");
+    return { ok: false, error: "cancelled" };
+  }
+  stopAutosave();
+  importSave(res.save);
+  location.reload();
+  return res;
+}
 
 // --- held item (first-person hand) — its own scene + depth-cleared pass ------
 
@@ -1912,6 +2115,7 @@ function tick(now) {
       }
       return accepted; // a full inventory keeps the rest on the ground
     });
+    mobs.peddlerAway = sky.day < peddlerState.absentUntil;
     mobs.update(frameDt, { world, player, terrain, night: sky.lightLevel < 0.45, tod: sky.time });
     // the overworld's own institutions sleep while the player is under the
     // other sky: steads/prowl/meteors captured the overworld world+terrain
@@ -2189,7 +2393,17 @@ if (NO_LOCK) {
     steads,
     findNearestStead: (x, z) => findNearestStead(terrain, x, z),
     steadForChunk: (cx, cz) => steadForChunk(terrain, cx, cz),
-    steadOffers: (m, warmed) => steadOffers(m.steadSeed, m.resIdx, m.job, sky.day, warmed),
+    steadOffers: (m, standing) => steadOffers(m.steadSeed, m.resIdx, m.job, sky.day,
+      standing ?? standingOf(world.steads.get(m.steadKey))),
+    // save files: export (returns {name, text}) and a confirmed import
+    exportSave: () => exportSaveNow(),
+    importSaveText: (text) => importSaveText(text, "test", { confirmed: true }),
+    parseSaveFile,
+    saveNow: () => saveNow(),
+    // standing (standing.js): the band table + the live aggregate
+    standing: { bandOf, standingOf, applyStanding, giftStanding,
+      global: () => globalStanding(world.steads), gift: (m) => giftSteadfolk(m),
+      partAt: (x, y, z, id) => steadPartAt(terrain, x, y, z, id) },
     tradeWithMob: (m) => interaction.onTradeMob(m),
     // wear/model refresh + third-person toggle, so tests can equip the
     // Wanderwing straight into a wear slot and see the model dress + spread

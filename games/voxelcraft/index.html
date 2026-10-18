@@ -125,7 +125,7 @@
 
   <div id="trade-ui" class="hidden">
     <div id="trade-panel">
-      <h2>The Peddler <span class="hint">(three offers a day, take them or leave them &mdash; E to close)</span></h2>
+      <h2><span id="trade-title">The Peddler</span> <span class="hint" id="trade-hint">(three offers a day, take them or leave them &mdash; E to close)</span></h2>
       <h3>Today&rsquo;s offers</h3>
       <div id="trade-list"></div>
       <h3>Satchel</h3><div id="trade-main-grid" class="slot-grid"></div>
@@ -185,6 +185,12 @@
           <span id="music-val"></span>
         </label>
         <button id="music-toggle" class="secondary"></button>
+      </div>
+      <div class="row">
+        <button id="save-export" class="secondary">Export save</button>
+        <button id="save-import" class="secondary">Import save</button>
+        <input id="save-file" type="file" accept=".json,application/json" hidden>
+        <span id="save-status" class="hint"></span>
       </div>
       <div class="row">
         <button id="reset" class="danger">Reset world</button>

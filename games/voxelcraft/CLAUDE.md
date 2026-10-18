@@ -37,6 +37,8 @@ node games/voxelcraft/test/browser.test.mjs # headless Chrome boot + feature pro
   pointer lock and exposes `window.voxelcraft` (the test handle at the bottom
   of `main.js`). Add to that handle when a new system needs probing; never ship
   behavior that only exists in nolock mode. It needs network access for the CDN.
+- `VC_SHOTS=<dir> node games/voxelcraft/test/browser.test.mjs` also saves
+  PNGs at named moments (the cookbook's states) for eyeballing UI changes.
 - Pure logic you add (formulas, tables, resolvers, save shapes) gets a logic
   test. Gameplay gets at least a browser probe and a clean-console boot.
 

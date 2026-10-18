@@ -73,6 +73,9 @@ export function writeSave(world, player, sky, hud, inventory, extra = {}) {
       // additive: the Whims in progress [[id, secondsLeft], ...] — absent in
       // older saves (no moods borrowed)
       effects: extra.effects || undefined,
+      // additive: the Peddler's day [day, stockLedger, absentUntilDay] —
+      // absent in older saves: a full pack and an unbroken welcome
+      peddler: extra.peddler || undefined,
       // additive: tamed Tuftlings [[x, y, z, hp, stay], ...] — absent in
       // older saves, which simply have no little shadows at heel
       pets: extra.pets || undefined,
@@ -140,6 +143,67 @@ export function writeSave(world, player, sky, hud, inventory, extra = {}) {
 
 export function clearSave() {
   localStorage.removeItem(KEY);
+}
+
+// --- save files: carry a world between browsers ---------------------------------
+// The file is plain JSON (readable, diffable, and the saves compress well
+// enough as-is): an envelope naming the format around the exact object the
+// autosave writes. Import accepts that envelope or a bare save object (a raw
+// localStorage dump), validates the shape the loader depends on, and leaves
+// every additive field to main.js's own per-field validation on boot.
+export const SAVE_FILE_FORMAT = "voxelcraft-save";
+export const SAVE_FILE_VERSION = 1;
+
+// the current save as a downloadable file: { name, text } (null: no save yet)
+export function exportSaveFile(now = new Date()) {
+  let raw;
+  try { raw = localStorage.getItem(KEY); } catch { return null; }
+  if (!raw) return null;
+  let data;
+  try { data = JSON.parse(raw); } catch { return null; }
+  const day = Number.isInteger(data.day) ? data.day : 0;
+  const stamp = now.toISOString().slice(0, 10);
+  return {
+    name: `voxelcraft-${data.seed >>> 0}-day${day}-${stamp}.json`,
+    text: JSON.stringify({
+      format: SAVE_FILE_FORMAT, version: SAVE_FILE_VERSION,
+      exported: now.toISOString(), save: data,
+    }),
+  };
+}
+
+// parse + validate a save file's text: { ok: true, save } or { ok: false, error }
+export function parseSaveFile(text) {
+  let obj;
+  try { obj = JSON.parse(text); } catch { return { ok: false, error: "That file isn't a save (not JSON)." }; }
+  if (!obj || typeof obj !== "object") return { ok: false, error: "That file isn't a save." };
+  let save = obj;
+  if (obj.format !== undefined) {
+    if (obj.format !== SAVE_FILE_FORMAT) return { ok: false, error: "That file is some other game's save." };
+    if (!Number.isInteger(obj.version) || obj.version > SAVE_FILE_VERSION) {
+      return { ok: false, error: "That save file is from a newer Voxelcraft." };
+    }
+    save = obj.save;
+  }
+  if (!save || typeof save !== "object" || Array.isArray(save)) return { ok: false, error: "The file has no world in it." };
+  if (typeof save.seed !== "number" || !Number.isFinite(save.seed)) return { ok: false, error: "The world in that file has no seed." };
+  if (save.v !== undefined && save.v !== 1 && save.v !== 2) return { ok: false, error: "That save's version isn't one this game knows." };
+  // the loader walks these as arrays; anything else would be a broken world
+  for (const f of ["inventory", "edits", "chests", "kilns", "signs", "steads"]) {
+    if (save[f] !== undefined && save[f] !== null && !Array.isArray(save[f])) {
+      return { ok: false, error: `The save's ${f} is damaged.` };
+    }
+  }
+  if (save.player !== undefined && (typeof save.player !== "object" || save.player === null)) {
+    return { ok: false, error: "The save's player is damaged." };
+  }
+  return { ok: true, save };
+}
+
+// replace the current save with an imported one (the caller stops the
+// autosave first and reloads after, exactly like Reset world)
+export function importSave(save) {
+  localStorage.setItem(KEY, JSON.stringify(save));
 }
 
 // Returns a stop() that disables autosaving — required for "Reset world",

@@ -16,14 +16,18 @@ import { hash2, mulberry32 } from "./noise.js";
 import { CHUNK, HEIGHT, SEA_LEVEL } from "./world.js";
 import { ruinForChunk } from "./ruins.js";
 import { delveForChunk } from "./delvings.js";
+import { bandOf, standingOf } from "./standing.js";
 import {
   AIR, DIRT, GRASS, COBBLE, PLANKS, LOG, GLASS, TORCH, WATER, PLANK_SLAB,
   DOOR_OPEN, DOOR_TOP_OPEN, FENCE, GATE, FARMLAND, CROP_RIPE, BLOCKS, ICE,
   // job-table goods
   MEAL_ROOT, BERRIES, ROOT_SEED, POTTAGE, BOGBEAN, GRAVEL, STONE_PICK,
   IRON_INGOT, RAIL, DOOR, PLANK_STAIRS, COAL_ORE, SILVERFIN,
-  EMBER_BROTH, SUNWISP_BROTH, ROAST_LOIN,
+  EMBER_BROTH, SUNWISP_BROTH, ROAST_LOIN, SAND, BAKED_ROOT, LADDER, CHEST,
+  IRON_ORE, SEARED_SILVERFIN, SNUFFET_LOIN, POPPY, DANDELION, BOGBEAN_POD,
+  WISPCAP, SAPLING, IRON_PICK, COMPASS, CART, TIDE_BROTH, KELP_CRISP, STARGLASS,
 } from "./blocks.js";
+import { dealBoard, dispositionOf } from "./trade.js";
 
 const STEAD_RATE = 1 / 55;  // before the ruin/delve exclusion + terrain vetoes
                             // (~half the hits are lost to those), which lands
@@ -33,81 +37,73 @@ const STEADFOLK_HP = 10;
 const ACTIVATE_DIST = 72;   // residents come alive within this of the well
 const DEACTIVATE_DIST = 104;// ...and fold back to a saved record past this
 
-// the three trades a steadfolk works. give = what the player hands over, get
-// = what the steadfolk hands back (the Peddler's ledger idiom, trade.js).
+// the trades a steadfolk works: what each JOB sells, what it will take in
+// return, and (for a cherished customer) the rarer goods it keeps back. Any
+// sell can pair with any want; trade.js prices the pairing by fair value
+// (rarity.js) at the resident's disposition and the stead's standing.
 export const JOBS = ["grower", "wright", "keeper"];
-export const JOB_OFFERS = {
-  // the grower keeps the meal-root patch and the brambles; takes rubble and a
-  // spare tool for the digging, hands back the harvest and next year's pips
-  grower: [
-    { give: [[COBBLE, 10]], get: [MEAL_ROOT, 4] },
-    { give: [[GRAVEL, 10]], get: [BERRIES, 5] },
-    { give: [[COBBLE, 6]], get: [ROOT_SEED, 4] },
-    { give: [[STONE_PICK, 1]], get: [MEAL_ROOT, 8] },
-    { give: [[COBBLE, 14]], get: [BOGBEAN, 4] },
-    { give: [[GRAVEL, 8]], get: [POTTAGE, 1] },
-  ],
-  // the wright works the timber and the sky-iron: hands back planks, waybars,
-  // doors and stairs for an ingot or two
-  wright: [
-    { give: [[IRON_INGOT, 1]], get: [PLANKS, 12] },
-    { give: [[IRON_INGOT, 2]], get: [RAIL, 8] },
-    { give: [[IRON_INGOT, 1]], get: [DOOR, 2] },
-    { give: [[IRON_INGOT, 3]], get: [PLANK_STAIRS, 10] },
-    { give: [[IRON_INGOT, 1]], get: [FENCE, 8] },
-  ],
-  // the keeper minds the hearth and the pot: torches, broths, and a hot roast
-  // for coal and the day's catch
-  keeper: [
-    { give: [[COAL_ORE, 2]], get: [TORCH, 8] },
-    { give: [[SILVERFIN, 3]], get: [EMBER_BROTH, 1] },
-    { give: [[COAL_ORE, 3]], get: [SUNWISP_BROTH, 1] },
-    { give: [[SILVERFIN, 2]], get: [TORCH, 10] },
-    { give: [[COAL_ORE, 4]], get: [ROAST_LOIN, 1] },
-  ],
+export const JOB_GOODS = {
+  // the grower keeps the meal-root patch and the brambles; takes rubble,
+  // grit and the odd tool for the digging
+  grower: {
+    sells: [MEAL_ROOT, BERRIES, ROOT_SEED, BOGBEAN, POTTAGE, BAKED_ROOT],
+    wants: [COBBLE, GRAVEL, SAND, COAL_ORE, STONE_PICK, LOG],
+    rare: [BOGBEAN_POD, WISPCAP, SAPLING],
+  },
+  // the wright works the timber and the sky-iron
+  wright: {
+    sells: [PLANKS, RAIL, DOOR, PLANK_STAIRS, FENCE, LADDER, CHEST],
+    wants: [IRON_INGOT, IRON_ORE, LOG, COAL_ORE, COBBLE],
+    rare: [IRON_PICK, COMPASS, CART],
+  },
+  // the keeper minds the hearth and the pot
+  keeper: {
+    sells: [TORCH, EMBER_BROTH, SUNWISP_BROTH, ROAST_LOIN, SEARED_SILVERFIN],
+    wants: [COAL_ORE, SILVERFIN, SNUFFET_LOIN, POPPY, DANDELION, LOG],
+    rare: [TIDE_BROTH, KELP_CRISP, STARGLASS],
+  },
 };
 
 export const OFFERS_PER_DAY = 3;
-const WARM_THRESHOLD = 2;   // trades in a day that warm a steadfolk
-const WARM_DISCOUNT = 0.2;  // the third offer's discount once warmed
 
-// a steadfolk's three offers for the day, deterministic in (seed, resident,
-// day) — the Peddler's seeded Fisher-Yates, keyed so each resident rotates
-// its own board. When `warmed`, the third offer's price is shaved ~20%
-// (floored, never below one), until dawn re-deals a cold board.
-export function steadOffers(steadSeed, resIdx, job, day, warmed) {
-  const pool = JOB_OFFERS[job] || JOB_OFFERS.grower;
+// a resident's disposition: fixed at its "birth" (the stead's seed + its
+// place in the stead), so the same steadfolk is always the same bargainer
+export function residentDisposition(steadSeed, resIdx) {
+  return dispositionOf((steadSeed ^ Math.imul(resIdx + 1, 0x9e3779b9)) >>> 0);
+}
+
+// a steadfolk's offers for the day, deterministic in (seed, resident, day):
+// value-fair pairings from its job's goods (trade.js dealBoard), at
+// ratio = disposition x the stead's standing band price (standing.js — the
+// old per-day warmth lives at its positive end). A friendly stead deals a
+// fourth line; a cherished one deals it from the job's rare goods.
+export function steadOffers(steadSeed, resIdx, job, day, standing = 0) {
+  const band = bandOf(standing);
+  const goods = JOB_GOODS[job] || JOB_GOODS.grower;
   const rand = mulberry32(
     (steadSeed ^ Math.imul(resIdx + 1, 0x9e3779b9) ^ Math.imul(day + 1, 0x85ebca77)) >>> 0);
-  const idx = pool.map((_, i) => i);
-  for (let i = idx.length - 1; i > 0; i--) {
-    const j = (rand() * (i + 1)) | 0;
-    [idx[i], idx[j]] = [idx[j], idx[i]];
+  const ratio = residentDisposition(steadSeed, resIdx) * band.priceMul;
+  const board = dealBoard(rand, goods.sells, goods.wants, OFFERS_PER_DAY, ratio);
+  if (band.extraOffer) {
+    const pool = band.id === "cherished"
+      ? goods.rare : goods.sells.filter((id) => !board.some((o) => o.get[0] === id));
+    board.push(...dealBoard(rand, pool, goods.wants, 1, ratio));
   }
-  const picks = idx.slice(0, OFFERS_PER_DAY).map((i) => pool[i]);
-  if (warmed && picks[2]) {
-    // shave the third offer's give side (a warmed neighbor cuts you a deal)
-    picks[2] = {
-      give: picks[2].give.map(([id, n]) =>
-        [id, Math.max(1, Math.floor(n * (1 - WARM_DISCOUNT)))]),
-      get: picks[2].get,
-      warmed: true,
-    };
-  }
-  return picks;
+  for (const o of board) o.warmed = band.priceMul < 1; // the board shows a friendly price
+  return board;
 }
 
-export function isWarmed(record, day) {
-  return !!record && record.tradeDay === day && record.trades >= WARM_THRESHOLD;
+// is this resident's stead friendly enough to deal its good prices?
+// (the old two-trades-a-day warmth, folded into standing)
+export function isWarmed(steadRec) {
+  return bandOf(standingOf(steadRec)).priceMul < 1;
 }
 
-// register a completed trade against a resident's record and return whether
-// the warmth state just flipped on (so the caller can re-render the board)
+// register a completed trade against a resident's record (the per-day
+// trade count is kept for the save and for errands; standing does the rest)
 export function recordTrade(record, day) {
   if (record.tradeDay !== day) { record.tradeDay = day; record.trades = 0; }
-  const was = record.trades >= WARM_THRESHOLD;
   record.trades++;
-  return !was && record.trades >= WARM_THRESHOLD;
 }
 
 // --- placement (pure function of seed + chunk) --------------------------------
@@ -281,6 +277,37 @@ export function stampStead(chunk, plan) {
   }
 }
 
+// --- what part of a stead is this? (standing: wreck / steal) -----------------
+
+// the stead's own built pieces: breaking one of these inside the footprint
+// is taking the stead apart (the turf pad, dirt and stone under it are just
+// ground, and don't count)
+const STRUCTURE_IDS = new Set([
+  PLANKS, LOG, COBBLE, GLASS, TORCH, DOOR, DOOR_OPEN, DOOR_TOP_OPEN, FENCE, GATE,
+  PLANK_SLAB, FARMLAND,
+]);
+const CROP_IDS = new Set([CROP_RIPE]);
+
+// is world cell (x, y, z) — which held `brokenId` — part of a Living Stead?
+// Returns { plan, kind: "steal" | "wreck" } or null. Pure (seed + coords).
+export function steadPartAt(terrain, x, y, z, brokenId) {
+  const plan = steadForChunk(terrain, x >> 4, z >> 4);
+  if (!plan) return null;
+  const inBox = (x0, x1, z0, z1, y0, y1) =>
+    x >= x0 && x <= x1 && z >= z0 && z <= z1 && y >= y0 && y <= y1;
+  const g = plan.garden;
+  if (CROP_IDS.has(brokenId) && inBox(g.x0, g.x1, g.z0, g.z1, plan.h, plan.h + 1)) {
+    return { plan, kind: "steal" };
+  }
+  if (!STRUCTURE_IDS.has(brokenId) && !(brokenId >= DOOR && brokenId <= DOOR + 3)) return null;
+  const w = plan.well;
+  const inStead =
+    plan.buildings.some((b) => inBox(b.x0, b.x1, b.z0, b.z1, b.floorY, b.roofY + 1)) ||
+    inBox(w.x - 1, w.x + 1, w.z - 1, w.z + 1, plan.h - 3, plan.h + 4) ||
+    inBox(g.x0, g.x1, g.z0, g.z1, plan.h, plan.h + 1);
+  return inStead ? { plan, kind: "wreck" } : null;
+}
+
 // --- persistent resident records (additive save field) -----------------------
 
 // seed the stead's resident records exactly once per world (keyed on the
@@ -290,9 +317,11 @@ export function stampStead(chunk, plan) {
 export function seedSteadState(world, plan) {
   if (world.steads.has(plan.key)) return;
   world.steads.set(plan.key, {
+    standing: 0, gainDay: -1, gainToday: 0, // standing.js
     residents: plan.residents.map((r) => ({
       job: r.job, homeIdx: r.homeIdx, hp: STEADFOLK_HP,
       trades: 0, tradeDay: -1, dead: false,
+      stock: {}, // stock.js ledger — empty = a full shelf
     })),
   });
 }
@@ -403,7 +432,24 @@ export class Steads {
       this.active.set(key, { plan, entries });
     }
 
-    // 4. life touch: a thin smoke column off the nearest active stead's roof
+    // 4. manner: a wary or hostile stead's folk step away from the player
+    // (standing.js fleeDist) — the generic flee state, re-armed while close
+    for (const [key, act] of this.active) {
+      const rec = world.steads.get(key);
+      const flee = bandOf(standingOf(rec)).fleeDist;
+      if (!flee) continue;
+      for (const e of act.entries) {
+        const m = e.mob;
+        const d = Math.hypot(m.x - player.pos.x, m.z - player.pos.z);
+        if (d < flee && m.state !== "flee") {
+          m.state = "flee";
+          m.stateT = 2.5;
+          m.yaw = Math.atan2(m.x - player.pos.x, m.z - player.pos.z);
+        }
+      }
+    }
+
+    // 5. life touch: a thin smoke column off the nearest active stead's roof
     this._smokeT -= dt;
     if (this._smokeT <= 0 && this.particles) {
       this._smokeT = 0.5;
@@ -420,9 +466,8 @@ export class Steads {
     }
   }
 
-  // reset warmth at dawn across every seeded stead (a new day deals cold
-  // boards). isWarmed already keys on tradeDay===day, so this is belt-and-
-  // braces tidiness — but it keeps the records honest for the save.
+  // dawn: zero every resident's per-day trade count (the day's tally that
+  // errands read). Standing itself is not a daily thing — it persists.
   resetWarmth(world) {
     for (const [, rec] of world.steads) {
       for (const r of rec.residents) { r.trades = 0; r.tradeDay = -1; }
