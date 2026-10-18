@@ -64,6 +64,7 @@ import { Rain } from "./rain.js";
 import { Sfx } from "./audio.js";
 import { Music } from "./music.js";
 import { loadSave, writeSave, clearSave, startAutosave } from "./save.js";
+import { resolveRarity, rarityOf, valueOf, rarityTier } from "./rarity.js";
 
 const MESH_RADIUS = 5;
 const GEN_RADIUS = MESH_RADIUS + 1;
@@ -74,6 +75,10 @@ const FIXED_DT = 1 / 60;
 const NO_LOCK = new URLSearchParams(location.search).has("nolock");
 
 // --- boot -------------------------------------------------------------------
+
+// every item's rarity/value, resolved once from its sources (rarity.js) —
+// cached, so every economic system reads the same numbers all session
+resolveRarity();
 
 const save = loadSave();
 const seed = save ? save.seed : (Math.random() * 0xffffffff) >>> 0;
@@ -160,6 +165,10 @@ if (save && Number.isFinite(save.air)) {
 // hunger is an additive v2 field: saves from before it default to well-fed
 if (save && Number.isFinite(save.hunger)) {
   player.hunger = Math.min(20, Math.max(0, save.hunger));
+}
+// saturation is additive too: never above the loaded hunger
+if (save && Number.isFinite(save.saturation)) {
+  player.saturation = Math.min(player.hunger, Math.max(0, save.saturation));
 }
 // the Moss Cot respawn anchor (additive field): validated like the player pos;
 // whether the cot still stands is checked at respawn time, not here
@@ -2022,8 +2031,10 @@ function tick(now) {
   // riding: a simple crouch offset sinks the model to the bench, and the
   // seated pose kicks the legs forward (chosen over a real sit rig — cheap)
   const seated = !!player.riding;
+  // a crouch sinks the whole model by the same simple offset idea (the eye
+  // drop, eased) — no crouch rig, just a lower Wanderling
   playerModel.group.position.set(
-    player.pos.x, player.pos.y - (seated ? 0.5 : 0), player.pos.z);
+    player.pos.x, player.pos.y - (seated ? 0.5 : 0) - player.crouch * 0.3, player.pos.z);
   playerModel.group.rotation.y = player.yaw + Math.PI;
   playerModel.update(frameDt, {
     speed: horizSpeed,
@@ -2165,6 +2176,8 @@ if (NO_LOCK) {
     getGrowthSeconds: () => growthSeconds,
     getPlayerBiome: () => playerBiome, // the slow-sampled biome underfoot
     dailyOffers, // (seed, day) — lets tests diff the Peddler's rotation
+    // the shared worth table (rarity.js): rarity in [0,1], value, display tier
+    rarity: { rarityOf, valueOf, rarityTier },
     // the Steads-Before: placement prediction, for ruin tests
     findNearestRuin: (x, z) => findNearestRuin(terrain, x, z),
     ruinForChunk: (cx, cz) => ruinForChunk(terrain, cx, cz),

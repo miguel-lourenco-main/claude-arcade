@@ -62,8 +62,11 @@ canvas atlas at boot, and every sound is synthesized with WebAudio.
 ## Survival
 
 - **The body** — 10 hearts, hunger with a real exertion economy (sprinting
-  and jumping eat), drowning with an air meter, fall damage, cactus, void,
+  and jumping eat, and a hearty cooked meal holds you far longer than a
+  handful of berries), drowning with an air meter, fall damage, cactus, void,
   lava burns, starvation (gnaws to half a heart), slow well-fed regen.
+  Water holds nobody up: a swimmer always drifts down, even mid-stroke,
+  and Space is how you stay at the surface.
 - **Tools & tiers** — the Cracker (pick), Hewer (axe), Scoop (shovel), Shiv
   (blade), and **Furrower** (hoe) in plank → stone → sky-iron → **gloamgold**
   tiers, plus the meteor-forged **Star-Edge Shiv**. Per-instance durability;
@@ -196,7 +199,8 @@ moods with crossfades, plus rain and Prowl-pulse overlays).
 | double-tap W (or hold Ctrl) | sprint |
 | double-tap Space | toggle flight, creative only (Space/Shift = up/down) |
 | hold Space, falling | deploy the Wanderwing (worn) and glide |
-| Shift | sneak (slow, won't fall off edges; overrides right-click routing) |
+| Shift | sneak: crouch (lower eye, fits a slab-high gap), slow, won't fall off edges, grips a ladder; overrides right-click routing |
+| W / S on a ladder | climb / descend (idle slides down slowly) |
 | LMB / RMB / MMB | break / use-place / pick block |
 | hold RMB | eat food, draw the Springstave |
 | Q | toss one item |
@@ -204,6 +208,16 @@ moods with crossfades, plus rain and Prowl-pulse overlays).
 | E | Satchel / block picker |
 | F3 / F5 | debug overlay / third person |
 | Esc | pause |
+
+## Docs & tests
+
+- [CLAUDE.md](CLAUDE.md): how to run, test and extend the game (agents and
+  humans alike), the save contract, the naming contract, the wave cadence.
+- [DIRECTION.md](DIRECTION.md): pillars, what the game is and isn't, roadmap.
+- [LORE.md](LORE.md): the Upturn, its folk, and the field glossary.
+- `test/`: node logic suites (`*.test.mjs`) and a headless-Chrome suite
+  (`browser.test.mjs`). Run them with `node run-tests.mjs voxelcraft` from the
+  repo root.
 
 ## Architecture
 
@@ -213,6 +227,7 @@ src/main.js        boot, chunk streaming, fixed-step game loop, all wiring
 src/noise.js       seeded Perlin 2D/3D + fBm + integer hashes
 src/textures.js    procedural 16px atlas (120+ tiles) + avg tile colors
 src/blocks.js      block/item registry (tiles, buckets, tools, armor, food)
+src/rarity.js      rarity -> value: every item's shared worth (seeded + overridable)
 src/world.js       chunk store, get/set, emitters, persistent edit overlay
 src/terrain.js     heightmap/biomes/caves/ores/lava — pure fn of (x,z,seed)
 src/undersky.js    the far side: pearlsand dunes, pearl-beds, starkelp

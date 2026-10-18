@@ -13,7 +13,7 @@ import {
 } from "./blocks.js";
 import { HEIGHT } from "./world.js";
 import { detectFrame } from "./portal.js";
-import { EYE_HEIGHT, MAX_HUNGER } from "./player.js";
+import { EYE_HEIGHT, MAX_HUNGER, saturationOf } from "./player.js";
 
 const REACH_CREATIVE = 5;
 const REACH_SURVIVAL = 4.5;
@@ -355,7 +355,7 @@ export class Interaction {
       this._eatProgress = 0;
       // consume LAST: a failed take (stale slot) must not feed the player
       if (this.canConsume(id)) {
-        const ate = this.player.eat(def.food.restore);
+        const ate = this.player.eat(def.food.restore, saturationOf(def.food));
         if (def.food.effect) {
           this.player.addEffect(def.food.effect[0], def.food.effect[1]);
         }

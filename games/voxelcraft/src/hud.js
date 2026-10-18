@@ -11,9 +11,20 @@ import { RECIPES, BASIC_RECIPES, canCraft } from "./craft.js";
 import { canAfford } from "./trade.js";
 import { SMELTS, FUEL_SECONDS, SMELT_SECONDS } from "./kiln.js";
 import { threadName } from "./loom.js";
+import { rarityTier } from "./rarity.js";
 import { SlotUI, invRegion, arrayRegion, paletteRegion, slotRegion } from "./slotui.js";
 
 const ICON = 40;
+
+// a satchel slot's hover text: the name (and its woven thread), then the
+// item's display tier from rarity.js — a UI layer over the continuous number
+export function describeStack(stack) {
+  const def = BLOCKS[stack.id];
+  if (!def) return "";
+  const thread = threadName(stack);
+  const head = `${def.name}${thread ? ` — ${thread}` : ""} · ${rarityTier(stack.id).name}`;
+  return def.desc ? `${head}\n${def.desc}` : head;
+}
 
 // Draw a fake-iso cube (top + two sides) from atlas tiles onto a 2D canvas.
 // Accepts a bare block id OR a stack ({id, count, dur?}) — a worn tool stack
@@ -248,6 +259,7 @@ export class Hud {
     // one cursor-stack engine powers the inventory/chest/workbench windows
     this.slotUI = new SlotUI({
       drawIcon: (ctx, stack) => drawBlockIcon(ctx, this.atlas, stack),
+      describe: (stack) => describeStack(stack),
       onChange: () => {
         this.refreshHotbarRow();
         // craftability depends on slot counts (a stack on the cursor doesn't
@@ -786,7 +798,8 @@ export class Hud {
     // so read the built cells back off the engine)
     const builtWear = this.slotUI._views.find((v) => v.region.name === "wear");
     builtWear.cells.forEach(({ cell }, i) => {
-      cell.title = WEAR_KINDS[i][0].toUpperCase() + WEAR_KINDS[i].slice(1);
+      cell.dataset.emptyTitle = WEAR_KINDS[i][0].toUpperCase() + WEAR_KINDS[i].slice(1);
+      if (!wear.get(i)) cell.title = cell.dataset.emptyTitle;
     });
     this._fieldOrder = this._sortedRecipes(BASIC_RECIPES);
     this._renderFieldRecipes();

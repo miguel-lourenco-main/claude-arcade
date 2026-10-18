@@ -10,6 +10,13 @@ import { wearSkips, tideCarries } from "./loom.js";
 const HALF_W = 0.3;
 const PLAYER_HEIGHT = 1.8;
 export const EYE_HEIGHT = 1.62;
+// the crouch: sneaking folds a Wanderling down — the eye drops and the
+// hitbox shortens to fit under a slab-high ceiling (a 1.5 gap; the box is a
+// hair under so the landing epsilon still fits it). Standing back up waits
+// for the headroom; the eye eases rather than snapping.
+export const CROUCH_HEIGHT = 1.49;
+export const CROUCH_EYE_DROP = 0.35; // eye 1.62 -> 1.27 at a full crouch
+const CROUCH_EASE = 14;              // per-second easing of the eye
 
 const GRAVITY = 32;
 const TERMINAL_VELOCITY = 78;
@@ -21,10 +28,16 @@ const FLY_SPEED = 11;
 const FLY_SPRINT_SPEED = 22;
 const SWIM_SPEED = 2.2;
 const SWIM_SPRINT_SPEED = 3.9;
-const SWIM_UP_MAX = 3.5;
+const SWIM_UP_MAX = 3.0;          // ceiling on upward swim speed (was 3.5)
+// the water's pull: water has no buoyancy in the Upturn, so a swimmer always
+// drifts down — even while stroking along. Staying up is Space (or looking
+// up as you swim); idle, the sink deepens toward SWIM_IDLE_SINK.
+const SWIM_DRIFT = 0.6;           // bl/s of downward drift folded into every stroke
+const SWIM_IDLE_SINK = 1.2;       // bl/s terminal sink with no input at all
+const SWIM_IDLE_ACCEL = 3;        // bl/s² toward that idle sink
 const WATER_EXIT_BOOST = 6;       // upward kick when swimming into a bank
-const LADDER_CLIMB = 2.3;         // blocks/s up (forward/jump) or down (sneak)
-const LADDER_SLIDE = 0.8;         // idle drift down the rungs
+const LADDER_CLIMB = 2.3;         // blocks/s up (forward/jump) or down (back)
+const LADDER_SLIDE = 0.8;         // idle drift down the rungs (sneak grips: none)
 const LADDER_SIDE_SPEED = 2.0;    // damped horizontal shuffle while gripping
 const MAX_STEP_DISP = 0.4;        // max movement per collision substep (anti-tunneling)
 const STEP_DISTANCE = 2.2;        // blocks walked between footstep sounds
@@ -55,11 +68,26 @@ const REGEN_RATE = 0.5;           // HP per second, gated on a well-fed satchel
 const REGEN_MIN_HUNGER = 18;      // regen only while this fed or better
 const REGEN_HUNGER_COST = 0.4;    // hunger spent per HP healed
 const HUNGER_PASSIVE = 0.02;      // hunger per second while doing anything
-const HUNGER_SPRINT = 0.06;       // extra while sprinting (total 0.08 = 4x walking)
-const HUNGER_JUMP = 0.12;         // hunger per jump
-const SPRINT_JUMP_EXTRA = 0.2;    // additional cost of a jump taken at a sprint
+const HUNGER_SPRINT = 0.05;       // extra while sprinting (total 0.07 = 3.5x walking)
+const HUNGER_JUMP = 0.06;         // hunger per jump (was 0.12: hopping starved you)
+const SPRINT_JUMP_EXTRA = 0.1;    // additional cost of a jump taken at a sprint
 const SPRINT_MIN_HUNGER = 3;      // too hungry to run: sprint needs hunger > this
 const STARVE_INTERVAL = 2.5;      // seconds between starvation ticks at 0 hunger
+// saturation: a hidden buffer that every exertion drains BEFORE hunger moves.
+// Food grants it alongside its restore; it can never exceed the current
+// hunger (a full belly can only be so full). No HUD shows it — the hearty
+// foods say so in their description text instead (blocks.js `desc`).
+export const FOOD_SATURATION_RATIO = 0.3; // a food with no stated saturation
+const SATURATION_START = 5;       // a fresh (or respawned) Wanderling's buffer
+
+// the saturation a food def grants (blocks.js food.saturation, else a light
+// default from its restore)
+export function saturationOf(food) {
+  if (!food) return 0;
+  return Number.isFinite(food.saturation)
+    ? Math.max(0, food.saturation)
+    : food.restore * FOOD_SATURATION_RATIO;
+}
 
 // horizontal acceleration (blocks/s²): crisp starts, crisper stops on ground,
 // deliberately weaker steering in the air — replaces the old exponential
@@ -110,6 +138,11 @@ export class Player {
     this.eyeInWater = false;  // water only: drowning + underwater fog
     this.eyeInLava = false;   // molten over the eyes — burns like contact
     this.onLadder = false;
+    // the crouch: `crouched` is the hitbox state (held while sneaking, and
+    // kept while the ceiling is too low to stand); `crouch` eases 0..1 and
+    // drives the eye height and the third-person sink
+    this.crouched = false;
+    this.crouch = 0;
     // riding a Reed Skiff: the boat entity that owns this player's physics
     // (boats.js seats, drives, and dismounts; update() suspends everything)
     this.riding = null;
@@ -133,6 +166,7 @@ export class Player {
     this.spawnPoint = null;
     this.health = MAX_HEALTH;
     this.hunger = MAX_HUNGER;
+    this.saturation = SATURATION_START; // hidden; drains before hunger
     this.air = AIR_SECONDS;
     this.dead = false;
     this.onDamage = null;       // (amount, cause) => void
@@ -268,10 +302,13 @@ export class Player {
     this.vel.x = this.vel.y = this.vel.z = 0;
     this.health = MAX_HEALTH;
     this.hunger = MAX_HUNGER;
+    this.saturation = SATURATION_START;
     this.air = AIR_SECONDS;
     this.dead = false;
     this.flying = false;
     this.gliding = false;
+    this.crouched = false;
+    this.crouch = 0;
     this._peakY = this.pos.y;
     this._sinceDamage = 999;
   }
@@ -383,7 +420,24 @@ export class Player {
     }
   }
 
-  get eyeY() { return this.pos.y + EYE_HEIGHT; }
+  get eyeY() { return this.pos.y + EYE_HEIGHT - CROUCH_EYE_DROP * this.crouch; }
+
+  // the collision height right now (crouched or standing)
+  get height() { return this.crouched ? CROUCH_HEIGHT : PLAYER_HEIGHT; }
+
+  // fold down while sneaking (not when flying or swimming — there's nothing
+  // to crouch on); unfold only when the standing box would fit
+  _updateCrouch(dt, sneaking) {
+    const want = sneaking && !this.flying && !this.inWater;
+    if (want) this.crouched = true;
+    else if (this.crouched &&
+             !this._boxCollides(this.pos.x, this.pos.y, this.pos.z, PLAYER_HEIGHT)) {
+      this.crouched = false;
+    }
+    const target = this.crouched ? 1 : 0;
+    this.crouch += (target - this.crouch) * Math.min(1, dt * CROUCH_EASE);
+    if (Math.abs(target - this.crouch) < 1e-3) this.crouch = target;
+  }
 
   lookDir() {
     const cp = Math.cos(this.pitch);
@@ -458,6 +512,8 @@ export class Player {
     // fall — a seated Wanderling exerts nothing. Space does nothing here.
     if (this.riding) {
       this._sneaking = this.keys.has("ShiftLeft") || this.keys.has("ShiftRight");
+      this.crouched = false; // the bench sets the seat height, not the crouch
+      this.crouch = 0;
       this.sprintActive = false; // no pounding down the bench — FOV settles
       this.vel.x = this.vel.y = this.vel.z = 0;
       this.onGround = false;
@@ -473,6 +529,7 @@ export class Player {
     const strafe = (this.keys.has("KeyD") ? 1 : 0) - (this.keys.has("KeyA") ? 1 : 0);
     const sneaking = this.keys.has("ShiftLeft") || this.keys.has("ShiftRight");
     const jumping = this.keys.has("Space");
+    this._updateCrouch(dt, sneaking);
 
     // wanted horizontal velocity in world space.
     // forward = (-sin yaw, -cos yaw); right = (cos yaw, -sin yaw) — the strafe
@@ -511,7 +568,8 @@ export class Player {
       if (this.inLava) speed *= 0.55; // the melt is thicker than any river
       else if (this._tideThread()) speed *= 1.5; // the sea carries you
     }
-    else if (sneaking) speed = SNEAK_SPEED;
+    // a crouch kept by a low ceiling walks at the sneak pace too
+    else if (sneaking || this.crouched) speed = SNEAK_SPEED;
     else if (wantSprint && sprintInput) speed = SPRINT_SPEED;
     else speed = WALK_SPEED;
     this.sprintActive = speed === SPRINT_SPEED || speed === SWIM_SPRINT_SPEED ||
@@ -555,8 +613,9 @@ export class Player {
       }
     } else if (this.onLadder) {
       // ladder grip (Wanderling hand-feet were made for this): gravity is
-      // suspended; forward/jump climbs, sneak descends, idle drifts down a
-      // slow slide; horizontal movement is damped to a shuffle
+      // suspended; forward/jump climbs, back descends, sneak GRIPS (holds
+      // the rung, no slide), idle drifts down a slow slide; horizontal
+      // movement is damped to a shuffle
       const accel = (hasInput ? ACCEL_GROUND : FRICTION_GROUND) * 0.5 * dt;
       const side = Math.min(speed, LADDER_SIDE_SPEED);
       const dvx = dirX * side - this.vel.x;
@@ -567,7 +626,8 @@ export class Player {
         this.vel.x += dvx * s; this.vel.z += dvz * s;
       }
       if (forward > 0 || jumping) this.vel.y = LADDER_CLIMB;
-      else if (sneaking) this.vel.y = -LADDER_CLIMB;
+      else if (sneaking) this.vel.y = 0; // grip-hold: hand-feet locked on
+      else if (forward < 0) this.vel.y = -LADDER_CLIMB;
       else this.vel.y = Math.max(-LADDER_SLIDE, this.vel.y - GRAVITY * dt);
     } else if (this.inWater) {
       // swimming follows the camera: look down + forward dives, look up
@@ -588,7 +648,8 @@ export class Player {
       if (len > 1) { tx /= len; ty /= len; tz /= len; }
       const accel = ACCEL_WATER * dt;
       const dvx = tx * speed - this.vel.x;
-      const dvy = ty * speed - this.vel.y;
+      // the drift is part of the target, so the stroke itself can't cancel it
+      const dvy = ty * speed - SWIM_DRIFT - this.vel.y;
       const dvz = tz * speed - this.vel.z;
       const d = Math.hypot(dvx, dvy, dvz);
       if (d > 1e-9) {
@@ -596,7 +657,7 @@ export class Player {
         this.vel.x += dvx * s; this.vel.y += dvy * s; this.vel.z += dvz * s;
       }
       if (!hasInput && up === 0) {
-        this.vel.y = Math.max(-1.2, this.vel.y - 3 * dt); // idle sink
+        this.vel.y = Math.max(-SWIM_IDLE_SINK, this.vel.y - SWIM_IDLE_ACCEL * dt); // idle sink
       }
       this.vel.y = Math.max(-4.2, Math.min(Math.max(SWIM_UP_MAX, speed), this.vel.y));
       // boost out of the water at a bank: the jump path works from the
@@ -642,8 +703,7 @@ export class Player {
         if (this.mode === "survival") {
           // a jump taken at a sprint costs extra — bunny-hopping is fast
           // but it eats
-          this.hunger = Math.max(0, this.hunger -
-            (HUNGER_JUMP + (this.sprintActive ? SPRINT_JUMP_EXTRA : 0)));
+          this.exhaust(HUNGER_JUMP + (this.sprintActive ? SPRINT_JUMP_EXTRA : 0));
         }
       }
     }
@@ -787,7 +847,7 @@ export class Player {
     if (!idle) {
       let drain = HUNGER_PASSIVE;
       if (this.sprintActive) drain += HUNGER_SPRINT;
-      this.hunger = Math.max(0, this.hunger - drain * dt);
+      this.exhaust(drain * dt);
     }
 
     // starvation: an empty satchel gnaws down to (never below) half a heart
@@ -806,21 +866,32 @@ export class Player {
         this.hunger >= REGEN_MIN_HUNGER) {
       const heal = Math.min(REGEN_RATE * dt, MAX_HEALTH - this.health);
       this.health += heal;
-      this.hunger = Math.max(0, this.hunger - heal * REGEN_HUNGER_COST);
+      this.exhaust(heal * REGEN_HUNGER_COST);
     }
   }
 
-  // eat a food item: restore hunger (clamped). Returns false at full hunger.
-  eat(restore) {
+  // spend food on an exertion: the saturation buffer pays first, and only
+  // what it can't cover moves the hunger meter
+  exhaust(amount) {
+    if (!(amount > 0)) return;
+    const fromSat = Math.min(this.saturation, amount);
+    this.saturation -= fromSat;
+    this.hunger = Math.max(0, this.hunger - (amount - fromSat));
+  }
+
+  // eat a food item: restore hunger (clamped) and top up the saturation
+  // buffer (capped at the new hunger). Returns false at full hunger.
+  eat(restore, saturation = 0) {
     if (this.hunger >= MAX_HUNGER - 1e-9) return false;
     this.hunger = Math.min(MAX_HUNGER, this.hunger + restore);
+    this.saturation = Math.min(this.hunger, this.saturation + Math.max(0, saturation));
     return true;
   }
 
   _touchesCactus() {
     const p = this.pos, pad = 0.08;
     const x0 = Math.floor(p.x - HALF_W - pad), x1 = Math.floor(p.x + HALF_W + pad);
-    const y0 = Math.floor(p.y - 0.05), y1 = Math.floor(p.y + PLAYER_HEIGHT);
+    const y0 = Math.floor(p.y - 0.05), y1 = Math.floor(p.y + this.height);
     const z0 = Math.floor(p.z - HALF_W - pad), z1 = Math.floor(p.z + HALF_W + pad);
     for (let by = y0; by <= y1; by++) for (let bz = z0; bz <= z1; bz++) for (let bx = x0; bx <= x1; bx++) {
       if (this.world.getBlock(bx, by, bz) === CACTUS) return true;
@@ -886,7 +957,7 @@ export class Player {
     }
 
     const minX = p.x - HALF_W, maxX = p.x + HALF_W;
-    const minY = p.y, maxY = p.y + PLAYER_HEIGHT;
+    const minY = p.y, maxY = p.y + this.height;
     const minZ = p.z - HALF_W, maxZ = p.z + HALF_W;
     const eps = 0.001;
 
@@ -934,7 +1005,7 @@ export class Player {
             this._hitWall = true;
           } else {
             if (disp > 0) {
-              p.y = by - PLAYER_HEIGHT - eps;
+              p.y = by - this.height - eps;
               this.vel.y = 0;
             } else {
               // don't resolve yet — a taller partial block (a drift's shell
@@ -955,12 +1026,13 @@ export class Player {
   }
 
   // does the player AABB, moved to (px, py, pz), intersect any solid block?
-  // Uses per-block colHeight — the auto-step clearance test.
-  _boxCollides(px, py, pz) {
+  // Uses per-block colHeight — the auto-step clearance test (and, with a
+  // standing height passed, the crouch's can-I-stand-up test).
+  _boxCollides(px, py, pz, height = this.height) {
     const eps = 0.001;
     const x0 = Math.floor(px - HALF_W), x1 = Math.floor(px + HALF_W - eps);
     // one row below the feet: tall blocks (colHeight > 1) reach up here
-    const y0 = Math.floor(py) - 1, y1 = Math.floor(py + PLAYER_HEIGHT - eps);
+    const y0 = Math.floor(py) - 1, y1 = Math.floor(py + height - eps);
     const z0 = Math.floor(pz - HALF_W), z1 = Math.floor(pz + HALF_W - eps);
     for (let by = y0; by <= y1; by++) for (let bz = z0; bz <= z1; bz++) for (let bx = x0; bx <= x1; bx++) {
       const d = BLOCKS[this.world.getBlock(bx, by, bz)];
@@ -973,7 +1045,7 @@ export class Player {
   aabb() {
     return {
       minX: this.pos.x - HALF_W, maxX: this.pos.x + HALF_W,
-      minY: this.pos.y, maxY: this.pos.y + PLAYER_HEIGHT,
+      minY: this.pos.y, maxY: this.pos.y + this.height,
       minZ: this.pos.z - HALF_W, maxZ: this.pos.z + HALF_W,
     };
   }

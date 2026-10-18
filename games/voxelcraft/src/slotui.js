@@ -61,8 +61,9 @@ export function paletteRegion(name, ids) {
 }
 
 export class SlotUI {
-  constructor({ drawIcon, onChange, onSpill }) {
+  constructor({ drawIcon, onChange, onSpill, describe }) {
     this.drawIcon = drawIcon;   // (canvasCtx, stack) => void
+    this.describe = describe || null; // (stack) => hover text for a filled slot
     this.onChange = onChange;   // () => refresh hotbar/hud after any mutation
     this.onSpill = onSpill;     // (stack) => drop it at the player
     this.cursor = null;         // null | {id, count, dur?}
@@ -142,8 +143,11 @@ export class SlotUI {
   }
 
   _renderCell(view, i) {
-    const { canvas, n } = view.cells[i];
+    const { cell, canvas, n } = view.cells[i];
     const s = view.region.get(i);
+    // hover text: the stack's description, or an empty slot's own label
+    // (the wear column names its slots via data-empty-title)
+    cell.title = s && this.describe ? this.describe(s) : (cell.dataset.emptyTitle || "");
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, 40, 40);
     if (s) this.drawIcon(ctx, s);
